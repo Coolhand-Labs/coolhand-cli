@@ -1,0 +1,74 @@
+{
+  "name": "coolhand-cli",
+  "version": "0.1.0",
+  "description": "CLI for authenticating with Coolhand and retrieving API tokens from a local dev environment",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "coolhand": "dist/bin.js",
+    "coolhand-cli": "dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "coolhand",
+    "cli",
+    "auth",
+    "login",
+    "feedback",
+    "llm",
+    "api"
+  ],
+  "author": "Michael Carroll",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Coolhand-Labs/coolhand-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Coolhand-Labs/coolhand-cli/issues"
+  },
+  "homepage": "https://coolhandlabs.com",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "sync-version": "node scripts/sync-version.mjs",
+    "build": "npm run sync-version && tsc && chmod +x dist/bin.js",
+    "prepublishOnly": "npm run build && npm run lint && npm run typecheck && npm test",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test --ext .ts",
+    "lint:fix": "eslint src test --ext .ts --fix",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist coverage",
+    "smoke": "node dist/bin.js --version"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.45.0",
+    "@typescript-eslint/parser": "^8.45.0",
+    "eslint": "^9.36.0",
+    "eslint-plugin-jest": "^29.0.1",
+    "globals": "^16.4.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.4",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0",
+    "@eslint/js": "^9.36.0"
+  }
+}

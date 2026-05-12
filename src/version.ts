@@ -1,0 +1,12 @@
+/**
+ * Auto-generated from package.json — do not edit manually.
+ * Run `npm run sync-version` or `npm run build` to regenerate.
+ */
+
+export const PACKAGE_VERSION = '0.1.0';
+export const PACKAGE_NAME = 'coolhand-cli';
+
+/**
+ * Full package identifier
+ */
+export const PACKAGE_IDENTIFIER = `${PACKAGE_NAME}-${PACKAGE_VERSION}`;
