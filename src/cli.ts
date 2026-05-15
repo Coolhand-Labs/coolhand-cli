@@ -5,9 +5,9 @@ import { run as runLogin } from './commands/login.js';
 import { run as runLogout } from './commands/logout.js';
 import { run as runStatus } from './commands/status.js';
 import { run as runWhoami } from './commands/whoami.js';
-import { run as runAccounts } from './commands/accounts.js';
+import { run as runClients } from './commands/clients.js';
 import type {
-  AccountsOptions,
+  ClientsOptions,
   LoginOptions,
   LogoutOptions,
   StatusOptions,
@@ -27,10 +27,10 @@ Usage:
 
 Commands:
   login                  Open a browser to retrieve and store an API token
-  logout                 Remove a stored account
+  logout                 Remove a stored client
   status                 Check whether a token is configured
-  whoami                 Show the currently configured account
-  accounts [use <id>]    List or switch the default account
+  whoami                 Show the currently configured client
+  clients [use <id>]    List or switch the default client
   help                   Show this message
 
 Global options:
@@ -40,12 +40,12 @@ Global options:
 Login options:
   --base-url URL         Coolhand server (default: https://coolhandlabs.com)
   --write-env PATH       Idempotently set COOLHAND_API_KEY in PATH
-  --account-id ID        Hint to the server about which account to select
+  --client-id ID        Hint to the server about which client to select
   --json                 Emit JSON output instead of human-readable text
 
 Logout options:
-  --account-id ID        Remove a specific account
-  --all                  Remove every stored account
+  --client-id ID        Remove a specific client
+  --all                  Remove every stored client
 
 Run "coolhand <command> --help" for more details.
 `;
@@ -101,8 +101,8 @@ function loginOptions(parsed: ParsedArgs): LoginOptions {
     }
     opts.writeEnv = v;
   }
-  if (typeof parsed.flags['account-id'] === 'string') {
-    opts.accountId = parsed.flags['account-id'];
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
   }
   if (parsed.flags.json === true) {
     opts.json = true;
@@ -118,8 +118,8 @@ function loginOptions(parsed: ParsedArgs): LoginOptions {
 
 function logoutOptions(parsed: ParsedArgs): LogoutOptions {
   const opts: LogoutOptions = {};
-  if (typeof parsed.flags['account-id'] === 'string') {
-    opts.accountId = parsed.flags['account-id'];
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
   }
   if (parsed.flags.all === true) {
     opts.all = true;
@@ -132,8 +132,8 @@ function logoutOptions(parsed: ParsedArgs): LogoutOptions {
 
 function statusOptions(parsed: ParsedArgs): StatusOptions {
   const opts: StatusOptions = {};
-  if (typeof parsed.flags['account-id'] === 'string') {
-    opts.accountId = parsed.flags['account-id'];
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
   }
   if (parsed.flags.json === true) {
     opts.json = true;
@@ -143,14 +143,14 @@ function statusOptions(parsed: ParsedArgs): StatusOptions {
 
 function whoamiOptions(parsed: ParsedArgs): WhoamiOptions {
   const opts: WhoamiOptions = {};
-  if (typeof parsed.flags['account-id'] === 'string') {
-    opts.accountId = parsed.flags['account-id'];
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
   }
   return opts;
 }
 
-function accountsOptions(parsed: ParsedArgs): AccountsOptions {
-  const opts: AccountsOptions = {};
+function clientsOptions(parsed: ParsedArgs): ClientsOptions {
+  const opts: ClientsOptions = {};
   if (parsed.flags.json === true) {
     opts.json = true;
   }
@@ -185,8 +185,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runStatus(statusOptions(parsed));
       case 'whoami':
         return await runWhoami(whoamiOptions(parsed));
-      case 'accounts':
-        return await runAccounts(parsed.positional, accountsOptions(parsed));
+      case 'clients':
+        return await runClients(parsed.positional, clientsOptions(parsed));
       default:
         logger.info(`Unknown command: ${parsed.command}`);
         logger.info(HELP_TEXT);

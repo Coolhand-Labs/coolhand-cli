@@ -22,15 +22,15 @@ This document describes the end-to-end token-acquisition flow used by `coolhand 
      │                                │ ────────────────────────────────► │
      │                                │                                   │
      │                                │       (consent page, user picks   │
-     │                                │        account, checks human-     │
+     │                                │        client, checks human-     │
      │                                │        verification checkbox)     │
      │                                │                                   │
      │                                │   302 redirect to                 │
      │                                │   http://127.0.0.1:P/callback     │
      │                                │     ?token=ch_pub_…               │
      │                                │     &state=...                    │
-     │                                │     &account_name=...             │
-     │                                │     &account_id=...               │
+     │                                │     &client_name=...             │
+     │                                │     &client_id=...               │
      │                                │ ◄──────────────────────────────── │
      │                                │                                   │
      │                                │ verify state matches              │
@@ -61,7 +61,7 @@ This document describes the end-to-end token-acquisition flow used by `coolhand 
 | -------------- | -------------------------------------------------------- |
 | `token`        | The selected client's **public** `api_key`               |
 | `state`        | The same value the CLI sent in the auth URL              |
-| `account_name` | Human-readable name of the selected client account       |
-| `account_id`   | Stable identifier of the selected client account         |
+| `client_name` | Human-readable name of the selected client              |
+| `client_id`   | Stable identifier of the selected client                |
 
 The relevant Rails controller is `Cli::AuthController` in the `coolhand` repo.

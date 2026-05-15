@@ -65,8 +65,8 @@ export async function startCallbackServer(opts: StartCallbackServerOptions): Pro
 
     const token = url.searchParams.get('token');
     const state = url.searchParams.get('state');
-    const accountName = url.searchParams.get('account_name');
-    const accountId = url.searchParams.get('account_id');
+    const clientName = url.searchParams.get('client_name');
+    const clientId = url.searchParams.get('client_id');
 
     if (!state || !safeEqual(state, opts.expectedState)) {
       consumed = true;
@@ -78,7 +78,7 @@ export async function startCallbackServer(opts: StartCallbackServerOptions): Pro
       return;
     }
 
-    if (!token || !accountId || !accountName) {
+    if (!token || !clientId || !clientName) {
       consumed = true;
       res.statusCode = 400;
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -86,7 +86,7 @@ export async function startCallbackServer(opts: StartCallbackServerOptions): Pro
       rejectResult(
         new CliError(
           'INVALID_CALLBACK',
-          'Callback was missing token, account_id, or account_name. Make sure your Coolhand server is up to date.'
+          'Callback was missing token, client_id, or client_name. Make sure your Coolhand server is up to date.'
         )
       );
       closeServerSoon();
@@ -97,7 +97,7 @@ export async function startCallbackServer(opts: StartCallbackServerOptions): Pro
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.end(SUCCESS_HTML);
-    resolveResult({ token, accountName, accountId });
+    resolveResult({ token, clientName, clientId });
     closeServerSoon();
   }
 

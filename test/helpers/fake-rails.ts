@@ -4,8 +4,8 @@ import { AddressInfo } from 'net';
 export interface FakeRailsRedirect {
   token?: string;
   state?: string;
-  accountName?: string;
-  accountId?: string;
+  clientName?: string;
+  clientId?: string;
 }
 
 export interface FakeRails {
@@ -18,7 +18,7 @@ export interface FakeRails {
 /**
  * Stands in for the Coolhand Rails server during tests. When the CLI opens
  * `/cli/auth`, this server records the redirect_uri + state and immediately
- * issues a 302 to `${redirectUri}?token=...&state=...&account_name=...&account_id=...`
+ * issues a 302 to `${redirectUri}?token=...&state=...&client_name=...&client_id=...`
  * as if a human had clicked through.
  */
 export async function startFakeRails(
@@ -44,11 +44,11 @@ export async function startFakeRails(
     if (decision.state !== undefined) {
       callbackUrl.searchParams.set('state', decision.state);
     }
-    if (decision.accountName !== undefined) {
-      callbackUrl.searchParams.set('account_name', decision.accountName);
+    if (decision.clientName !== undefined) {
+      callbackUrl.searchParams.set('client_name', decision.clientName);
     }
-    if (decision.accountId !== undefined) {
-      callbackUrl.searchParams.set('account_id', decision.accountId);
+    if (decision.clientId !== undefined) {
+      callbackUrl.searchParams.set('client_id', decision.clientId);
     }
     res.statusCode = 302;
     res.setHeader('Location', callbackUrl.toString());
@@ -87,11 +87,11 @@ export async function deliverCallback(redirectUri: string, params: FakeRailsRedi
   if (params.state !== undefined) {
     url.searchParams.set('state', params.state);
   }
-  if (params.accountName !== undefined) {
-    url.searchParams.set('account_name', params.accountName);
+  if (params.clientName !== undefined) {
+    url.searchParams.set('client_name', params.clientName);
   }
-  if (params.accountId !== undefined) {
-    url.searchParams.set('account_id', params.accountId);
+  if (params.clientId !== undefined) {
+    url.searchParams.set('client_id', params.clientId);
   }
   await fetch(url.toString(), { method: 'GET' }).catch(() => undefined);
 }

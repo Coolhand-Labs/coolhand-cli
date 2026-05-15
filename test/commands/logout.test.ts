@@ -1,12 +1,12 @@
 import { promises as fs } from 'fs';
 import { run as runLogout } from '../../src/commands/logout.js';
-import { loadConfig, upsertAccount, configPath } from '../../src/config.js';
+import { loadConfig, upsertClient, configPath } from '../../src/config.js';
 import { createTmpHome, TmpHome } from '../helpers/tmp-home.js';
 
 function makeEntry(id: string) {
   return {
-    account_id: id,
-    account_name: `Acct ${id}`,
+    client_id: id,
+    client_name: `Client ${id}`,
     api_key: `ch_pub_${id.repeat(4)}xxxx`,
     base_url: 'https://coolhandlabs.com',
     saved_at: new Date().toISOString(),
@@ -25,7 +25,7 @@ describe('logout command', () => {
   });
 
   test('--all wipes the config file', async () => {
-    await upsertAccount(makeEntry('a'), true);
+    await upsertClient(makeEntry('a'), true);
     const code = await runLogout({ all: true });
     expect(code).toBe(0);
     await expect(fs.stat(configPath())).rejects.toMatchObject({ code: 'ENOENT' });
@@ -36,24 +36,24 @@ describe('logout command', () => {
     expect(code).toBe(0);
   });
 
-  test('removes specific account by id and re-assigns default', async () => {
-    await upsertAccount(makeEntry('a'), true);
-    await upsertAccount(makeEntry('b'), false);
-    const code = await runLogout({ accountId: 'a' });
+  test('removes specific client by id and re-assigns default', async () => {
+    await upsertClient(makeEntry('a'), true);
+    await upsertClient(makeEntry('b'), false);
+    const code = await runLogout({ clientId: 'a' });
     expect(code).toBe(0);
     const cfg = await loadConfig();
-    expect(cfg.accounts.a).toBeUndefined();
-    expect(cfg.default_account_id).toBe('b');
+    expect(cfg.clients.a).toBeUndefined();
+    expect(cfg.default_client_id).toBe('b');
   });
 
-  test('removing missing account is a no-op', async () => {
-    await upsertAccount(makeEntry('a'), true);
-    const code = await runLogout({ accountId: 'missing' });
+  test('removing missing client is a no-op', async () => {
+    await upsertClient(makeEntry('a'), true);
+    const code = await runLogout({ clientId: 'missing' });
     expect(code).toBe(0);
   });
 
-  test('with no args removes the default account', async () => {
-    await upsertAccount(makeEntry('a'), true);
+  test('with no args removes the default client', async () => {
+    await upsertClient(makeEntry('a'), true);
     const code = await runLogout({});
     expect(code).toBe(0);
     await expect(fs.stat(configPath())).rejects.toMatchObject({ code: 'ENOENT' });

@@ -1,6 +1,6 @@
-export interface AccountEntry {
-  account_id: string;
-  account_name: string;
+export interface ClientEntry {
+  client_id: string;
+  client_name: string;
   api_key: string;
   base_url: string;
   saved_at: string;
@@ -8,52 +8,52 @@ export interface AccountEntry {
 
 export interface ConfigFile {
   version: 1;
-  default_account_id: string | null;
-  accounts: Record<string, AccountEntry>;
+  default_client_id: string | null;
+  clients: Record<string, ClientEntry>;
 }
 
 export interface LoginOptions {
   baseUrl?: string;
   writeEnv?: string;
   json?: boolean;
-  accountId?: string;
+  clientId?: string;
   timeoutMs?: number;
 }
 
 export interface LogoutOptions {
-  accountId?: string;
+  clientId?: string;
   all?: boolean;
   json?: boolean;
 }
 
 export interface StatusOptions {
-  accountId?: string;
+  clientId?: string;
   json?: boolean;
 }
 
 export interface WhoamiOptions {
-  accountId?: string;
+  clientId?: string;
 }
 
-export interface AccountsOptions {
+export interface ClientsOptions {
   json?: boolean;
 }
 
 export interface CallbackResult {
   token: string;
-  accountName: string;
-  accountId: string;
+  clientName: string;
+  clientId: string;
 }
 
 export interface StatusOutput {
   configured: boolean;
-  accounts: Array<{
-    account_id: string;
-    account_name: string;
+  clients: Array<{
+    client_id: string;
+    client_name: string;
     masked_token: string;
     base_url: string;
   }>;
-  default_account_id: string | null;
+  default_client_id: string | null;
 }
 
 export const DEFAULT_BASE_URL = 'https://coolhandlabs.com';

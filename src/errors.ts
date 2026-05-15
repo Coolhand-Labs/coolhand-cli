@@ -17,7 +17,7 @@ export type ErrorCode =
   | 'INVALID_BASE_URL'
   | 'INVALID_ARGS'
   | 'WRITE_ENV_FAILED'
-  | 'ACCOUNT_NOT_FOUND';
+  | 'CLIENT_NOT_FOUND';
 
 export class CliError extends Error {
   public readonly code: ErrorCode;

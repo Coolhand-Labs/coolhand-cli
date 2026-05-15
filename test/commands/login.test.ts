@@ -29,8 +29,8 @@ describe('login command', () => {
     rails = await startFakeRails(({ state }) => ({
       token: 'ch_pub_HAPPYPATHTOKEN12345678',
       state,
-      accountName: 'Acme Inc',
-      accountId: 'acme',
+      clientName: 'Acme Inc',
+      clientId: 'acme',
     }));
 
     // Wire openBrowser to actually trigger the redirect by hitting the fake-rails URL.
@@ -45,17 +45,17 @@ describe('login command', () => {
     const code = await runLogin({ baseUrl: rails.url, json: true });
     expect(code).toBe(0);
     const cfg = await loadConfig();
-    expect(cfg.default_account_id).toBe('acme');
-    expect(cfg.accounts.acme.api_key).toBe('ch_pub_HAPPYPATHTOKEN12345678');
-    expect(cfg.accounts.acme.base_url).toBe(rails.url);
+    expect(cfg.default_client_id).toBe('acme');
+    expect(cfg.clients.acme.api_key).toBe('ch_pub_HAPPYPATHTOKEN12345678');
+    expect(cfg.clients.acme.base_url).toBe(rails.url);
   });
 
   test('state mismatch causes failure without writing config', async () => {
     rails = await startFakeRails(() => ({
       token: 'ch_pub_BADBADBADBADBADBADBADBAD',
       state: 'wrong_state',
-      accountName: 'X',
-      accountId: 'x',
+      clientName: 'X',
+      clientId: 'x',
     }));
 
     (openBrowser as jest.Mock).mockImplementation(async (url: string) => {
@@ -74,8 +74,8 @@ describe('login command', () => {
   test('missing token rejects with non-zero exit', async () => {
     rails = await startFakeRails(({ state }) => ({
       state,
-      accountName: 'X',
-      accountId: 'x',
+      clientName: 'X',
+      clientId: 'x',
     }));
 
     (openBrowser as jest.Mock).mockImplementation(async (url: string) => {
@@ -100,8 +100,8 @@ describe('login command', () => {
     rails = await startFakeRails(({ state }) => ({
       token: 'ch_pub_ENVWRITERTOKEN1234567',
       state,
-      accountName: 'Env Acct',
-      accountId: 'envacct',
+      clientName: 'Env Acct',
+      clientId: 'envacct',
     }));
 
     (openBrowser as jest.Mock).mockImplementation(async (url: string) => {
@@ -129,8 +129,8 @@ describe('login command', () => {
     rails = await startFakeRails(({ state }) => ({
       token: 'ch_pub_DELIVERCALLBACKVALID000',
       state,
-      accountName: 'Direct',
-      accountId: 'direct',
+      clientName: 'Direct',
+      clientId: 'direct',
     }));
 
     (openBrowser as jest.Mock).mockImplementation(async (url: string) => {
@@ -140,14 +140,14 @@ describe('login command', () => {
       await deliverCallback(redirectUri, {
         token: 'ch_pub_DELIVERCALLBACKVALID000',
         state,
-        accountName: 'Direct',
-        accountId: 'direct',
+        clientName: 'Direct',
+        clientId: 'direct',
       });
     });
 
     const code = await runLogin({ baseUrl: rails.url, json: true });
     expect(code).toBe(0);
     const cfg = await loadConfig();
-    expect(cfg.accounts.direct.account_name).toBe('Direct');
+    expect(cfg.clients.direct.client_name).toBe('Direct');
   });
 });

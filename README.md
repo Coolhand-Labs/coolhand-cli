@@ -20,16 +20,16 @@ Requires Node 18 or newer.
 ## Commands
 
 ```
-coolhand login    [--base-url URL] [--write-env PATH] [--account-id ID] [--json]
-coolhand logout   [--account-id ID | --all] [--json]
-coolhand status   [--account-id ID] [--json]
-coolhand whoami   [--account-id ID]
-coolhand accounts [use <id>] [--json]
+coolhand login    [--base-url URL] [--write-env PATH] [--client-id ID] [--json]
+coolhand logout   [--client-id ID | --all] [--json]
+coolhand status   [--client-id ID] [--json]
+coolhand whoami   [--client-id ID]
+coolhand clients [use <id>] [--json]
 ```
 
 ### login
 
-Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the callback, and stores the returned token. The token is the **public** `api_key` for the client account you select — the same key you would use with `coolhand-node`, `coolhand-python`, or the `coolhand-js` widget.
+Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the callback, and stores the returned token. The token is the **public** `api_key` for the client you select — the same key you would use with `coolhand-node`, `coolhand-python`, or the `coolhand-js` widget.
 
 `--write-env PATH` will additionally set `COOLHAND_API_KEY=<token>` in the target `.env` file (idempotent — replaces an existing value rather than appending a duplicate).
 
@@ -40,19 +40,19 @@ Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the 
 ```json
 {
   "configured": true,
-  "accounts": [
-    {"account_id": "acme", "account_name": "Acme Inc",
+  "clients": [
+    {"client_id": "acme", "client_name": "Acme Inc",
      "masked_token": "ch_pub_A…wxyz", "base_url": "https://coolhandlabs.com"}
   ],
-  "default_account_id": "acme"
+  "default_client_id": "acme"
 }
 ```
 
-Exit code is `0` if a token is configured for the default (or requested) account, `1` otherwise.
+Exit code is `0` if a token is configured for the default (or requested) client, `1` otherwise.
 
-### accounts
+### clients
 
-Multiple accounts can be stored at once. `coolhand accounts` lists them, `coolhand accounts use <id>` switches the default. Each `coolhand login` adds (or refreshes) one entry, keyed by the server-assigned `account_id`.
+Multiple clients can be stored at once. `coolhand clients` lists them, `coolhand clients use <id>` switches the default. Each `coolhand login` adds (or refreshes) one entry, keyed by the server-assigned `client_id`.
 
 ## Security
 
@@ -66,13 +66,13 @@ Multiple accounts can be stored at once. `coolhand accounts` lists them, `coolha
 ## Programmatic use
 
 ```ts
-import { run, loadConfig, getAccount, maskToken } from 'coolhand-cli';
+import { run, loadConfig, getClient, maskToken } from 'coolhand-cli';
 
 await run(['login', '--json']);
 
 const cfg = await loadConfig();
-const account = getAccount(cfg);
-console.log(maskToken(account!.api_key));
+const client = getClient(cfg);
+console.log(maskToken(client!.api_key));
 ```
 
 The CLI is shipped as an ES module. Importers must be ESM as well, or use a dynamic `import()`.
@@ -84,11 +84,11 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
 ```json
 {
   "version": 1,
-  "default_account_id": "acme",
-  "accounts": {
+  "default_client_id": "acme",
+  "clients": {
     "acme": {
-      "account_id": "acme",
-      "account_name": "Acme Inc",
+      "client_id": "acme",
+      "client_name": "Acme Inc",
       "api_key": "ch_pub_…",
       "base_url": "https://coolhandlabs.com",
       "saved_at": "2026-05-12T18:04:11.000Z"

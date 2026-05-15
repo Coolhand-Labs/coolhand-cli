@@ -15,8 +15,8 @@ describe('parseArgs', () => {
   });
 
   test('captures positional arguments', () => {
-    const parsed = parseArgs(['accounts', 'use', 'acme']);
-    expect(parsed.command).toBe('accounts');
+    const parsed = parseArgs(['clients', 'use', 'acme']);
+    expect(parsed.command).toBe('clients');
     expect(parsed.positional).toEqual(['use', 'acme']);
   });
 

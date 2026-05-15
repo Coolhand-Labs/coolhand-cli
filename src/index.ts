@@ -3,9 +3,9 @@ export {
   loadConfig,
   saveConfig,
   deleteConfig,
-  getAccount,
-  upsertAccount,
-  removeAccount,
+  getClient,
+  upsertClient,
+  removeClient,
   setDefault,
   configPath,
   configDir,
@@ -14,13 +14,13 @@ export { maskToken } from './mask.js';
 export { CliError, ExitCode } from './errors.js';
 export { PACKAGE_VERSION, PACKAGE_NAME } from './version.js';
 export type {
-  AccountEntry,
+  ClientEntry,
   ConfigFile,
   LoginOptions,
   LogoutOptions,
   StatusOptions,
   WhoamiOptions,
-  AccountsOptions,
+  ClientsOptions,
   CallbackResult,
   StatusOutput,
 } from './types.js';

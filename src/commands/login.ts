@@ -1,12 +1,12 @@
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { maskToken } from '../mask.js';
-import { upsertAccount, configPath } from '../config.js';
+import { upsertClient, configPath } from '../config.js';
 import { writeEnvKey } from '../env-file.js';
 import { startCallbackServer } from '../auth/callback-server.js';
 import { openBrowser } from '../auth/open-browser.js';
 import { generateState } from '../auth/state.js';
-import { DEFAULT_BASE_URL, DEFAULT_TIMEOUT_MS, type AccountEntry, type LoginOptions } from '../types.js';
+import { DEFAULT_BASE_URL, DEFAULT_TIMEOUT_MS, type ClientEntry, type LoginOptions } from '../types.js';
 
 function parseBaseUrl(input: string | undefined): URL {
   const raw = input ?? DEFAULT_BASE_URL;
@@ -50,8 +50,8 @@ export async function run(opts: LoginOptions): Promise<number> {
   const authUrl = new URL('/cli/auth', baseUrl);
   authUrl.searchParams.set('redirect_uri', redirectUri);
   authUrl.searchParams.set('state', state);
-  if (opts.accountId) {
-    authUrl.searchParams.set('account_id', opts.accountId);
+  if (opts.clientId) {
+    authUrl.searchParams.set('client_id', opts.clientId);
   }
 
   const onSignal = (sig: NodeJS.Signals): void => {
@@ -77,14 +77,14 @@ export async function run(opts: LoginOptions): Promise<number> {
 
     const callback = await handle.result;
 
-    const entry: AccountEntry = {
-      account_id: callback.accountId,
-      account_name: callback.accountName,
+    const entry: ClientEntry = {
+      client_id: callback.clientId,
+      client_name: callback.clientName,
       api_key: callback.token,
       base_url: baseUrl.origin,
       saved_at: new Date().toISOString(),
     };
-    await upsertAccount(entry, true);
+    await upsertClient(entry, true);
 
     let envResult: { path: string; created: boolean; replaced: boolean } | undefined;
     if (opts.writeEnv) {
@@ -95,8 +95,8 @@ export async function run(opts: LoginOptions): Promise<number> {
       logger.json({
         ok: true,
         masked_token: maskToken(callback.token),
-        account_id: callback.accountId,
-        account_name: callback.accountName,
+        client_id: callback.clientId,
+        client_name: callback.clientName,
         base_url: baseUrl.origin,
         config_path: configPath(),
         env_file: envResult
@@ -104,7 +104,7 @@ export async function run(opts: LoginOptions): Promise<number> {
           : null,
       });
     } else {
-      logger.info(`Logged in as "${callback.accountName}" (${callback.accountId}).`);
+      logger.info(`Logged in as "${callback.clientName}" (${callback.clientId}).`);
       logger.info(`Saved to ${configPath()}.`);
       if (envResult) {
         const action = envResult.created ? 'created' : envResult.replaced ? 'updated' : 'appended to';

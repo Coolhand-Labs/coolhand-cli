@@ -4,12 +4,12 @@ import {
   configDir,
   configPath,
   deleteConfig,
-  getAccount,
+  getClient,
   loadConfig,
-  removeAccount,
+  removeClient,
   saveConfig,
   setDefault,
-  upsertAccount,
+  upsertClient,
 } from '../src/config.js';
 import { CliError } from '../src/errors.js';
 import { createTmpHome, TmpHome } from './helpers/tmp-home.js';
@@ -27,8 +27,8 @@ describe('config', () => {
 
   function makeEntry(id: string) {
     return {
-      account_id: id,
-      account_name: `Account ${id}`,
+      client_id: id,
+      client_name: `Client ${id}`,
       api_key: `ch_pub_${id.repeat(4)}xxxx`,
       base_url: 'https://coolhandlabs.com',
       saved_at: new Date().toISOString(),
@@ -37,71 +37,71 @@ describe('config', () => {
 
   test('loadConfig returns empty default when file is missing', async () => {
     const cfg = await loadConfig();
-    expect(cfg).toEqual({ version: 1, default_account_id: null, accounts: {} });
+    expect(cfg).toEqual({ version: 1, default_client_id: null, clients: {} });
   });
 
   test('saveConfig writes parseable JSON', async () => {
-    await saveConfig({ version: 1, default_account_id: 'a', accounts: { a: makeEntry('a') } });
+    await saveConfig({ version: 1, default_client_id: 'a', clients: { a: makeEntry('a') } });
     const cfg = await loadConfig();
-    expect(cfg.default_account_id).toBe('a');
-    expect(cfg.accounts.a.api_key).toContain('ch_pub_');
+    expect(cfg.default_client_id).toBe('a');
+    expect(cfg.clients.a.api_key).toContain('ch_pub_');
   });
 
   test('saveConfig writes file with mode 0o600 (POSIX)', async () => {
     if (process.platform === 'win32') {
       return;
     }
-    await saveConfig({ version: 1, default_account_id: null, accounts: {} });
+    await saveConfig({ version: 1, default_client_id: null, clients: {} });
     const stat = await fs.stat(configPath());
     expect(stat.mode & 0o777).toBe(0o600);
   });
 
-  test('upsertAccount adds entry and sets default when requested', async () => {
-    await upsertAccount(makeEntry('a'), true);
+  test('upsertClient adds entry and sets default when requested', async () => {
+    await upsertClient(makeEntry('a'), true);
     const cfg = await loadConfig();
-    expect(cfg.accounts.a).toBeDefined();
-    expect(cfg.default_account_id).toBe('a');
+    expect(cfg.clients.a).toBeDefined();
+    expect(cfg.default_client_id).toBe('a');
   });
 
-  test('upsertAccount overwrites existing entry with same id', async () => {
-    await upsertAccount(makeEntry('a'), true);
-    const next = { ...makeEntry('a'), account_name: 'Renamed' };
-    await upsertAccount(next, false);
+  test('upsertClient overwrites existing entry with same id', async () => {
+    await upsertClient(makeEntry('a'), true);
+    const next = { ...makeEntry('a'), client_name: 'Renamed' };
+    await upsertClient(next, false);
     const cfg = await loadConfig();
-    expect(cfg.accounts.a.account_name).toBe('Renamed');
+    expect(cfg.clients.a.client_name).toBe('Renamed');
   });
 
-  test('removeAccount last entry deletes the file', async () => {
-    await upsertAccount(makeEntry('a'), true);
-    const result = await removeAccount('a');
+  test('removeClient last entry deletes the file', async () => {
+    await upsertClient(makeEntry('a'), true);
+    const result = await removeClient('a');
     expect(result).toBeNull();
     await expect(fs.stat(configPath())).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  test('removeAccount with remaining accounts re-assigns default', async () => {
-    await upsertAccount(makeEntry('a'), true);
-    await upsertAccount(makeEntry('b'), false);
-    const cfg = (await removeAccount('a'))!;
-    expect(cfg.default_account_id).toBe('b');
+  test('removeClient with remaining clients re-assigns default', async () => {
+    await upsertClient(makeEntry('a'), true);
+    await upsertClient(makeEntry('b'), false);
+    const cfg = (await removeClient('a'))!;
+    expect(cfg.default_client_id).toBe('b');
   });
 
-  test('removeAccount unknown id is a no-op', async () => {
-    await upsertAccount(makeEntry('a'), true);
-    const cfg = (await removeAccount('missing'))!;
-    expect(cfg.accounts.a).toBeDefined();
+  test('removeClient unknown id is a no-op', async () => {
+    await upsertClient(makeEntry('a'), true);
+    const cfg = (await removeClient('missing'))!;
+    expect(cfg.clients.a).toBeDefined();
   });
 
-  test('setDefault rejects unknown account', async () => {
-    await upsertAccount(makeEntry('a'), true);
+  test('setDefault rejects unknown client', async () => {
+    await upsertClient(makeEntry('a'), true);
     await expect(setDefault('nope')).rejects.toBeInstanceOf(CliError);
   });
 
-  test('getAccount falls back to default when id missing', async () => {
-    await upsertAccount(makeEntry('a'), true);
+  test('getClient falls back to default when id missing', async () => {
+    await upsertClient(makeEntry('a'), true);
     const cfg = await loadConfig();
-    expect(getAccount(cfg)?.account_id).toBe('a');
-    expect(getAccount(cfg, 'a')?.account_id).toBe('a');
-    expect(getAccount(cfg, 'missing')).toBeUndefined();
+    expect(getClient(cfg)?.client_id).toBe('a');
+    expect(getClient(cfg, 'a')?.client_id).toBe('a');
+    expect(getClient(cfg, 'missing')).toBeUndefined();
   });
 
   test('deleteConfig is idempotent', async () => {
