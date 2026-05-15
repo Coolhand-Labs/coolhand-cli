@@ -81,15 +81,23 @@ describe('startCallbackServer', () => {
     await handle.close().catch(() => undefined);
   });
 
-  test('second valid callback returns 410', async () => {
+  test('second valid callback does not re-consume the token', async () => {
     const handle = await startCallbackServer({ expectedState: 's', timeoutMs: 5000 });
-    await get(handle.port, '/callback?token=t1&state=s&client_name=N&client_id=I');
-    await handle.result;
-    // Give the server a moment to close.
-    await new Promise((r) => setTimeout(r, 50));
-    await expect(
-      get(handle.port, '/callback?token=t2&state=s&client_name=N&client_id=I')
-    ).rejects.toBeDefined();
+    const first = await get(handle.port, '/callback?token=t1&state=s&client_name=N&client_id=I');
+    expect(first.status).toBe(200);
+    const result = await handle.result;
+    expect(result.token).toBe('t1');
+    await new Promise((r) => setTimeout(r, 200));
+    // After consuming once, either the listener has closed (fetch rejects) or it returns 410.
+    // Both satisfy the single-shot invariant; the token must not be re-issued.
+    let secondStatus: number | 'rejected' = 'rejected';
+    try {
+      const second = await get(handle.port, '/callback?token=t2&state=s&client_name=N&client_id=I');
+      secondStatus = second.status;
+    } catch {
+      secondStatus = 'rejected';
+    }
+    expect([410, 'rejected']).toContain(secondStatus);
   });
 
   test('timeout rejects with TIMEOUT', async () => {
