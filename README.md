@@ -15,7 +15,7 @@ npm install -g coolhand-cli
 coolhand login
 ```
 
-Requires Node 18 or newer.
+Requires Node 20 or newer.
 
 ## Commands
 
@@ -60,7 +60,7 @@ Multiple clients can be stored at once. `coolhand clients` lists them, `coolhand
 - Tokens are delivered through a one-shot localhost redirect; subsequent calls to the listener get `410 Gone`.
 - CSRF protection: every login generates a random `state` value verified with `crypto.timingSafeEqual` before any token is accepted.
 - `~/.coolhand/config.json` is written atomically with mode `0o600`; the parent directory is `0o700`.
-- Raw tokens are never printed to stdout or stderr. JSON output uses a masked form (`64hex…last4`).
+- Raw tokens are never printed to stdout or stderr. JSON output uses a masked form (e.g. `e885b463…1148`).
 - Zero runtime dependencies — minimal supply-chain surface for the auth flow.
 
 ## Programmatic use
@@ -76,6 +76,23 @@ console.log(maskToken(client!.api_key));
 ```
 
 The CLI is shipped as an ES module. Importers must be ESM as well, or use a dynamic `import()`.
+
+## Use with AI agents
+
+coolhand-cli is designed to be invoked by AI agents and automated workflows, not just humans at a terminal. Two patterns make this straightforward:
+
+**Check auth before starting work:**
+```bash
+coolhand status --json   # exit 0 = token present, exit 1 = not configured
+```
+
+**Wire up the API key in one step:**
+```bash
+coolhand login --write-env .env
+# sets COOLHAND_API_KEY=<token> in .env, idempotent on re-run
+```
+
+The CLI works especially well with the [Coolhand feedback collection skill](https://github.com/Coolhand-Labs/feedback-collection-skill) for Claude Code. The skill scans your project for LLM inference calls and implements best-practice human feedback collection — it reads `COOLHAND_API_KEY` from the environment, which `coolhand login --write-env .env` puts in place.
 
 ## Configuration file
 
