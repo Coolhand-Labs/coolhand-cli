@@ -20,14 +20,14 @@ On Windows, POSIX permission bits are not enforced. The file is still confined t
     "acme": {
       "client_id": "acme",
       "client_name": "Acme Inc",
-      "api_key": "ch_pub_AbCdEf0123456789xyz",
+      "api_key": "e885b463541f1d1c6002268f32bbb7c82d9a350437bd587eb429504005831148",
       "base_url": "https://coolhandlabs.com",
       "saved_at": "2026-05-12T18:04:11.000Z"
     },
     "personal": {
       "client_id": "personal",
       "client_name": "Personal",
-      "api_key": "ch_pub_PERSONALTOKEN12345",
+      "api_key": "4f3a2e7d6c5b8a9f1e0d2c4b6a8f1e3d5c7b9a2f4e6d8c1a3b5d7f9e1c2a4b6d",
       "base_url": "https://coolhandlabs.com",
       "saved_at": "2026-05-13T09:22:00.000Z"
     }

@@ -27,7 +27,7 @@ This document describes the end-to-end token-acquisition flow used by `coolhand 
      │                                │                                   │
      │                                │   302 redirect to                 │
      │                                │   http://127.0.0.1:P/callback     │
-     │                                │     ?token=ch_pub_…               │
+     │                                │     ?token=<64-hex>               │
      │                                │     &state=...                    │
      │                                │     &client_name=...             │
      │                                │     &client_id=...               │

@@ -42,7 +42,7 @@ Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the 
   "configured": true,
   "clients": [
     {"client_id": "acme", "client_name": "Acme Inc",
-     "masked_token": "ch_pub_A…wxyz", "base_url": "https://coolhandlabs.com"}
+     "masked_token": "e885b463…1148", "base_url": "https://coolhandlabs.com"}
   ],
   "default_client_id": "acme"
 }
@@ -60,7 +60,7 @@ Multiple clients can be stored at once. `coolhand clients` lists them, `coolhand
 - Tokens are delivered through a one-shot localhost redirect; subsequent calls to the listener get `410 Gone`.
 - CSRF protection: every login generates a random `state` value verified with `crypto.timingSafeEqual` before any token is accepted.
 - `~/.coolhand/config.json` is written atomically with mode `0o600`; the parent directory is `0o700`.
-- Raw tokens are never printed to stdout or stderr. JSON output uses a masked form (`ch_pub_…last4`).
+- Raw tokens are never printed to stdout or stderr. JSON output uses a masked form (`64hex…last4`).
 - Zero runtime dependencies — minimal supply-chain surface for the auth flow.
 
 ## Programmatic use
@@ -89,7 +89,7 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
     "acme": {
       "client_id": "acme",
       "client_name": "Acme Inc",
-      "api_key": "ch_pub_…",
+      "api_key": "e885b463541f1d1c6002268f32bbb7c82d9a350437bd587eb429504005831148",
       "base_url": "https://coolhandlabs.com",
       "saved_at": "2026-05-12T18:04:11.000Z"
     }

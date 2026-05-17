@@ -1,11 +1,17 @@
 /**
- * Strips anything that looks like a Coolhand public API key from a string,
- * so we never inadvertently log a raw token through an error message.
+ * Strips anything that looks like a Coolhand API key from a string, so we never
+ * inadvertently log a raw token through an error message. Real tokens are raw
+ * 64-char hex strings; this pattern also catches longer hex (forwards-compat)
+ * and the legacy `ch_pub_…` form, with low false-positive risk (redacting an
+ * unrelated 40+ hex SHA in an error message is harmless).
  */
-const TOKEN_PATTERN = /ch_pub_[A-Za-z0-9_-]{8,}/g;
+const TOKEN_PATTERNS: ReadonlyArray<RegExp> = [
+  /\b[a-f0-9]{40,}\b/gi,
+  /ch_pub_[A-Za-z0-9_-]{8,}/g,
+];
 
 export function redact(text: string): string {
-  return text.replace(TOKEN_PATTERN, 'ch_pub_…REDACTED');
+  return TOKEN_PATTERNS.reduce((acc, pattern) => acc.replace(pattern, 'REDACTED'), text);
 }
 
 export interface Logger {

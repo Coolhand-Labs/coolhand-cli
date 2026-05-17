@@ -15,7 +15,7 @@ npx -y coolhand-cli@latest status --json
   "configured": true,
   "clients": [
     {"client_id": "acme", "client_name": "Acme Inc",
-     "masked_token": "ch_pub_A…wxyz", "base_url": "https://coolhandlabs.com"}
+     "masked_token": "e885b463…1148", "base_url": "https://coolhandlabs.com"}
   ],
   "default_client_id": "acme"
 }
@@ -36,7 +36,7 @@ Successful exit (`0`) produces a single JSON line on stdout:
 ```json
 {
   "ok": true,
-  "masked_token": "ch_pub_H…5678",
+  "masked_token": "e885b463…1148",
   "client_id": "acme",
   "client_name": "Acme Inc",
   "base_url": "https://coolhandlabs.com",
