@@ -19,6 +19,6 @@ All notable changes to `coolhand-cli` will be documented in this file.
 - HTTP callback listener binds to `127.0.0.1` only.
 - Single-shot server: rejects any subsequent callbacks after the first valid one.
 - CSRF protection via 16-byte random `state` parameter, verified with `crypto.timingSafeEqual`.
-- Raw API tokens are never written to stdout or stderr. JSON outputs use a masked form (`64hex…last4`).
+- Raw API tokens are never written to stdout or stderr. JSON outputs use a masked form (e.g. `e885b463…1148`).
 - Config files written atomically (tmp + rename + chmod) with mode `0o600`; parent directory `0o700`.
 - Zero runtime dependencies — minimal supply-chain surface for the auth flow.

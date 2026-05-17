@@ -36,7 +36,7 @@
   },
   "homepage": "https://coolhandlabs.com",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "files": [
     "dist/",
@@ -51,8 +51,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src test --ext .ts",
-    "lint:fix": "eslint src test --ext .ts --fix",
+    "lint": "eslint src test",
+    "lint:fix": "eslint src test --fix",
     "dev": "tsc --watch",
     "clean": "rm -rf dist coverage",
     "smoke": "node dist/bin.js --version"
