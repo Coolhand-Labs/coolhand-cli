@@ -23,10 +23,10 @@ const BASE_STYLES = `
   .wrap { width: 100%; max-width: 440px; }
   .brand {
     text-align: center;
-    margin-bottom: 24px;
+    margin-bottom: 32px;
   }
   .brand-logo {
-    height: 36px;
+    height: 112px;
     width: auto;
     display: inline-block;
   }
