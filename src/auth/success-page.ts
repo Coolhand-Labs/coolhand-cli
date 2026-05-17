@@ -26,8 +26,9 @@ const BASE_STYLES = `
     margin-bottom: 32px;
   }
   .brand-logo {
-    height: 112px;
+    height: 224px;
     width: auto;
+    max-width: 100%;
     display: inline-block;
   }
   .brand-text {
