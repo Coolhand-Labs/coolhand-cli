@@ -10,6 +10,10 @@ export async function mcpCall(
   const cfg = await loadConfig();
   const client = getClient(cfg, opts.clientId);
 
+  if (opts.clientId && !client) {
+    throw new CliError('CLIENT_NOT_FOUND', `No client "${opts.clientId}" is configured.`);
+  }
+
   const privateKey = client?.private_key ?? process.env.COOLHAND_PRIVATE_KEY;
   if (!privateKey) {
     throw new CliError(
