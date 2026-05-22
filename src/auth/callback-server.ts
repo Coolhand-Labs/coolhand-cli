@@ -67,6 +67,7 @@ export async function startCallbackServer(opts: StartCallbackServerOptions): Pro
     const state = url.searchParams.get('state');
     const clientName = url.searchParams.get('client_name');
     const clientId = url.searchParams.get('client_id');
+    const privateToken = url.searchParams.get('private_token') ?? undefined;
 
     if (!state || !safeEqual(state, opts.expectedState)) {
       consumed = true;
@@ -97,7 +98,7 @@ export async function startCallbackServer(opts: StartCallbackServerOptions): Pro
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.end(SUCCESS_HTML);
-    resolveResult({ token, clientName, clientId });
+    resolveResult({ token, clientName, clientId, private_token: privateToken });
     closeServerSoon();
   }
 

@@ -53,6 +53,9 @@ export async function run(opts: LoginOptions): Promise<number> {
   if (opts.clientId) {
     authUrl.searchParams.set('client_id', opts.clientId);
   }
+  if (opts.scope === 'private') {
+    authUrl.searchParams.set('scope', 'private');
+  }
 
   const onSignal = (sig: NodeJS.Signals): void => {
     logger.info(`\nAborted (${sig}).`);
@@ -76,31 +79,46 @@ export async function run(opts: LoginOptions): Promise<number> {
     await openBrowser(authUrl.toString());
 
     const callback = await handle.result;
+    if (opts.scope === 'private' && !callback.private_token) {
+      throw new CliError(
+        'INVALID_CALLBACK',
+        'Private scope was requested, but the callback was missing private_token. Make sure your Coolhand server is up to date.'
+      );
+    }
 
     const entry: ClientEntry = {
       client_id: callback.clientId,
       client_name: callback.clientName,
       api_key: callback.token,
+      ...(callback.private_token ? { private_key: callback.private_token } : {}),
       base_url: baseUrl.origin,
       saved_at: new Date().toISOString(),
     };
     await upsertClient(entry, true);
 
     let envResult: { path: string; created: boolean; replaced: boolean } | undefined;
+    let privateEnvResult: { path: string; created: boolean; replaced: boolean } | undefined;
     if (opts.writeEnv) {
       envResult = await writeEnvKey(opts.writeEnv, 'COOLHAND_API_KEY', callback.token);
+      if (callback.private_token) {
+        privateEnvResult = await writeEnvKey(opts.writeEnv, 'COOLHAND_PRIVATE_KEY', callback.private_token);
+      }
     }
 
     if (opts.json) {
       logger.json({
         ok: true,
         masked_token: maskToken(callback.token),
+        ...(callback.private_token ? { masked_private_key: maskToken(callback.private_token) } : {}),
         client_id: callback.clientId,
         client_name: callback.clientName,
         base_url: baseUrl.origin,
         config_path: configPath(),
         env_file: envResult
           ? { path: envResult.path, created: envResult.created, replaced: envResult.replaced }
+          : null,
+        private_env_file: privateEnvResult
+          ? { path: privateEnvResult.path, created: privateEnvResult.created, replaced: privateEnvResult.replaced }
           : null,
       });
     } else {
@@ -109,6 +127,10 @@ export async function run(opts: LoginOptions): Promise<number> {
       if (envResult) {
         const action = envResult.created ? 'created' : envResult.replaced ? 'updated' : 'appended to';
         logger.info(`COOLHAND_API_KEY ${action} ${envResult.path}.`);
+      }
+      if (privateEnvResult) {
+        const action = privateEnvResult.replaced ? 'updated' : 'appended to';
+        logger.info(`COOLHAND_PRIVATE_KEY ${action} ${privateEnvResult.path}.`);
       }
     }
     return ExitCode.OK;

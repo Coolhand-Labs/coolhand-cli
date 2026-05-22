@@ -6,6 +6,7 @@ export interface FakeRailsRedirect {
   state?: string;
   clientName?: string;
   clientId?: string;
+  private_token?: string;
 }
 
 export interface FakeRails {
@@ -50,6 +51,9 @@ export async function startFakeRails(
     if (decision.clientId !== undefined) {
       callbackUrl.searchParams.set('client_id', decision.clientId);
     }
+    if (decision.private_token !== undefined) {
+      callbackUrl.searchParams.set('private_token', decision.private_token);
+    }
     res.statusCode = 302;
     res.setHeader('Location', callbackUrl.toString());
     res.end();
@@ -92,6 +96,9 @@ export async function deliverCallback(redirectUri: string, params: FakeRailsRedi
   }
   if (params.clientId !== undefined) {
     url.searchParams.set('client_id', params.clientId);
+  }
+  if (params.private_token !== undefined) {
+    url.searchParams.set('private_token', params.private_token);
   }
   await fetch(url.toString(), { method: 'GET' }).catch(() => undefined);
 }

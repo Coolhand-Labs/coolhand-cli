@@ -124,6 +124,79 @@ describe('login command', () => {
     expect(code).not.toBe(0);
   });
 
+  test('--scope private stores private_key in config', async () => {
+    rails = await startFakeRails(({ state }) => ({
+      token: 'ch_pub_SCOPEPUBTOKEN1234567890',
+      state,
+      clientName: 'Scope Acct',
+      clientId: 'scopeacct',
+      private_token: 'ch_priv_SCOPEPRIVTOKEN123456789',
+    }));
+
+    (openBrowser as jest.Mock).mockImplementation(async (url: string) => {
+      const parsed = new URL(url);
+      expect(parsed.searchParams.get('scope')).toBe('private');
+      const res = await fetch(url, { redirect: 'manual' });
+      const location = res.headers.get('location');
+      if (location) {
+        await fetch(location).catch(() => undefined);
+      }
+    });
+
+    const code = await runLogin({ baseUrl: rails.url, scope: 'private', json: true });
+    expect(code).toBe(0);
+    const cfg = await loadConfig();
+    expect(cfg.clients.scopeacct.api_key).toBe('ch_pub_SCOPEPUBTOKEN1234567890');
+    expect(cfg.clients.scopeacct.private_key).toBe('ch_priv_SCOPEPRIVTOKEN123456789');
+  });
+
+  test('--scope private rejects callback without private_token', async () => {
+    rails = await startFakeRails(({ state }) => ({
+      token: 'ch_pub_NOPRIVTOKEN1234567890',
+      state,
+      clientName: 'No Priv',
+      clientId: 'nopriv',
+    }));
+
+    (openBrowser as jest.Mock).mockImplementation(async (url: string) => {
+      const res = await fetch(url, { redirect: 'manual' });
+      const location = res.headers.get('location');
+      if (location) {
+        await fetch(location).catch(() => undefined);
+      }
+    });
+
+    const code = await runLogin({ baseUrl: rails.url, scope: 'private', json: true });
+    expect(code).not.toBe(0);
+    const cfg = await loadConfig();
+    expect(cfg.clients.nopriv).toBeUndefined();
+  });
+
+  test('--scope private --write-env writes both keys to env file', async () => {
+    rails = await startFakeRails(({ state }) => ({
+      token: 'ch_pub_ENVPUBTOKEN12345678901',
+      state,
+      clientName: 'Env Scope',
+      clientId: 'envscope',
+      private_token: 'ch_priv_ENVPRIVTOKEN1234567890',
+    }));
+
+    (openBrowser as jest.Mock).mockImplementation(async (url: string) => {
+      const res = await fetch(url, { redirect: 'manual' });
+      const location = res.headers.get('location');
+      if (location) {
+        await fetch(location).catch(() => undefined);
+      }
+    });
+
+    const envPath = path.join(home.dir, '.env');
+    const code = await runLogin({ baseUrl: rails.url, scope: 'private', writeEnv: envPath, json: true });
+    expect(code).toBe(0);
+    const contents = await fs.readFile(envPath, 'utf8');
+    expect(contents).toContain('COOLHAND_API_KEY=ch_pub_ENVPUBTOKEN12345678901');
+    expect(contents).toContain('COOLHAND_PRIVATE_KEY=ch_priv_ENVPRIVTOKEN1234567890');
+  });
+
   // Use deliverCallback directly to avoid the fake-rails dance.
   test('deliverCallback with valid params succeeds', async () => {
     rails = await startFakeRails(({ state }) => ({
