@@ -257,8 +257,12 @@ function loginOptions(parsed: ParsedArgs): LoginOptions {
       opts.timeoutMs = n;
     }
   }
-  if (parsed.flags.scope === 'private') {
-    opts.scope = 'private';
+  if (parsed.flags.scope !== undefined) {
+    if (parsed.flags.scope === 'private') {
+      opts.scope = 'private';
+    } else if (typeof parsed.flags.scope === 'string') {
+      logger.warn(`Ignoring unknown --scope value "${parsed.flags.scope}" (only "private" is supported).`);
+    }
   }
   return opts;
 }

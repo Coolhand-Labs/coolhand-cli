@@ -79,18 +79,20 @@ export async function run(opts: LoginOptions): Promise<number> {
     await openBrowser(authUrl.toString());
 
     const callback = await handle.result;
-    if (opts.scope === 'private' && !callback.private_token) {
+    const wantsPrivate = opts.scope === 'private';
+    if (wantsPrivate && !callback.private_token) {
       throw new CliError(
         'INVALID_CALLBACK',
         'Private scope was requested, but the callback was missing private_token. Make sure your Coolhand server is up to date.'
       );
     }
+    const privateToken = wantsPrivate ? callback.private_token : undefined;
 
     const entry: ClientEntry = {
       client_id: callback.clientId,
       client_name: callback.clientName,
       api_key: callback.token,
-      ...(callback.private_token ? { private_key: callback.private_token } : {}),
+      ...(privateToken ? { private_key: privateToken } : {}),
       base_url: baseUrl.origin,
       saved_at: new Date().toISOString(),
     };
@@ -100,8 +102,8 @@ export async function run(opts: LoginOptions): Promise<number> {
     let privateEnvResult: { path: string; created: boolean; replaced: boolean } | undefined;
     if (opts.writeEnv) {
       envResult = await writeEnvKey(opts.writeEnv, 'COOLHAND_API_KEY', callback.token);
-      if (callback.private_token) {
-        privateEnvResult = await writeEnvKey(opts.writeEnv, 'COOLHAND_PRIVATE_KEY', callback.private_token);
+      if (privateToken) {
+        privateEnvResult = await writeEnvKey(opts.writeEnv, 'COOLHAND_PRIVATE_KEY', privateToken);
       }
     }
 
@@ -109,7 +111,7 @@ export async function run(opts: LoginOptions): Promise<number> {
       logger.json({
         ok: true,
         masked_token: maskToken(callback.token),
-        ...(callback.private_token ? { masked_private_key: maskToken(callback.private_token) } : {}),
+        ...(privateToken ? { masked_private_key: maskToken(privateToken) } : {}),
         client_id: callback.clientId,
         client_name: callback.clientName,
         base_url: baseUrl.origin,
@@ -129,7 +131,7 @@ export async function run(opts: LoginOptions): Promise<number> {
         logger.info(`COOLHAND_API_KEY ${action} ${envResult.path}.`);
       }
       if (privateEnvResult) {
-        const action = privateEnvResult.replaced ? 'updated' : 'appended to';
+        const action = privateEnvResult.created ? 'created' : privateEnvResult.replaced ? 'updated' : 'appended to';
         logger.info(`COOLHAND_PRIVATE_KEY ${action} ${privateEnvResult.path}.`);
       }
     }

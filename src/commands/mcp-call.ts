@@ -14,6 +14,13 @@ export async function mcpCall(
     throw new CliError('CLIENT_NOT_FOUND', `No client "${opts.clientId}" is configured.`);
   }
 
+  if (!client && !process.env.COOLHAND_PRIVATE_KEY) {
+    throw new CliError(
+      'NOT_CONFIGURED',
+      'Not logged in. Run `coolhand login --scope private` to authenticate.'
+    );
+  }
+
   const privateKey = opts.clientId ? client?.private_key : (client?.private_key ?? process.env.COOLHAND_PRIVATE_KEY);
   if (!privateKey) {
     throw new CliError(
@@ -23,6 +30,15 @@ export async function mcpCall(
   }
 
   const baseUrl = client?.base_url ?? DEFAULT_BASE_URL;
+  let parsedBaseUrl: URL;
+  try {
+    parsedBaseUrl = new URL(baseUrl);
+  } catch {
+    throw new CliError('INVALID_BASE_URL', `Invalid base_url for client: ${baseUrl}`);
+  }
+  if (parsedBaseUrl.protocol !== 'http:' && parsedBaseUrl.protocol !== 'https:') {
+    throw new CliError('INVALID_BASE_URL', `base_url must be http or https, got: ${parsedBaseUrl.protocol}`);
+  }
   const url = `${baseUrl}/mcp`;
 
   const body = {
@@ -47,15 +63,16 @@ export async function mcpCall(
   }
 
   const text = await res.text().catch(() => '');
+  const snippet = text.slice(0, 2000);
   if (!res.ok) {
-    throw new CliError('MCP_ERROR', `MCP request failed (${res.status}): ${text}`);
+    throw new CliError('MCP_ERROR', `MCP request failed (${res.status}): ${snippet}`);
   }
 
   let json: { result?: unknown; error?: { message?: string } };
   try {
     json = JSON.parse(text) as { result?: unknown; error?: { message?: string } };
   } catch {
-    throw new CliError('MCP_ERROR', `MCP response was not valid JSON: ${text}`);
+    throw new CliError('MCP_ERROR', `MCP response was not valid JSON: ${snippet}`);
   }
 
   if (json.error) {
