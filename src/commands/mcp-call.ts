@@ -39,7 +39,7 @@ export async function mcpCall(
   if (parsedBaseUrl.protocol !== 'http:' && parsedBaseUrl.protocol !== 'https:') {
     throw new CliError('INVALID_BASE_URL', `base_url must be http or https, got: ${parsedBaseUrl.protocol}`);
   }
-  const url = `${baseUrl}/mcp`;
+  const url = new URL('/mcp', parsedBaseUrl).toString();
 
   const body = {
     jsonrpc: '2.0',
