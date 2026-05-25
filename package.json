@@ -45,6 +45,7 @@
   ],
   "scripts": {
     "sync-version": "node scripts/sync-version.mjs",
+    "prepare": "node scripts/sync-version.mjs",
     "build": "npm run sync-version && tsc && chmod +x dist/bin.js",
     "prepublishOnly": "npm run build && npm run lint && npm run typecheck && npm test",
     "test": "jest",

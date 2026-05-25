@@ -12,6 +12,9 @@ yarn-error.log*
 # TypeScript build output
 dist/
 
+# Generated from package.json — do not commit
+src/version.ts
+
 # TypeScript cache
 *.tsbuildinfo
 

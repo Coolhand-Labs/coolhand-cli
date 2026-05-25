@@ -12,18 +12,20 @@
 
    Or edit `"version"` in `package.json` directly.
 
-2. **Build** — automatically syncs `src/version.ts` from `package.json`, compiles, and marks `dist/bin.js` executable:
+2. **Build** — regenerates `src/version.ts` from `package.json`, compiles TypeScript, and marks `dist/bin.js` executable:
 
    ```bash
    npm run build
    ```
 
+   > `src/version.ts` is gitignored and generated automatically — never edit or commit it.
+
 3. **Update `CHANGELOG.md`** with the new version section.
 
-4. **Commit** both updated files together:
+4. **Commit**:
 
    ```bash
-   git add package.json src/version.ts CHANGELOG.md
+   git add package.json CHANGELOG.md
    git commit -m "Bump version to vX.Y.Z"
    ```
 
@@ -44,12 +46,3 @@
 
 For a release candidate, use `npm publish --tag next` and verify on a clean machine with `npx coolhand-cli@next login` before promoting to `latest`.
 
----
-
-## Version File
-
-`src/version.ts` is **auto-generated** from `package.json` — do not edit it manually. `scripts/sync-version.mjs` (called automatically by `npm run build`) rewrites the file with the current version from `package.json`. To sync manually:
-
-```bash
-npm run sync-version
-```
