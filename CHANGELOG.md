@@ -2,6 +2,17 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.2.0] - 2026-05-25
+
+### Added
+- Six optimization commands: `create-optimization`, `get-optimization`, `update-optimization`, `close-optimization`, `add-optimization-comment`, `search-optimizations`.
+- `mcp-call` command for direct MCP tool invocation.
+- `--scope private` flag on `login` to authenticate against private workspaces.
+- Per-command `--help` output for all commands.
+
+### Changed
+- npm version badge added to README.
+
 ## [0.1.0] - 2026-05-12
 
 ### Added
