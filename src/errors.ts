@@ -17,7 +17,9 @@ export type ErrorCode =
   | 'INVALID_BASE_URL'
   | 'INVALID_ARGS'
   | 'WRITE_ENV_FAILED'
-  | 'CLIENT_NOT_FOUND';
+  | 'CLIENT_NOT_FOUND'
+  | 'NO_PRIVATE_KEY'
+  | 'MCP_ERROR';
 
 export class CliError extends Error {
   public readonly code: ErrorCode;

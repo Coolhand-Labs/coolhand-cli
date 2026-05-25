@@ -8,6 +8,7 @@
 const TOKEN_PATTERNS: ReadonlyArray<RegExp> = [
   /\b[a-f0-9]{40,}\b/gi,
   /ch_pub_[A-Za-z0-9_-]{8,}/g,
+  /ch_priv_[A-Za-z0-9_-]{8,}/g,
 ];
 
 export function redact(text: string): string {

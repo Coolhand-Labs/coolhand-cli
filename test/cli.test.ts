@@ -24,6 +24,19 @@ describe('parseArgs', () => {
     const parsed = parseArgs(['--version']);
     expect(parsed.flags.version).toBe(true);
   });
+
+  test('does not consume positional id after boolean flag', () => {
+    const parsed = parseArgs(['get-optimization', '--json', 'opt-1']);
+    expect(parsed.command).toBe('get-optimization');
+    expect(parsed.flags.json).toBe(true);
+    expect(parsed.positional).toEqual(['opt-1']);
+  });
+
+  test('preserves multi-word positional text', () => {
+    const parsed = parseArgs(['add-optimization-comment', 'opt-1', 'looks', 'good']);
+    expect(parsed.command).toBe('add-optimization-comment');
+    expect(parsed.positional).toEqual(['opt-1', 'looks', 'good']);
+  });
 });
 
 describe('run', () => {

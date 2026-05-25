@@ -2,6 +2,7 @@ export interface ClientEntry {
   client_id: string;
   client_name: string;
   api_key: string;
+  private_key?: string;
   base_url: string;
   saved_at: string;
 }
@@ -18,6 +19,7 @@ export interface LoginOptions {
   json?: boolean;
   clientId?: string;
   timeoutMs?: number;
+  scope?: 'private';
 }
 
 export interface LogoutOptions {
@@ -43,6 +45,7 @@ export interface CallbackResult {
   token: string;
   clientName: string;
   clientId: string;
+  private_token?: string;
 }
 
 export interface StatusOutput {
@@ -54,6 +57,54 @@ export interface StatusOutput {
     base_url: string;
   }>;
   default_client_id: string | null;
+}
+
+export interface SearchOptimizationsOptions {
+  status?: string;
+  type?: string;
+  category?: string;
+  query?: string;
+  from?: string;
+  to?: string;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface GetOptimizationOptions {
+  id: string;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface AddOptimizationCommentOptions {
+  id: string;
+  comment: string;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface CloseOptimizationOptions {
+  id: string;
+  reason: string;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface CreateOptimizationOptions {
+  title?: string;
+  analysis?: string;
+  plan?: string;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface UpdateOptimizationOptions {
+  id: string;
+  title?: string;
+  analysis?: string;
+  plan?: string;
+  json?: boolean;
+  clientId?: string;
 }
 
 export const DEFAULT_BASE_URL = 'https://coolhandlabs.com';
