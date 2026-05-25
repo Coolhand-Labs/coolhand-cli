@@ -25,4 +25,25 @@ describe('add-optimization-comment command', () => {
     const code = await run({ id: 'opt-1', comment: 'test' });
     expect(code).not.toBe(0);
   });
+
+  test('--json flag exits 0 on success', async () => {
+    const code = await run({ id: 'opt-1', comment: 'Looks good', json: true });
+    expect(code).toBe(0);
+  });
+
+  test('--json flag exits non-zero on error', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    (mcpCall as jest.Mock).mockRejectedValue(new CliError('MCP_ERROR', 'Server error'));
+    const code = await run({ id: 'opt-1', comment: 'test', json: true });
+    expect(code).not.toBe(0);
+  });
+
+  test('forwards --client-id to mcpCall', async () => {
+    const code = await run({ id: 'opt-1', comment: 'Looks good', clientId: 'my-client' });
+    expect(code).toBe(0);
+    expect(mcpCall).toHaveBeenCalledWith('add_optimization_comment', {
+      id: 'opt-1',
+      comment: 'Looks good',
+    }, { clientId: 'my-client' });
+  });
 });

@@ -25,4 +25,25 @@ describe('close-optimization command', () => {
     const code = await run({ id: 'opt-1', reason: 'done' });
     expect(code).not.toBe(0);
   });
+
+  test('--json flag exits 0 on success', async () => {
+    const code = await run({ id: 'opt-1', reason: 'shipped', json: true });
+    expect(code).toBe(0);
+  });
+
+  test('--json flag exits non-zero on error', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    (mcpCall as jest.Mock).mockRejectedValue(new CliError('MCP_ERROR', 'Not found'));
+    const code = await run({ id: 'opt-1', reason: 'done', json: true });
+    expect(code).not.toBe(0);
+  });
+
+  test('forwards --client-id to mcpCall', async () => {
+    const code = await run({ id: 'opt-1', reason: 'shipped', clientId: 'my-client' });
+    expect(code).toBe(0);
+    expect(mcpCall).toHaveBeenCalledWith('close_optimization', {
+      id: 'opt-1',
+      reason: 'shipped',
+    }, { clientId: 'my-client' });
+  });
 });

@@ -41,4 +41,15 @@ describe('create-optimization command', () => {
     const code = await run({ title: 'Test' });
     expect(code).not.toBe(0);
   });
+
+  test('--json flag exits 0 on success', async () => {
+    const code = await run({ title: 'My opt', json: true });
+    expect(code).toBe(0);
+  });
+
+  test('forwards --client-id to mcpCall', async () => {
+    const code = await run({ title: 'My opt', clientId: 'my-client' });
+    expect(code).toBe(0);
+    expect(mcpCall).toHaveBeenCalledWith('create_optimization', { title: 'My opt' }, { clientId: 'my-client' });
+  });
 });
