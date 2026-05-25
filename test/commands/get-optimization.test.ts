@@ -27,4 +27,17 @@ describe('get-optimization command', () => {
     const code = await run({ id: 'bad-id' });
     expect(code).not.toBe(0);
   });
+
+  test('--json flag exits non-zero on error', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    (mcpCall as jest.Mock).mockRejectedValue(new CliError('MCP_ERROR', 'Not found'));
+    const code = await run({ id: 'bad-id', json: true });
+    expect(code).not.toBe(0);
+  });
+
+  test('forwards --client-id to mcpCall', async () => {
+    const code = await run({ id: 'opt-1', clientId: 'my-client' });
+    expect(code).toBe(0);
+    expect(mcpCall).toHaveBeenCalledWith('get_optimization', { id: 'opt-1' }, { clientId: 'my-client' });
+  });
 });

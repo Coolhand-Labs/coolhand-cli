@@ -72,4 +72,29 @@ describe('run', () => {
     const code = await run(['login', '--write-env']);
     expect(code).toBe(1);
   });
+
+  test('get-optimization without id returns exit 1', async () => {
+    const code = await run(['get-optimization']);
+    expect(code).toBe(1);
+  });
+
+  test('close-optimization without id returns exit 1', async () => {
+    const code = await run(['close-optimization']);
+    expect(code).toBe(1);
+  });
+
+  test('close-optimization with id but no reason returns exit 1', async () => {
+    const code = await run(['close-optimization', 'abc-123']);
+    expect(code).toBe(1);
+  });
+
+  test('update-optimization without id returns exit 1', async () => {
+    const code = await run(['update-optimization']);
+    expect(code).toBe(1);
+  });
+
+  test('add-optimization-comment without comment returns exit 1', async () => {
+    const code = await run(['add-optimization-comment', 'abc-123']);
+    expect(code).toBe(1);
+  });
 });
