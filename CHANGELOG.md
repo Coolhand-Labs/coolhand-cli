@@ -2,6 +2,22 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.3.0] - 2026-05-27
+
+### Added
+- `--page` and `--per-page` pagination flags on `search-optimizations`; text output now includes a `Page N of M (X total)` hint.
+- `--template-id`, `--workload-id`, `--days-back` filter flags on `search-optimizations`.
+- `--sort-by` flag on `search-optimizations` (`impact_desc` | `complexity_asc` | `created_at_desc`).
+- `get-optimization` now surfaces `pr_number` and `pr_url` (printed as `PR: #N <url>` when present).
+- `get-optimization` renders `coding_prompt` in a separate `--- Coding Prompt ---` block with preserved newlines.
+
+### Fixed
+- `get-optimization` was sending `id` instead of `optimization_id` to the MCP server, causing "Invalid params" errors for all calls.
+
+### Changed
+- `src/version.ts` is now gitignored and auto-generated from `package.json` at build time; version bumps only require editing `package.json`.
+- Test coverage thresholds raised to 70/65/60/70.
+
 ## [0.2.0] - 2026-05-25
 
 ### Added
