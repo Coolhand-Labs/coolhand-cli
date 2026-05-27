@@ -71,6 +71,7 @@ export interface SearchOptimizationsOptions {
   templateId?: string;
   workloadId?: string;
   daysBack?: number;
+  sortBy?: string;
   json?: boolean;
   clientId?: string;
 }

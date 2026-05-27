@@ -10,7 +10,15 @@ export async function run(opts: GetOptimizationOptions): Promise<number> {
     if (opts.json) {
       logger.json({ ok: true, result });
     } else {
-      logger.info(JSON.stringify(result, null, 2));
+      const r = result as Record<string, unknown>;
+      const { coding_prompt, ...rest } = r;
+      logger.info(JSON.stringify(rest, null, 2));
+      if (typeof r.pr_number === 'number' && typeof r.pr_url === 'string') {
+        logger.info(`PR: #${r.pr_number} ${r.pr_url}`);
+      }
+      if (typeof coding_prompt === 'string') {
+        logger.info(`\n--- Coding Prompt ---\n${coding_prompt}`);
+      }
     }
     return ExitCode.OK;
   } catch (err) {

@@ -39,6 +39,9 @@ export async function run(opts: SearchOptimizationsOptions): Promise<number> {
     if (opts.daysBack !== undefined) {
       args.days_back = opts.daysBack;
     }
+    if (opts.sortBy !== undefined) {
+      args.sort_by = opts.sortBy;
+    }
 
     const result = await mcpCall('search_optimizations', args, { clientId: opts.clientId });
 
