@@ -335,11 +335,11 @@ function searchOptimizationsOptions(parsed: ParsedArgs): SearchOptimizationsOpti
   }
   if (typeof parsed.flags['page'] === 'string') {
     const n = parseInt(parsed.flags['page'], 10);
-    if (!isNaN(n)) opts.page = n;
+    if (!isNaN(n)) { opts.page = n; }
   }
   if (typeof parsed.flags['per-page'] === 'string') {
     const n = parseInt(parsed.flags['per-page'], 10);
-    if (!isNaN(n)) opts.perPage = n;
+    if (!isNaN(n)) { opts.perPage = n; }
   }
   if (typeof parsed.flags['template-id'] === 'string') {
     opts.templateId = parsed.flags['template-id'];
@@ -349,7 +349,7 @@ function searchOptimizationsOptions(parsed: ParsedArgs): SearchOptimizationsOpti
   }
   if (typeof parsed.flags['days-back'] === 'string') {
     const n = parseInt(parsed.flags['days-back'], 10);
-    if (!isNaN(n)) opts.daysBack = n;
+    if (!isNaN(n)) { opts.daysBack = n; }
   }
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
