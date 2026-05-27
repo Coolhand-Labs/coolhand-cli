@@ -13,7 +13,7 @@ describe('get-optimization command', () => {
   test('calls get_optimization with the provided id', async () => {
     const code = await run({ id: 'opt-1' });
     expect(code).toBe(0);
-    expect(mcpCall).toHaveBeenCalledWith('get_optimization', { id: 'opt-1' }, { clientId: undefined });
+    expect(mcpCall).toHaveBeenCalledWith('get_optimization', { optimization_id: 'opt-1' }, { clientId: undefined });
   });
 
   test('--json flag produces json output', async () => {
@@ -38,6 +38,6 @@ describe('get-optimization command', () => {
   test('forwards --client-id to mcpCall', async () => {
     const code = await run({ id: 'opt-1', clientId: 'my-client' });
     expect(code).toBe(0);
-    expect(mcpCall).toHaveBeenCalledWith('get_optimization', { id: 'opt-1' }, { clientId: 'my-client' });
+    expect(mcpCall).toHaveBeenCalledWith('get_optimization', { optimization_id: 'opt-1' }, { clientId: 'my-client' });
   });
 });
