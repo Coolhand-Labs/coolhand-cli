@@ -99,6 +99,11 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--query VALUE', description: 'Search query string' },
       { flag: '--from DATE', description: 'Start of date range' },
       { flag: '--to DATE', description: 'End of date range' },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 20, max: 50)' },
+      { flag: '--template-id ID', description: 'Filter to a specific template' },
+      { flag: '--workload-id ID', description: 'Filter to a specific workload' },
+      { flag: '--days-back N', description: 'Only show optimizations from the last N days' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -327,6 +332,24 @@ function searchOptimizationsOptions(parsed: ParsedArgs): SearchOptimizationsOpti
   }
   if (typeof parsed.flags.to === 'string') {
     opts.to = parsed.flags.to;
+  }
+  if (typeof parsed.flags['page'] === 'string') {
+    const n = parseInt(parsed.flags['page'], 10);
+    if (!isNaN(n)) { opts.page = n; }
+  }
+  if (typeof parsed.flags['per-page'] === 'string') {
+    const n = parseInt(parsed.flags['per-page'], 10);
+    if (!isNaN(n)) { opts.perPage = n; }
+  }
+  if (typeof parsed.flags['template-id'] === 'string') {
+    opts.templateId = parsed.flags['template-id'];
+  }
+  if (typeof parsed.flags['workload-id'] === 'string') {
+    opts.workloadId = parsed.flags['workload-id'];
+  }
+  if (typeof parsed.flags['days-back'] === 'string') {
+    const n = parseInt(parsed.flags['days-back'], 10);
+    if (!isNaN(n)) { opts.daysBack = n; }
   }
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
