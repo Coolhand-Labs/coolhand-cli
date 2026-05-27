@@ -66,6 +66,11 @@ export interface SearchOptimizationsOptions {
   query?: string;
   from?: string;
   to?: string;
+  page?: number;
+  perPage?: number;
+  templateId?: string;
+  workloadId?: string;
+  daysBack?: number;
   json?: boolean;
   clientId?: string;
 }
