@@ -104,6 +104,7 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--template-id ID', description: 'Filter to a specific template' },
       { flag: '--workload-id ID', description: 'Filter to a specific workload' },
       { flag: '--days-back N', description: 'Only show optimizations from the last N days' },
+      { flag: '--sort-by VALUE', description: 'Sort order: impact_desc | complexity_asc | created_at_desc' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -350,6 +351,9 @@ function searchOptimizationsOptions(parsed: ParsedArgs): SearchOptimizationsOpti
   if (typeof parsed.flags['days-back'] === 'string') {
     const n = parseInt(parsed.flags['days-back'], 10);
     if (!isNaN(n)) { opts.daysBack = n; }
+  }
+  if (typeof parsed.flags['sort-by'] === 'string') {
+    opts.sortBy = parsed.flags['sort-by'];
   }
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];

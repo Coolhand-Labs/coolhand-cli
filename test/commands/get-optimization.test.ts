@@ -35,6 +35,35 @@ describe('get-optimization command', () => {
     expect(code).not.toBe(0);
   });
 
+  test('prints PR line when pr_number and pr_url are present', async () => {
+    (mcpCall as jest.Mock).mockResolvedValue({ id: 'opt-1', title: 'Reduce latency', pr_number: 42, pr_url: 'https://github.com/org/repo/pull/42' });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ id: 'opt-1' });
+    expect(spy).toHaveBeenCalledWith('PR: #42 https://github.com/org/repo/pull/42');
+    spy.mockRestore();
+  });
+
+  test('prints coding_prompt as raw block when present', async () => {
+    (mcpCall as jest.Mock).mockResolvedValue({ id: 'opt-1', title: 'Reduce latency', coding_prompt: 'Fix the slow query\nby adding an index' });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ id: 'opt-1' });
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('Fix the slow query\nby adding an index'));
+    spy.mockRestore();
+  });
+
+  test('does not print PR line or coding_prompt block when fields absent', async () => {
+    (mcpCall as jest.Mock).mockResolvedValue({ id: 'opt-1', title: 'Reduce latency' });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ id: 'opt-1' });
+    const calls = spy.mock.calls.map(([msg]) => msg as string);
+    expect(calls.every((msg) => !msg.startsWith('PR:'))).toBe(true);
+    expect(calls.every((msg) => !msg.includes('Coding Prompt'))).toBe(true);
+    spy.mockRestore();
+  });
+
   test('forwards --client-id to mcpCall', async () => {
     const code = await run({ id: 'opt-1', clientId: 'my-client' });
     expect(code).toBe(0);

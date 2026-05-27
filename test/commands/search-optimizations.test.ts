@@ -72,6 +72,18 @@ describe('search-optimizations command', () => {
     spy.mockRestore();
   });
 
+  test('passes sort_by arg when sortBy flag given', async () => {
+    await run({ sortBy: 'complexity_asc' });
+    const [, args] = (mcpCall as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+    expect(args).toEqual({ sort_by: 'complexity_asc' });
+  });
+
+  test('omits sort_by when sortBy is undefined', async () => {
+    await run({});
+    const [, args] = (mcpCall as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+    expect(Object.keys(args)).not.toContain('sort_by');
+  });
+
   test('returns non-zero exit on NO_PRIVATE_KEY error', async () => {
     const { CliError } = await import('../../src/errors.js');
     (mcpCall as jest.Mock).mockRejectedValue(
