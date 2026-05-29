@@ -5,7 +5,7 @@ import type { GetOptimizationOptions } from '../types.js';
 
 export async function run(opts: GetOptimizationOptions): Promise<number> {
   try {
-    const result = await mcpCall('get_optimization', { optimization_id: opts.id }, { clientId: opts.clientId });
+    const result = await mcpCall('get_optimization', { id: opts.id }, { clientId: opts.clientId });
 
     if (opts.json) {
       logger.json({ ok: true, result });
