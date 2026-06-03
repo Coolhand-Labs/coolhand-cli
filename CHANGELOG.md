@@ -2,6 +2,12 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.4.0] - 2026-06-03
+
+### Added
+- `report-blocker` command for AI agents: records a free-form "this capability is unavailable" complaint as feedback tagged `is_from: agent`, then always prints a fixed de-loop message and exits `0` so the agent stops retrying. Submission is best-effort. Requires `--complaint` and `--agent-name` (or the `COOLHAND_AGENT_NAME` environment variable); accepts optional `--thinking` and `--log-id`.
+- `coolhand-node` is now a runtime dependency, used by `report-blocker` to submit feedback.
+
 ## [0.3.0] - 2026-05-27
 
 ### Added

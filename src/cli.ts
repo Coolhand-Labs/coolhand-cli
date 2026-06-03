@@ -12,6 +12,7 @@ import { run as runAddOptimizationComment } from './commands/add-optimization-co
 import { run as runCloseOptimization } from './commands/close-optimization.js';
 import { run as runCreateOptimization } from './commands/create-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
+import { run as runReportBlocker } from './commands/report-blocker.js';
 import type {
   ClientsOptions,
   LoginOptions,
@@ -24,6 +25,7 @@ import type {
   CloseOptimizationOptions,
   CreateOptimizationOptions,
   UpdateOptimizationOptions,
+  ReportBlockerOptions,
 } from './types.js';
 
 interface ParsedArgs {
@@ -156,6 +158,19 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--title VALUE', description: 'New title' },
       { flag: '--analysis VALUE', description: 'New analysis text' },
       { flag: '--plan VALUE', description: 'New optimization plan' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'report-blocker',
+    oneLiner: 'Report that a needed capability is unavailable, then stop and move on',
+    usage: 'coolhand report-blocker --complaint "<what is blocking you>" --agent-name <name> [options]',
+    options: [
+      { flag: '--complaint TEXT', description: 'What capability is missing or blocking you (required)' },
+      { flag: '--agent-name NAME', description: 'Identifier for the calling agent (or set COOLHAND_AGENT_NAME)' },
+      { flag: '--thinking TEXT', description: 'Optional reasoning/context that led to the blocker' },
+      { flag: '--log-id N', description: 'Optional LLM request log id this blocker relates to' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -455,6 +470,35 @@ function updateOptimizationOptions(parsed: ParsedArgs): UpdateOptimizationOption
   return opts;
 }
 
+function reportBlockerOptions(parsed: ParsedArgs): ReportBlockerOptions {
+  const complaint = typeof parsed.flags.complaint === 'string' ? parsed.flags.complaint.trim() : '';
+  if (!complaint) {
+    throw new CliError('INVALID_ARGS', 'report-blocker requires --complaint "<what is blocking you>"');
+  }
+  const agentName =
+    typeof parsed.flags['agent-name'] === 'string' ? parsed.flags['agent-name'] : process.env.COOLHAND_AGENT_NAME;
+  if (!agentName) {
+    throw new CliError('INVALID_ARGS', 'report-blocker requires --agent-name <name> (or set COOLHAND_AGENT_NAME)');
+  }
+  const opts: ReportBlockerOptions = { complaint, agentName };
+  if (typeof parsed.flags.thinking === 'string') {
+    opts.thinking = parsed.flags.thinking;
+  }
+  if (typeof parsed.flags['log-id'] === 'string') {
+    const n = parseInt(parsed.flags['log-id'], 10);
+    if (!isNaN(n)) {
+      opts.logId = n;
+    }
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 export async function run(argv: string[]): Promise<number> {
   if (argv.length === 0) {
     logger.info(buildSummaryHelp());
@@ -518,6 +562,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runCreateOptimization(createOptimizationOptions(parsed));
       case 'update-optimization':
         return await runUpdateOptimization(updateOptimizationOptions(parsed));
+      case 'report-blocker':
+        return await runReportBlocker(reportBlockerOptions(parsed));
       default:
         logger.info(`Unknown command: ${parsed.command}`);
         logger.info(buildSummaryHelp());
