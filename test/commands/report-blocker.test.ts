@@ -71,19 +71,25 @@ describe('report-blocker command', () => {
     );
   });
 
-  test('always exits 0 even when the SDK throws', async () => {
+  test('exits non-zero when the SDK throws', async () => {
     createFeedbackMock.mockRejectedValue(new Error('network down'));
     const code = await run({ complaint: 'x', agentName: 'a' });
-    expect(code).toBe(0);
+    expect(code).not.toBe(0);
   });
 
-  test('exits 0 and skips submission when no api key is configured', async () => {
+  test('exits non-zero and does not de-loop when the write is not confirmed (SDK returns null)', async () => {
+    createFeedbackMock.mockResolvedValue(null);
+    const code = await run({ complaint: 'x', agentName: 'a' });
+    expect(code).not.toBe(0);
+  });
+
+  test('exits non-zero and skips submission when no api key is configured', async () => {
     (getClient as jest.Mock).mockReturnValueOnce(undefined);
     const previous = process.env.COOLHAND_API_KEY;
     delete process.env.COOLHAND_API_KEY;
     try {
       const code = await run({ complaint: 'x', agentName: 'a' });
-      expect(code).toBe(0);
+      expect(code).not.toBe(0);
       expect(createFeedbackMock).not.toHaveBeenCalled();
     } finally {
       if (previous !== undefined) {
@@ -92,7 +98,7 @@ describe('report-blocker command', () => {
     }
   });
 
-  test('--json still exits 0', async () => {
+  test('exits 0 on a confirmed write with --json', async () => {
     const code = await run({ complaint: 'x', agentName: 'a', json: true });
     expect(code).toBe(0);
   });

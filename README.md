@@ -106,7 +106,7 @@ coolhand report-blocker \
   --agent-name code-review-agent
 ```
 
-The command records the complaint as feedback tagged `is_from: agent`, then prints a fixed de-loop message and exits `0` — even if the submission failed (server down, not logged in). This is deliberate: a non-zero exit or a vague message reads as a transient failure and makes the agent retry, which is the exact loop this command exists to stop.
+On a confirmed write the command records the complaint as feedback tagged `is_from: agent`, prints a fixed de-loop message, and exits `0` so the agent stops and moves on. The de-loop message is the proof the blocker was recorded, so it is printed only after the write is confirmed: if the submission cannot be confirmed (not logged in, server error) the command prints a warning and exits non-zero, surfacing the failure instead of masking it behind a reassuring "recorded" message.
 
 Set `COOLHAND_AGENT_NAME` to avoid passing `--agent-name` on every call. Optional `--thinking` attaches the reasoning that led to the blocker; `--log-id` ties it to a specific LLM request log.
 

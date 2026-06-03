@@ -4,46 +4,56 @@ import { logger, redact } from '../logger.js';
 import { loadConfig, getClient } from '../config.js';
 import { DEFAULT_BASE_URL, type ReportBlockerOptions } from '../types.js';
 
-// What the agent is told after filing a blocker. It must be unambiguous and
-// terminal: a vague message (or a non-zero exit) reads as a transient failure
-// and makes the agent retry — the exact loop this command exists to stop.
+// What the agent is told once the blocker is CONFIRMED recorded. It must be
+// unambiguous and terminal so the agent stops retrying the missing capability.
+// Printed only on a confirmed write — a failed submission exits non-zero instead,
+// so it surfaces rather than being masked by a reassuring "recorded" message.
 const DELOOP_MESSAGE =
   'This capability is not available in this environment. Your feedback has been recorded. ' +
   'Do not retry this action or attempt alternative ways to perform it; continue with the rest of your task.';
 
 /**
  * Records an agent's free-form "I am blocked, this capability does not exist"
- * complaint as feedback (tagged is_from: "agent"), then always tells the agent
- * to stop and move on. Submission is best-effort: the command ALWAYS prints the
- * de-loop message and ALWAYS exits 0, even when nothing could be sent.
+ * complaint as feedback (tagged is_from: "agent"). On a confirmed write it prints
+ * the de-loop message and exits 0 so the agent stops and moves on. If the write
+ * cannot be confirmed (not logged in, or the server did not accept it), it warns
+ * and exits non-zero so the failure surfaces instead of being silently swallowed.
  */
 export async function run(opts: ReportBlockerOptions): Promise<number> {
+  let recorded = false;
+
   try {
     const cfg = await loadConfig();
     const client = getClient(cfg, opts.clientId);
     const apiKey = client?.api_key ?? process.env.COOLHAND_API_KEY;
     const baseUrl = client?.base_url ?? DEFAULT_BASE_URL;
 
-    if (apiKey) {
-      try {
-        const coolhand = new Coolhand({ apiKey, baseUrl, silent: true });
-        await coolhand.createFeedback({
-          explanation: opts.complaint,
-          creator_unique_id: opts.agentName,
-          is_from: 'agent',
-          ...(opts.thinking ? { original_output: opts.thinking } : {}),
-          ...(opts.logId !== undefined ? { llm_request_log_id: opts.logId } : {}),
-        });
-      } catch (err) {
-        // Best-effort only — never surface a submission failure as a retry signal.
-        logger.warn(`Could not record blocker feedback: ${redact((err as Error).message)}`);
-      }
-    } else {
+    if (!apiKey) {
       logger.warn('Not logged in; blocker feedback was not recorded. Run `coolhand login` to enable reporting.');
+    } else {
+      const coolhand = new Coolhand({ apiKey, baseUrl, silent: true });
+      // The SDK resolves to null (it does not throw) when the write fails, so a
+      // truthy response is the only proof the blocker was actually recorded.
+      const result = await coolhand.createFeedback({
+        explanation: opts.complaint,
+        creator_unique_id: opts.agentName,
+        is_from: 'agent',
+        ...(opts.thinking ? { original_output: opts.thinking } : {}),
+        ...(opts.logId !== undefined ? { llm_request_log_id: opts.logId } : {}),
+      });
+      recorded = result !== null && result !== undefined;
+      if (!recorded) {
+        logger.warn('Blocker feedback was not recorded: the server did not confirm the write.');
+      }
     }
   } catch (err) {
-    // Defensive: even on an unexpected error, fall through to de-loop + exit 0.
     logger.warn(`Could not record blocker feedback: ${redact((err as Error).message)}`);
+  }
+
+  if (!recorded) {
+    // Do not print the de-loop until the write is confirmed: a failed submission
+    // must surface, not be hidden behind a reassuring "recorded" message.
+    return ExitCode.INTERNAL;
   }
 
   if (opts.json === true) {
