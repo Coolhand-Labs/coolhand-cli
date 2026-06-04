@@ -1,4 +1,4 @@
-import { Coolhand } from 'coolhand-node';
+import { Coolhand, type LLMRequestLogFeedback } from 'coolhand-node';
 import { ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { loadConfig, getClient } from '../config.js';
@@ -34,13 +34,18 @@ export async function run(opts: ReportBlockerOptions): Promise<number> {
       const coolhand = new Coolhand({ apiKey, baseUrl, silent: true });
       // The SDK resolves to null (it does not throw) when the write fails, so a
       // truthy response is the only proof the blocker was actually recorded.
-      const result = await coolhand.createFeedback({
+      // coolhand-node 0.6.0's published type does not declare creator_type (it is
+      // added in 0.7.0). The SDK forwards unknown fields to the API as-is, so we
+      // send it now and widen the type locally. Drop this widening once the
+      // dependency is bumped to coolhand-node ^0.7.0.
+      const feedback: LLMRequestLogFeedback & { creator_type?: 'human' | 'agent' | 'unknown' } = {
         explanation: opts.complaint,
         creator_unique_id: opts.agentName,
         creator_type: 'agent',
         ...(opts.thinking ? { original_output: opts.thinking } : {}),
         ...(opts.logId !== undefined ? { llm_request_log_id: opts.logId } : {}),
-      });
+      };
+      const result = await coolhand.createFeedback(feedback);
       recorded = result !== null && result !== undefined;
       if (!recorded) {
         logger.warn('Blocker feedback was not recorded: the server did not confirm the write.');
