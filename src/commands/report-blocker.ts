@@ -14,7 +14,7 @@ const DELOOP_MESSAGE =
 
 /**
  * Records an agent's free-form "I am blocked, this capability does not exist"
- * complaint as feedback (tagged is_from: "agent"). On a confirmed write it prints
+ * complaint as feedback (tagged creator_type: "agent"). On a confirmed write it prints
  * the de-loop message and exits 0 so the agent stops and moves on. If the write
  * cannot be confirmed (not logged in, or the server did not accept it), it warns
  * and exits non-zero so the failure surfaces instead of being silently swallowed.
@@ -37,7 +37,7 @@ export async function run(opts: ReportBlockerOptions): Promise<number> {
       const result = await coolhand.createFeedback({
         explanation: opts.complaint,
         creator_unique_id: opts.agentName,
-        is_from: 'agent',
+        creator_type: 'agent',
         ...(opts.thinking ? { original_output: opts.thinking } : {}),
         ...(opts.logId !== undefined ? { llm_request_log_id: opts.logId } : {}),
       });

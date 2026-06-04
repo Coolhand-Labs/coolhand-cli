@@ -35,14 +35,14 @@ describe('report-blocker command', () => {
     });
   });
 
-  test('submits the complaint tagged is_from agent and exits 0', async () => {
+  test('submits the complaint tagged creator_type agent and exits 0', async () => {
     const code = await run({ complaint: 'no internet access', agentName: 'code-review-agent' });
     expect(code).toBe(0);
     expect(createFeedbackMock).toHaveBeenCalledWith(
       expect.objectContaining({
         explanation: 'no internet access',
         creator_unique_id: 'code-review-agent',
-        is_from: 'agent',
+        creator_type: 'agent',
       })
     );
   });
