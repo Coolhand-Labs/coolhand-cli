@@ -4,20 +4,33 @@ import { logger, redact } from '../logger.js';
 import { loadConfig, getClient } from '../config.js';
 import { DEFAULT_BASE_URL, type ReportBlockerOptions } from '../types.js';
 
-// What the agent is told once the blocker is CONFIRMED recorded. It must be
-// unambiguous and terminal so the agent stops retrying the missing capability.
-// Printed only on a confirmed write — a failed submission exits non-zero instead,
-// so it surfaces rather than being masked by a reassuring "recorded" message.
-const DELOOP_MESSAGE =
-  'This capability is not available in this environment. Your feedback has been recorded. ' +
+// Terminal guidance that breaks the agent out of its retry loop. The missing
+// capability is real regardless of whether we could reach the Coolhand server, so
+// the de-loop is the agent's decision to make, not the server's.
+const STOP_GUIDANCE =
   'Do not retry this action or attempt alternative ways to perform it; continue with the rest of your task.';
+
+// Printed when the blocker was successfully recorded server-side.
+const DELOOP_RECORDED =
+  'This capability is not available in this environment. Your feedback has been recorded. ' + STOP_GUIDANCE;
+
+// Printed when the blocker could NOT be recorded (e.g. not logged in, or the server
+// did not confirm). We still de-loop the agent, but stay honest: we never claim a
+// recording happened, and a warning is logged separately so the failure surfaces.
+const DELOOP_UNRECORDED =
+  'This capability is not available in this environment. Your feedback could not be recorded ' +
+  '(not logged in, or the server did not confirm — run `coolhand login` to enable reporting). ' +
+  STOP_GUIDANCE;
 
 /**
  * Records an agent's free-form "I am blocked, this capability does not exist"
- * complaint as feedback (tagged creator_type: "agent"). On a confirmed write it prints
- * the de-loop message and exits 0 so the agent stops and moves on. If the write
- * cannot be confirmed (not logged in, or the server did not accept it), it warns
- * and exits non-zero so the failure surfaces instead of being silently swallowed.
+ * complaint as feedback (tagged creator_type: "agent"), then prints a terminal
+ * de-loop message and exits 0 so the agent stops and moves on. The de-loop ALWAYS
+ * fires — even when the feedback could not be recorded — because the missing
+ * capability is real regardless of server state (and a logged-out agent in a
+ * sandbox is exactly who this command is for). When recording fails it says so
+ * plainly and logs a warning, so the failure still surfaces without trapping the
+ * agent in the retry loop the command exists to break.
  */
 export async function run(opts: ReportBlockerOptions): Promise<number> {
   let recorded = false;
@@ -55,16 +68,15 @@ export async function run(opts: ReportBlockerOptions): Promise<number> {
     logger.warn(`Could not record blocker feedback: ${redact((err as Error).message)}`);
   }
 
-  if (!recorded) {
-    // Do not print the de-loop until the write is confirmed: a failed submission
-    // must surface, not be hidden behind a reassuring "recorded" message.
-    return ExitCode.INTERNAL;
-  }
-
+  // Always de-loop: the capability genuinely does not exist, so the agent must stop
+  // whether or not we could notify the server. Stay honest about the recording status
+  // (warnings above already surfaced any failure) rather than gating the stop-signal
+  // on a confirmed write and leaving a logged-out agent stuck.
+  const message = recorded ? DELOOP_RECORDED : DELOOP_UNRECORDED;
   if (opts.json === true) {
-    logger.json({ ok: true, message: DELOOP_MESSAGE });
+    logger.json({ ok: true, recorded, message });
   } else {
-    logger.info(DELOOP_MESSAGE);
+    logger.info(message);
   }
   return ExitCode.OK;
 }

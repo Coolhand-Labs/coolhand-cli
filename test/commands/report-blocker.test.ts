@@ -21,8 +21,13 @@ jest.mock('../../src/config.js', () => ({
 
 import { Coolhand } from 'coolhand-node';
 import { getClient } from '../../src/config.js';
+import { logger } from '../../src/logger.js';
 
 describe('report-blocker command', () => {
+  let infoSpy: jest.SpyInstance;
+  let warnSpy: jest.SpyInstance;
+  let jsonSpy: jest.SpyInstance;
+
   beforeEach(() => {
     createFeedbackMock.mockReset().mockResolvedValue({ id: 1 });
     (Coolhand as jest.Mock).mockClear();
@@ -33,6 +38,15 @@ describe('report-blocker command', () => {
       base_url: 'https://coolhandlabs.com',
       saved_at: 'now',
     });
+    infoSpy = jest.spyOn(logger, 'info').mockImplementation(() => {});
+    warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+    jsonSpy = jest.spyOn(logger, 'json').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    infoSpy.mockRestore();
+    warnSpy.mockRestore();
+    jsonSpy.mockRestore();
   });
 
   test('submits the complaint tagged creator_type agent and exits 0', async () => {
@@ -71,26 +85,32 @@ describe('report-blocker command', () => {
     );
   });
 
-  test('exits non-zero when the SDK throws', async () => {
+  test('still de-loops (exit 0) and warns when the SDK throws', async () => {
     createFeedbackMock.mockRejectedValue(new Error('network down'));
     const code = await run({ complaint: 'x', agentName: 'a' });
-    expect(code).not.toBe(0);
+    expect(code).toBe(0);
+    expect(warnSpy).toHaveBeenCalled();
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('could not be recorded'));
   });
 
-  test('exits non-zero and does not de-loop when the write is not confirmed (SDK returns null)', async () => {
+  test('de-loops (exit 0) without claiming a recording when the write is not confirmed (SDK returns null)', async () => {
     createFeedbackMock.mockResolvedValue(null);
     const code = await run({ complaint: 'x', agentName: 'a' });
-    expect(code).not.toBe(0);
+    expect(code).toBe(0);
+    expect(warnSpy).toHaveBeenCalled();
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('could not be recorded'));
   });
 
-  test('exits non-zero and skips submission when no api key is configured', async () => {
+  test('de-loops (exit 0) and skips submission when no api key is configured', async () => {
     (getClient as jest.Mock).mockReturnValueOnce(undefined);
     const previous = process.env.COOLHAND_API_KEY;
     delete process.env.COOLHAND_API_KEY;
     try {
       const code = await run({ complaint: 'x', agentName: 'a' });
-      expect(code).not.toBe(0);
+      expect(code).toBe(0);
       expect(createFeedbackMock).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
+      expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('could not be recorded'));
     } finally {
       if (previous !== undefined) {
         process.env.COOLHAND_API_KEY = previous;

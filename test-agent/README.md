@@ -12,8 +12,9 @@ not exist in its sandbox) and a shell to drive, then watches whether it runs
 
 It runs against the **real** built CLI (`../dist/bin.js`), so the help text and
 the de-loop behaviour under test are the genuine ones. No Coolhand server or
-login is needed: `report-blocker` de-loops and exits `0` while offline, and the
-harness forces an empty config dir so every run is deterministic.
+login is needed: while offline `report-blocker` still de-loops and exits `0`
+(noting that the feedback could not be recorded), and the harness forces an empty
+config dir so every run is deterministic.
 
 ## Two modes
 
