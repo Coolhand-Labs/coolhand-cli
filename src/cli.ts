@@ -12,6 +12,7 @@ import { run as runAddOptimizationComment } from './commands/add-optimization-co
 import { run as runCloseOptimization } from './commands/close-optimization.js';
 import { run as runCreateOptimization } from './commands/create-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
+import { run as runCaptureSessions } from './commands/capture-sessions.js';
 import type {
   ClientsOptions,
   LoginOptions,
@@ -24,6 +25,7 @@ import type {
   CloseOptimizationOptions,
   CreateOptimizationOptions,
   UpdateOptimizationOptions,
+  CaptureSessionsOptions,
 } from './types.js';
 
 interface ParsedArgs {
@@ -39,7 +41,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run']);
 
 const COMMANDS: CommandMeta[] = [
   {
@@ -156,6 +158,16 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--title VALUE', description: 'New title' },
       { flag: '--analysis VALUE', description: 'New analysis text' },
       { flag: '--plan VALUE', description: 'New optimization plan' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'capture-sessions',
+    oneLiner: 'Scan local Claude Code sessions and submit them to Coolhand',
+    usage: 'coolhand capture-sessions [options]',
+    options: [
+      { flag: '--dry-run', description: 'Scan and report what would be submitted, without sending' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -455,6 +467,20 @@ function updateOptimizationOptions(parsed: ParsedArgs): UpdateOptimizationOption
   return opts;
 }
 
+function captureSessionsOptions(parsed: ParsedArgs): CaptureSessionsOptions {
+  const opts: CaptureSessionsOptions = {};
+  if (parsed.flags['dry-run'] === true) {
+    opts.dryRun = true;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 export async function run(argv: string[]): Promise<number> {
   if (argv.length === 0) {
     logger.info(buildSummaryHelp());
@@ -518,6 +544,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runCreateOptimization(createOptimizationOptions(parsed));
       case 'update-optimization':
         return await runUpdateOptimization(updateOptimizationOptions(parsed));
+      case 'capture-sessions':
+        return await runCaptureSessions(captureSessionsOptions(parsed));
       default:
         logger.info(`Unknown command: ${parsed.command}`);
         logger.info(buildSummaryHelp());
