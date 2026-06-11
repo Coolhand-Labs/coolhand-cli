@@ -2,11 +2,18 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+/** One message in the reconstructed conversation. */
+export interface ConversationMessage {
+  role: string;
+  content: string;
+}
+
 /**
- * An Anthropic-shaped envelope for one Claude Code transcript turn. The server's
- * `claude_code` ingestor recognises it by the synthetic `claudecode://` url and reuses the
- * Anthropic content/usage extraction. `response_body.id` is the transcript requestId and is
- * the stable per-turn key the server deduplicates on.
+ * An Anthropic-shaped envelope for ONE whole Claude Code session (a conversation). The server's
+ * `claude_code` ingestor recognises it by the synthetic `claudecode://session/<sessionId>` url,
+ * stores the full back-and-forth (the server already treats a multi-message request as one "chat"
+ * log), and deduplicates on the session id. `request_body.messages` is the conversation;
+ * `response_body` is the final assistant turn; `response_body.usage` is the session's summed tokens.
  */
 export interface CaptureEnvelope {
   url: string;
@@ -14,7 +21,7 @@ export interface CaptureEnvelope {
   status_code: number;
   request_body: {
     model?: string;
-    messages: Array<{ role: string; content: string }>;
+    messages: ConversationMessage[];
   };
   response_body: {
     id: string;
@@ -55,43 +62,27 @@ function extractText(content: unknown): string {
   return '';
 }
 
-interface AssistantTurn {
-  requestId: string;
-  sessionId: string;
-  message: Record<string, unknown>;
-  userText: string;
+function toCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
-function buildEnvelope(turn: AssistantTurn): CaptureEnvelope {
-  const { requestId, sessionId, message, userText } = turn;
-  const model = typeof message.model === 'string' ? message.model : undefined;
-  return {
-    url: `claudecode://session/${sessionId}/${requestId}`,
-    method: 'POST',
-    status_code: 200,
-    request_body: {
-      model,
-      messages: [{ role: 'user', content: userText }],
-    },
-    response_body: {
-      id: requestId,
-      type: 'message',
-      role: 'assistant',
-      model,
-      content: Array.isArray(message.content) ? message.content : [],
-      usage: message.usage,
-    },
-  };
+interface SessionUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
 }
 
 /**
- * Parse one transcript's raw text (newline-delimited JSON) into one envelope per assistant turn.
- * Pure function — no filesystem — so it is easy to unit test. `sessionIdFallback` is used when a
- * line does not carry its own `sessionId` (typically the transcript filename).
+ * Parse one transcript's raw text (newline-delimited JSON) into a SINGLE session envelope holding
+ * the whole conversation — one log per session, not one per turn. Returns `null` when the transcript
+ * contains no assistant turns. Pure function (no filesystem) so it is easy to unit test.
  */
-export function parseTranscript(content: string, sessionIdFallback: string): CaptureEnvelope[] {
-  const envelopes: CaptureEnvelope[] = [];
-  let lastUserText = '';
+export function parseTranscript(content: string, sessionId: string): CaptureEnvelope | null {
+  const messages: ConversationMessage[] = [];
+  const usage: SessionUsage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
+  let sawUsage = false;
+  let sessionModel: string | undefined;
+  let lastAssistant: { id: string; content: unknown; model?: string } | null = null;
 
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
@@ -115,9 +106,10 @@ export function parseTranscript(content: string, sessionIdFallback: string): Cap
     }
 
     if (event.type === 'user') {
+      // `user` events include tool results (no text) — only keep actual prompt text.
       const text = extractText(message.content);
       if (text) {
-        lastUserText = text;
+        messages.push({ role: 'user', content: text });
       }
       continue;
     }
@@ -129,21 +121,57 @@ export function parseTranscript(content: string, sessionIdFallback: string): Cap
           : typeof message.id === 'string'
             ? message.id
             : undefined;
-      if (!requestId) {
-        // No stable id means the server cannot deduplicate this turn — skip it.
-        continue;
+
+      messages.push({ role: 'assistant', content: extractText(message.content) });
+
+      const model = typeof message.model === 'string' ? message.model : undefined;
+      if (model) {
+        sessionModel = model;
       }
-      const sessionId = typeof event.sessionId === 'string' ? event.sessionId : sessionIdFallback;
-      envelopes.push(buildEnvelope({ requestId, sessionId, message, userText: lastUserText }));
+
+      const turnUsage = message.usage as Record<string, unknown> | undefined;
+      if (turnUsage && typeof turnUsage === 'object') {
+        sawUsage = true;
+        usage.input_tokens += toCount(turnUsage.input_tokens);
+        usage.output_tokens += toCount(turnUsage.output_tokens);
+        usage.cache_read_input_tokens += toCount(turnUsage.cache_read_input_tokens);
+      }
+
+      lastAssistant = {
+        id: requestId ?? sessionId,
+        content: Array.isArray(message.content) ? message.content : [],
+        model,
+      };
     }
   }
 
-  return envelopes;
+  // A session with no assistant turns has nothing to log.
+  if (!lastAssistant) {
+    return null;
+  }
+
+  return {
+    url: `claudecode://session/${sessionId}`,
+    method: 'POST',
+    status_code: 200,
+    request_body: {
+      model: sessionModel,
+      messages,
+    },
+    response_body: {
+      id: lastAssistant.id,
+      type: 'message',
+      role: 'assistant',
+      model: lastAssistant.model ?? sessionModel,
+      content: lastAssistant.content,
+      usage: sawUsage ? usage : undefined,
+    },
+  };
 }
 
 /**
- * Find every Claude Code transcript under `projectsDir` (default `~/.claude/projects`) and build
- * envelopes for all assistant turns. A missing directory simply yields zero sessions.
+ * Find every Claude Code transcript under `projectsDir` (default `~/.claude/projects`) and build one
+ * conversation envelope per session. A missing directory simply yields zero sessions.
  */
 export async function scanSessions(options: { projectsDir?: string } = {}): Promise<ScanResult> {
   const dir = options.projectsDir ?? defaultProjectsDir();
@@ -172,8 +200,16 @@ export async function scanSessions(options: { projectsDir?: string } = {}): Prom
     }
     sessionCount += 1;
     const sessionId = path.basename(relativePath, '.jsonl');
-    envelopes.push(...parseTranscript(content, sessionId));
+    const envelope = parseTranscript(content, sessionId);
+    if (envelope) {
+      envelopes.push(envelope);
+    }
   }
 
   return { envelopes, sessionCount };
+}
+
+/** The session id this envelope represents — used as the local dedup key. */
+export function sessionIdOf(envelope: CaptureEnvelope): string {
+  return envelope.url.replace(/^claudecode:\/\/session\//, '');
 }

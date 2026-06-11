@@ -2,79 +2,106 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
-import { parseTranscript, scanSessions } from '../../src/sessions/claude-scanner.js';
+import { parseTranscript, scanSessions, sessionIdOf } from '../../src/sessions/claude-scanner.js';
 
 const SAMPLE = [
-  JSON.stringify({ type: 'user', message: { role: 'user', content: 'Refactor this function' } }),
+  JSON.stringify({ type: 'user', message: { role: 'user', content: 'First question' } }),
   JSON.stringify({
     type: 'assistant',
-    requestId: 'req_abc123',
+    requestId: 'req_1',
     message: {
       role: 'assistant',
       id: 'msg_1',
       model: 'claude-opus-4-8',
-      content: [{ type: 'text', text: 'Done.' }],
-      usage: { input_tokens: 10, output_tokens: 5 },
+      content: [{ type: 'text', text: 'First answer.' }],
+      usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 2 },
+    },
+  }),
+  JSON.stringify({ type: 'user', message: { role: 'user', content: 'Second question' } }),
+  JSON.stringify({
+    type: 'assistant',
+    requestId: 'req_2',
+    message: {
+      role: 'assistant',
+      id: 'msg_2',
+      model: 'claude-opus-4-8',
+      content: [{ type: 'text', text: 'Second answer.' }],
+      usage: { input_tokens: 20, output_tokens: 7, cache_read_input_tokens: 3 },
     },
   }),
 ].join('\n');
 
 describe('parseTranscript', () => {
-  test('builds one envelope per assistant turn', () => {
-    expect(parseTranscript(SAMPLE, 'sess-1')).toHaveLength(1);
+  test('builds one envelope for the whole session', () => {
+    const env = parseTranscript(SAMPLE, 'sess-1');
+    expect(env).not.toBeNull();
   });
 
-  test('sets the claudecode url from session and request id', () => {
-    const [env] = parseTranscript(SAMPLE, 'sess-1');
-    expect(env.url).toBe('claudecode://session/sess-1/req_abc123');
+  test('uses a session-level claudecode url (no per-turn id)', () => {
+    const env = parseTranscript(SAMPLE, 'sess-1');
+    expect(env?.url).toBe('claudecode://session/sess-1');
   });
 
-  test('uses requestId as the response_body.id dedup key', () => {
-    const [env] = parseTranscript(SAMPLE, 'sess-1');
-    expect(env.response_body.id).toBe('req_abc123');
+  test('carries the full conversation in request_body.messages', () => {
+    const env = parseTranscript(SAMPLE, 'sess-1');
+    expect(env?.request_body.messages).toEqual([
+      { role: 'user', content: 'First question' },
+      { role: 'assistant', content: 'First answer.' },
+      { role: 'user', content: 'Second question' },
+      { role: 'assistant', content: 'Second answer.' },
+    ]);
   });
 
-  test('attaches the preceding user message as the user prompt', () => {
-    const [env] = parseTranscript(SAMPLE, 'sess-1');
-    expect(env.request_body.messages[0]).toEqual({ role: 'user', content: 'Refactor this function' });
+  test('response_body is the final assistant turn', () => {
+    const env = parseTranscript(SAMPLE, 'sess-1');
+    expect(env?.response_body.id).toBe('req_2');
+    expect(env?.response_body.content).toEqual([{ type: 'text', text: 'Second answer.' }]);
+    expect(env?.response_body.model).toBe('claude-opus-4-8');
   });
 
-  test('carries model, content and usage into response_body', () => {
-    const [env] = parseTranscript(SAMPLE, 'sess-1');
-    expect(env.response_body.model).toBe('claude-opus-4-8');
-    expect(env.response_body.content).toEqual([{ type: 'text', text: 'Done.' }]);
-    expect(env.response_body.usage).toEqual({ input_tokens: 10, output_tokens: 5 });
+  test('sums token usage across all turns', () => {
+    const env = parseTranscript(SAMPLE, 'sess-1');
+    expect(env?.response_body.usage).toEqual({
+      input_tokens: 30,
+      output_tokens: 12,
+      cache_read_input_tokens: 5,
+    });
+  });
+
+  test('returns null when the session has no assistant turns', () => {
+    const onlyUser = JSON.stringify({ type: 'user', message: { role: 'user', content: 'hi' } });
+    expect(parseTranscript(onlyUser, 'sess-1')).toBeNull();
   });
 
   test('falls back to message.id when requestId is missing', () => {
     const line = JSON.stringify({
       type: 'assistant',
-      message: { role: 'assistant', id: 'msg_x', content: [] },
+      message: { role: 'assistant', id: 'msg_x', content: [{ type: 'text', text: 'hi' }] },
     });
-    const [env] = parseTranscript(line, 's');
-    expect(env.response_body.id).toBe('msg_x');
+    const env = parseTranscript(line, 's');
+    expect(env?.response_body.id).toBe('msg_x');
   });
 
-  test('skips assistant turns with no usable id', () => {
-    const line = JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [] } });
-    expect(parseTranscript(line, 's')).toHaveLength(0);
+  test('falls back to the session id when a turn has no id at all', () => {
+    const line = JSON.stringify({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
+    });
+    const env = parseTranscript(line, 'sess-9');
+    expect(env?.response_body.id).toBe('sess-9');
   });
 
   test('ignores blank and unparseable lines', () => {
     const text = `\n  \nnot json\n${SAMPLE}`;
-    expect(parseTranscript(text, 'sess-1')).toHaveLength(1);
+    const env = parseTranscript(text, 'sess-1');
+    expect(env?.request_body.messages).toHaveLength(4);
   });
+});
 
-  test('extracts user text from a content block array', () => {
-    const text = [
-      JSON.stringify({
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: 'Block prompt' }] },
-      }),
-      JSON.stringify({ type: 'assistant', requestId: 'r', message: { role: 'assistant', content: [] } }),
-    ].join('\n');
-    const [env] = parseTranscript(text, 's');
-    expect(env.request_body.messages[0].content).toBe('Block prompt');
+describe('sessionIdOf', () => {
+  test('returns the session id from a session envelope', () => {
+    const env = parseTranscript(SAMPLE, 'sess-42');
+    expect(sessionIdOf(env!)).toBe('sess-42');
   });
 });
 
@@ -95,18 +122,25 @@ describe('scanSessions', () => {
     expect(res).toEqual({ envelopes: [], sessionCount: 0 });
   });
 
-  test('reads .jsonl files and counts sessions', async () => {
+  test('produces one envelope per session file', async () => {
     await fs.writeFile(path.join(dir, 'proj-a', 'sess-1.jsonl'), SAMPLE);
+    await fs.writeFile(path.join(dir, 'proj-a', 'sess-2.jsonl'), SAMPLE);
     const res = await scanSessions({ projectsDir: dir });
-    expect(res.sessionCount).toBe(1);
-    expect(res.envelopes).toHaveLength(1);
-    expect(res.envelopes[0].response_body.id).toBe('req_abc123');
+    expect(res.sessionCount).toBe(2);
+    expect(res.envelopes).toHaveLength(2);
   });
 
-  test('uses the filename as the fallback session id', async () => {
-    const line = JSON.stringify({ type: 'assistant', requestId: 'r1', message: { role: 'assistant', content: [] } });
-    await fs.writeFile(path.join(dir, 'proj-a', 'my-session.jsonl'), line);
+  test('uses the filename as the session id in the url', async () => {
+    await fs.writeFile(path.join(dir, 'proj-a', 'my-session.jsonl'), SAMPLE);
     const res = await scanSessions({ projectsDir: dir });
-    expect(res.envelopes[0].url).toBe('claudecode://session/my-session/r1');
+    expect(res.envelopes[0].url).toBe('claudecode://session/my-session');
+  });
+
+  test('skips a session file that has no assistant turns', async () => {
+    const onlyUser = JSON.stringify({ type: 'user', message: { role: 'user', content: 'hi' } });
+    await fs.writeFile(path.join(dir, 'proj-a', 'empty.jsonl'), onlyUser);
+    const res = await scanSessions({ projectsDir: dir });
+    expect(res.sessionCount).toBe(1);
+    expect(res.envelopes).toHaveLength(0);
   });
 });
