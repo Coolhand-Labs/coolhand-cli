@@ -1,3 +1,4 @@
+import { Coolhand, type CoolhandCallData } from 'coolhand-node';
 import { CliError } from './errors.js';
 import { loadConfig, getClient } from './config.js';
 import { DEFAULT_BASE_URL } from './types.js';
@@ -8,9 +9,13 @@ const COLLECTOR = 'coolhand-cli/claude-code';
 /**
  * Submit one captured request/response envelope to the Coolhand ingest endpoint.
  *
- * Mirrors `mcp-call.ts`, but posts to the REST log endpoint instead of the MCP endpoint and
- * authenticates with the client's public `api_key`. The server deduplicates by the envelope's
- * `response_body.id`, so re-submitting the same turn is harmless.
+ * Transport is delegated to coolhand-node's `Coolhand#logRequest`, which posts to the same
+ * `/api/v2/llm_request_logs` endpoint with the client's public `api_key`. The server
+ * deduplicates by the envelope's `response_body.id`, so re-submitting the same turn is harmless.
+ *
+ * The SDK swallows submission failures and returns `null`; we translate that (and a base_url
+ * rejection from the SDK constructor) back into a `CliError` so `capture-sessions` keeps its
+ * per-session success/failure accounting intact.
  */
 export async function logRequest(
   rawRequest: unknown,
@@ -32,49 +37,27 @@ export async function logRequest(
   }
 
   const baseUrl = client?.base_url ?? DEFAULT_BASE_URL;
-  let parsedBaseUrl: URL;
-  try {
-    parsedBaseUrl = new URL(baseUrl);
-  } catch {
-    throw new CliError('INVALID_BASE_URL', `Invalid base_url for client: ${baseUrl}`);
-  }
-  if (parsedBaseUrl.protocol !== 'http:' && parsedBaseUrl.protocol !== 'https:') {
-    throw new CliError('INVALID_BASE_URL', `base_url must be http or https, got: ${parsedBaseUrl.protocol}`);
-  }
-  const url = new URL('/api/v2/llm_request_logs', parsedBaseUrl).toString();
 
-  const body = {
-    llm_request_log: {
-      raw_request: rawRequest,
-      collector: COLLECTOR,
-    },
-  };
-
-  let res: Response;
+  let coolhand: Coolhand;
   try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': apiKey,
-      },
-      body: JSON.stringify(body),
-    });
+    // The SDK validates baseUrl in its constructor (https required; http only for localhost).
+    coolhand = new Coolhand({ apiKey, baseUrl, silent: true });
+  } catch (err) {
+    throw new CliError('INVALID_BASE_URL', `Invalid base_url for client: ${baseUrl} (${(err as Error).message})`);
+  }
+
+  let result: unknown;
+  try {
+    result = await coolhand.logRequest(rawRequest as CoolhandCallData, { collector: COLLECTOR });
   } catch (err) {
     throw new CliError('INGEST_ERROR', `Log submission failed: ${(err as Error).message}`);
   }
 
-  const text = await res.text().catch(() => '');
-  if (!res.ok) {
-    throw new CliError('INGEST_ERROR', `Log submission failed (${res.status}): ${text.slice(0, 2000)}`);
+  // The SDK returns null when the POST fails (it reports the error itself). On Node >= 20 (our
+  // engine floor) fetch is always defined, so a null result here unambiguously means failure.
+  if (result === null) {
+    throw new CliError('INGEST_ERROR', 'Log submission failed.');
   }
 
-  if (!text) {
-    return null;
-  }
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new CliError('INGEST_ERROR', `Log response was not valid JSON: ${text.slice(0, 2000)}`);
-  }
+  return result;
 }
