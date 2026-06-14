@@ -22,16 +22,28 @@ Requires Node 20 or newer.
 ## Commands
 
 ```
-coolhand login    [--base-url URL] [--write-env PATH] [--client-id ID] [--json]
+coolhand login    [--base-url URL] [--scope private] [--write-env PATH] [--client-id ID] [--json]
 coolhand logout   [--client-id ID | --all] [--json]
 coolhand status   [--client-id ID] [--json]
 coolhand whoami   [--client-id ID]
 coolhand clients [use <id>] [--json]
+
+coolhand search-optimizations [--status V] [--type V] [--category V] [--query V]
+                               [--from DATE] [--to DATE] [--days-back N]
+                               [--template-id ID] [--workload-id ID]
+                               [--sort-by impact_desc|complexity_asc|created_at_desc]
+                               [--page N] [--per-page N] [--client-id ID] [--json]
+coolhand get-optimization <id>                   [--client-id ID] [--json]
+coolhand update-optimization <id>                [--title V] [--analysis V] [--plan V] [--client-id ID] [--json]
+coolhand close-optimization <id> <reason>        [--client-id ID] [--json]
+coolhand add-optimization-comment <id> <comment> [--client-id ID] [--json]
 ```
 
 ### login
 
 Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the callback, and stores the returned token. The token is the **public** `api_key` for the client you select — the same key you would use with `coolhand-node`, `coolhand-python`, or the `coolhand-js` widget.
+
+`--scope private` authenticates against a private workspace instead of the default shared workspace.
 
 `--write-env PATH` will additionally set `COOLHAND_API_KEY=<token>` in the target `.env` file (idempotent — replaces an existing value rather than appending a duplicate).
 
@@ -55,6 +67,65 @@ Exit code is `0` if a token is configured for the default (or requested) client,
 ### clients
 
 Multiple clients can be stored at once. `coolhand clients` lists them, `coolhand clients use <id>` switches the default. Each `coolhand login` adds (or refreshes) one entry, keyed by the server-assigned `client_id`.
+
+## Optimization commands
+
+Coolhand stores LLM-generated optimization suggestions as structured records. These commands let you query, update, and comment on them from the terminal or from agent workflows.
+
+### search-optimizations
+
+Lists optimizations with optional filtering and pagination.
+
+| Flag | Description |
+|------|-------------|
+| `--status V` | Filter by status (e.g. `open`, `closed`) |
+| `--type V` | Filter by optimization type |
+| `--category V` | Filter by category |
+| `--query V` | Free-text search |
+| `--from DATE` | Start of date range |
+| `--to DATE` | End of date range |
+| `--days-back N` | Only show optimizations from the last N days |
+| `--template-id ID` | Filter to a specific template |
+| `--workload-id ID` | Filter to a specific workload |
+| `--sort-by V` | Sort order: `impact_desc`, `complexity_asc`, or `created_at_desc` |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 20, max: 50) |
+| `--client-id ID` | Use a specific stored client |
+| `--json` | Emit JSON output |
+
+Human-readable output includes a pagination hint: `Page N of M (X total)`.
+
+### get-optimization
+
+```bash
+coolhand get-optimization <id>
+```
+
+Fetches a single optimization by ID. When present, the output includes PR information (`PR: #N <url>`) and a `--- Coding Prompt ---` block with the full coding prompt text.
+
+### update-optimization
+
+```bash
+coolhand update-optimization <id> --title "..." --analysis "..." --plan "..."
+```
+
+Updates an existing optimization. Only the flags you provide are changed.
+
+### close-optimization
+
+```bash
+coolhand close-optimization <id> <reason>
+```
+
+Closes an optimization. The reason is a free-text positional argument (quote it if it contains spaces).
+
+### add-optimization-comment
+
+```bash
+coolhand add-optimization-comment <id> <comment>
+```
+
+Adds a comment to an optimization. The comment is a free-text positional argument.
 
 ## Security
 

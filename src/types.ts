@@ -96,14 +96,6 @@ export interface CloseOptimizationOptions {
   clientId?: string;
 }
 
-export interface CreateOptimizationOptions {
-  title?: string;
-  analysis?: string;
-  plan?: string;
-  json?: boolean;
-  clientId?: string;
-}
-
 export interface UpdateOptimizationOptions {
   id: string;
   title?: string;

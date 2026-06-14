@@ -10,7 +10,6 @@ import { run as runSearchOptimizations } from './commands/search-optimizations.j
 import { run as runGetOptimization } from './commands/get-optimization.js';
 import { run as runAddOptimizationComment } from './commands/add-optimization-comment.js';
 import { run as runCloseOptimization } from './commands/close-optimization.js';
-import { run as runCreateOptimization } from './commands/create-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
 import type {
   ClientsOptions,
@@ -22,7 +21,6 @@ import type {
   GetOptimizationOptions,
   AddOptimizationCommentOptions,
   CloseOptimizationOptions,
-  CreateOptimizationOptions,
   UpdateOptimizationOptions,
 } from './types.js';
 
@@ -132,18 +130,6 @@ const COMMANDS: CommandMeta[] = [
     oneLiner: 'Close an optimization with a reason',
     usage: 'coolhand close-optimization <id> <reason> [options]',
     options: [
-      { flag: '--client-id ID', description: 'Use a specific stored client' },
-      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
-    ],
-  },
-  {
-    name: 'create-optimization',
-    oneLiner: 'Create a new optimization',
-    usage: 'coolhand create-optimization [options]',
-    options: [
-      { flag: '--title VALUE', description: 'Optimization title' },
-      { flag: '--analysis VALUE', description: 'Analysis text' },
-      { flag: '--plan VALUE', description: 'Optimization plan' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -411,26 +397,6 @@ function closeOptimizationOptions(parsed: ParsedArgs): CloseOptimizationOptions 
   return opts;
 }
 
-function createOptimizationOptions(parsed: ParsedArgs): CreateOptimizationOptions {
-  const opts: CreateOptimizationOptions = {};
-  if (typeof parsed.flags.title === 'string') {
-    opts.title = parsed.flags.title;
-  }
-  if (typeof parsed.flags.analysis === 'string') {
-    opts.analysis = parsed.flags.analysis;
-  }
-  if (typeof parsed.flags.plan === 'string') {
-    opts.plan = parsed.flags.plan;
-  }
-  if (typeof parsed.flags['client-id'] === 'string') {
-    opts.clientId = parsed.flags['client-id'];
-  }
-  if (parsed.flags.json === true) {
-    opts.json = true;
-  }
-  return opts;
-}
-
 function updateOptimizationOptions(parsed: ParsedArgs): UpdateOptimizationOptions {
   const id = parsed.positional[0];
   if (!id) {
@@ -514,8 +480,6 @@ export async function run(argv: string[]): Promise<number> {
         return await runAddOptimizationComment(addOptimizationCommentOptions(parsed));
       case 'close-optimization':
         return await runCloseOptimization(closeOptimizationOptions(parsed));
-      case 'create-optimization':
-        return await runCreateOptimization(createOptimizationOptions(parsed));
       case 'update-optimization':
         return await runUpdateOptimization(updateOptimizationOptions(parsed));
       default:
