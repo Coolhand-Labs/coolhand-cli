@@ -82,24 +82,9 @@ export interface GetOptimizationOptions {
   clientId?: string;
 }
 
-export interface AddOptimizationCommentOptions {
-  id: string;
-  comment: string;
-  json?: boolean;
-  clientId?: string;
-}
-
 export interface CloseOptimizationOptions {
   id: string;
   reason: string;
-  json?: boolean;
-  clientId?: string;
-}
-
-export interface CreateOptimizationOptions {
-  title?: string;
-  analysis?: string;
-  plan?: string;
   json?: boolean;
   clientId?: string;
 }
