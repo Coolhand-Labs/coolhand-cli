@@ -58,6 +58,9 @@
     "clean": "rm -rf dist coverage",
     "smoke": "node dist/bin.js --version"
   },
+  "dependencies": {
+    "coolhand-node": "^0.7.0"
+  },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
