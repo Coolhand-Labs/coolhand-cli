@@ -36,7 +36,6 @@ coolhand search-optimizations [--status V] [--type V] [--category V] [--query V]
 coolhand get-optimization <id>                   [--client-id ID] [--json]
 coolhand update-optimization <id>                [--title V] [--analysis V] [--plan V] [--client-id ID] [--json]
 coolhand close-optimization <id> <reason>        [--client-id ID] [--json]
-coolhand add-optimization-comment <id> <comment> [--client-id ID] [--json]
 ```
 
 ### login
@@ -118,14 +117,6 @@ coolhand close-optimization <id> <reason>
 ```
 
 Closes an optimization. The reason is a free-text positional argument (quote it if it contains spaces).
-
-### add-optimization-comment
-
-```bash
-coolhand add-optimization-comment <id> <comment>
-```
-
-Adds a comment to an optimization. The comment is a free-text positional argument.
 
 ## Security
 

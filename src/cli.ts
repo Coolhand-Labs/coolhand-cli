@@ -8,7 +8,6 @@ import { run as runWhoami } from './commands/whoami.js';
 import { run as runClients } from './commands/clients.js';
 import { run as runSearchOptimizations } from './commands/search-optimizations.js';
 import { run as runGetOptimization } from './commands/get-optimization.js';
-import { run as runAddOptimizationComment } from './commands/add-optimization-comment.js';
 import { run as runCloseOptimization } from './commands/close-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
 import type {
@@ -19,7 +18,6 @@ import type {
   WhoamiOptions,
   SearchOptimizationsOptions,
   GetOptimizationOptions,
-  AddOptimizationCommentOptions,
   CloseOptimizationOptions,
   UpdateOptimizationOptions,
 } from './types.js';
@@ -111,15 +109,6 @@ const COMMANDS: CommandMeta[] = [
     name: 'get-optimization',
     oneLiner: 'Get a single optimization by ID',
     usage: 'coolhand get-optimization <id> [options]',
-    options: [
-      { flag: '--client-id ID', description: 'Use a specific stored client' },
-      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
-    ],
-  },
-  {
-    name: 'add-optimization-comment',
-    oneLiner: 'Add a comment to an optimization',
-    usage: 'coolhand add-optimization-comment <id> <comment> [options]',
     options: [
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
@@ -365,22 +354,6 @@ function getOptimizationOptions(parsed: ParsedArgs): GetOptimizationOptions {
   return opts;
 }
 
-function addOptimizationCommentOptions(parsed: ParsedArgs): AddOptimizationCommentOptions {
-  const id = parsed.positional[0];
-  const comment = parsed.positional.slice(1).join(' ').trim();
-  if (!id || !comment) {
-    throw new CliError('INVALID_ARGS', 'add-optimization-comment requires <id> and <comment> arguments');
-  }
-  const opts: AddOptimizationCommentOptions = { id, comment };
-  if (typeof parsed.flags['client-id'] === 'string') {
-    opts.clientId = parsed.flags['client-id'];
-  }
-  if (parsed.flags.json === true) {
-    opts.json = true;
-  }
-  return opts;
-}
-
 function closeOptimizationOptions(parsed: ParsedArgs): CloseOptimizationOptions {
   const id = parsed.positional[0];
   const reason = parsed.positional.slice(1).join(' ').trim();
@@ -476,8 +449,6 @@ export async function run(argv: string[]): Promise<number> {
         return await runSearchOptimizations(searchOptimizationsOptions(parsed));
       case 'get-optimization':
         return await runGetOptimization(getOptimizationOptions(parsed));
-      case 'add-optimization-comment':
-        return await runAddOptimizationComment(addOptimizationCommentOptions(parsed));
       case 'close-optimization':
         return await runCloseOptimization(closeOptimizationOptions(parsed));
       case 'update-optimization':
