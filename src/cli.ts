@@ -8,11 +8,10 @@ import { run as runWhoami } from './commands/whoami.js';
 import { run as runClients } from './commands/clients.js';
 import { run as runSearchOptimizations } from './commands/search-optimizations.js';
 import { run as runGetOptimization } from './commands/get-optimization.js';
-import { run as runAddOptimizationComment } from './commands/add-optimization-comment.js';
 import { run as runCloseOptimization } from './commands/close-optimization.js';
-import { run as runCreateOptimization } from './commands/create-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
 import { run as runReportBlocker } from './commands/report-blocker.js';
+import { run as runCaptureSessions } from './commands/capture-sessions.js';
 import type {
   ClientsOptions,
   LoginOptions,
@@ -21,11 +20,10 @@ import type {
   WhoamiOptions,
   SearchOptimizationsOptions,
   GetOptimizationOptions,
-  AddOptimizationCommentOptions,
   CloseOptimizationOptions,
-  CreateOptimizationOptions,
   UpdateOptimizationOptions,
   ReportBlockerOptions,
+  CaptureSessionsOptions,
 } from './types.js';
 
 interface ParsedArgs {
@@ -41,7 +39,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run']);
 
 const COMMANDS: CommandMeta[] = [
   {
@@ -121,31 +119,10 @@ const COMMANDS: CommandMeta[] = [
     ],
   },
   {
-    name: 'add-optimization-comment',
-    oneLiner: 'Add a comment to an optimization',
-    usage: 'coolhand add-optimization-comment <id> <comment> [options]',
-    options: [
-      { flag: '--client-id ID', description: 'Use a specific stored client' },
-      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
-    ],
-  },
-  {
     name: 'close-optimization',
     oneLiner: 'Close an optimization with a reason',
     usage: 'coolhand close-optimization <id> <reason> [options]',
     options: [
-      { flag: '--client-id ID', description: 'Use a specific stored client' },
-      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
-    ],
-  },
-  {
-    name: 'create-optimization',
-    oneLiner: 'Create a new optimization',
-    usage: 'coolhand create-optimization [options]',
-    options: [
-      { flag: '--title VALUE', description: 'Optimization title' },
-      { flag: '--analysis VALUE', description: 'Analysis text' },
-      { flag: '--plan VALUE', description: 'Optimization plan' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -171,6 +148,16 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--agent-name NAME', description: 'Identifier for the calling agent (or set COOLHAND_AGENT_NAME)' },
       { flag: '--thinking TEXT', description: 'Optional reasoning/context that led to the blocker' },
       { flag: '--log-id N', description: 'Optional LLM request log id this blocker relates to' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'capture-sessions',
+    oneLiner: 'Scan local Claude Code sessions and submit them to Coolhand',
+    usage: 'coolhand capture-sessions [options]',
+    options: [
+      { flag: '--dry-run', description: 'Scan and report what would be submitted, without sending' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -394,22 +381,6 @@ function getOptimizationOptions(parsed: ParsedArgs): GetOptimizationOptions {
   return opts;
 }
 
-function addOptimizationCommentOptions(parsed: ParsedArgs): AddOptimizationCommentOptions {
-  const id = parsed.positional[0];
-  const comment = parsed.positional.slice(1).join(' ').trim();
-  if (!id || !comment) {
-    throw new CliError('INVALID_ARGS', 'add-optimization-comment requires <id> and <comment> arguments');
-  }
-  const opts: AddOptimizationCommentOptions = { id, comment };
-  if (typeof parsed.flags['client-id'] === 'string') {
-    opts.clientId = parsed.flags['client-id'];
-  }
-  if (parsed.flags.json === true) {
-    opts.json = true;
-  }
-  return opts;
-}
-
 function closeOptimizationOptions(parsed: ParsedArgs): CloseOptimizationOptions {
   const id = parsed.positional[0];
   const reason = parsed.positional.slice(1).join(' ').trim();
@@ -417,26 +388,6 @@ function closeOptimizationOptions(parsed: ParsedArgs): CloseOptimizationOptions 
     throw new CliError('INVALID_ARGS', 'close-optimization requires <id> and <reason> arguments');
   }
   const opts: CloseOptimizationOptions = { id, reason };
-  if (typeof parsed.flags['client-id'] === 'string') {
-    opts.clientId = parsed.flags['client-id'];
-  }
-  if (parsed.flags.json === true) {
-    opts.json = true;
-  }
-  return opts;
-}
-
-function createOptimizationOptions(parsed: ParsedArgs): CreateOptimizationOptions {
-  const opts: CreateOptimizationOptions = {};
-  if (typeof parsed.flags.title === 'string') {
-    opts.title = parsed.flags.title;
-  }
-  if (typeof parsed.flags.analysis === 'string') {
-    opts.analysis = parsed.flags.analysis;
-  }
-  if (typeof parsed.flags.plan === 'string') {
-    opts.plan = parsed.flags.plan;
-  }
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
   }
@@ -460,6 +411,20 @@ function updateOptimizationOptions(parsed: ParsedArgs): UpdateOptimizationOption
   }
   if (typeof parsed.flags.plan === 'string') {
     opts.plan = parsed.flags.plan;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+function captureSessionsOptions(parsed: ParsedArgs): CaptureSessionsOptions {
+  const opts: CaptureSessionsOptions = {};
+  if (parsed.flags['dry-run'] === true) {
+    opts.dryRun = true;
   }
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
@@ -554,16 +519,14 @@ export async function run(argv: string[]): Promise<number> {
         return await runSearchOptimizations(searchOptimizationsOptions(parsed));
       case 'get-optimization':
         return await runGetOptimization(getOptimizationOptions(parsed));
-      case 'add-optimization-comment':
-        return await runAddOptimizationComment(addOptimizationCommentOptions(parsed));
       case 'close-optimization':
         return await runCloseOptimization(closeOptimizationOptions(parsed));
-      case 'create-optimization':
-        return await runCreateOptimization(createOptimizationOptions(parsed));
       case 'update-optimization':
         return await runUpdateOptimization(updateOptimizationOptions(parsed));
       case 'report-blocker':
         return await runReportBlocker(reportBlockerOptions(parsed));
+      case 'capture-sessions':
+        return await runCaptureSessions(captureSessionsOptions(parsed));
       default:
         logger.info(`Unknown command: ${parsed.command}`);
         logger.info(buildSummaryHelp());

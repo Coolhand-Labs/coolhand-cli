@@ -33,8 +33,8 @@ describe('parseArgs', () => {
   });
 
   test('preserves multi-word positional text', () => {
-    const parsed = parseArgs(['add-optimization-comment', 'opt-1', 'looks', 'good']);
-    expect(parsed.command).toBe('add-optimization-comment');
+    const parsed = parseArgs(['close-optimization', 'opt-1', 'looks', 'good']);
+    expect(parsed.command).toBe('close-optimization');
     expect(parsed.positional).toEqual(['opt-1', 'looks', 'good']);
   });
 });
@@ -93,8 +93,4 @@ describe('run', () => {
     expect(code).toBe(1);
   });
 
-  test('add-optimization-comment without comment returns exit 1', async () => {
-    const code = await run(['add-optimization-comment', 'abc-123']);
-    expect(code).toBe(1);
-  });
 });

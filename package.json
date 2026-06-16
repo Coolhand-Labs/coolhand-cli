@@ -59,7 +59,7 @@
     "smoke": "node dist/bin.js --version"
   },
   "dependencies": {
-    "coolhand-node": "^0.6.0"
+    "coolhand-node": "^0.7.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
