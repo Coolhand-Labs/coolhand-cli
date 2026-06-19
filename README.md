@@ -27,6 +27,7 @@ coolhand logout   [--client-id ID | --all] [--json]
 coolhand status   [--client-id ID] [--json]
 coolhand whoami   [--client-id ID]
 coolhand clients [use <id>] [--json]
+coolhand claude  [claude args...]
 
 coolhand search-optimizations [--status V] [--type V] [--category V] [--query V]
                                [--from DATE] [--to DATE] [--days-back N]
@@ -66,6 +67,18 @@ Exit code is `0` if a token is configured for the default (or requested) client,
 ### clients
 
 Multiple clients can be stored at once. `coolhand clients` lists them, `coolhand clients use <id>` switches the default. Each `coolhand login` adds (or refreshes) one entry, keyed by the server-assigned `client_id`.
+
+### claude
+
+`coolhand claude [args...]` runs the Claude CLI behind the Coolhand proxy, so every LLM call Claude makes is captured and sent to your Coolhand account — with no manual env-var setup. It reads your stored API key and runs the proxy's `wrap` for you under the hood.
+
+```bash
+coolhand login            # once, to store your key
+coolhand claude           # starts Claude with capture on
+coolhand claude --resume  # any args after `claude` go straight to the Claude CLI
+```
+
+Requires the `claude` CLI to be installed and on your `PATH`. Capture stops when the Claude session exits. To send to a non-default workspace, switch first with `coolhand clients use <id>`.
 
 ## Optimization commands
 
