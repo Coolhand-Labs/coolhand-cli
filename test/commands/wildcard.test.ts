@@ -1,4 +1,4 @@
-import { run } from '../../src/commands/report-blocker.js';
+import { run } from '../../src/commands/wildcard.js';
 
 const createFeedbackMock = jest.fn().mockResolvedValue({ id: 1 });
 
@@ -23,7 +23,7 @@ import { Coolhand } from 'coolhand-node';
 import { getClient } from '../../src/config.js';
 import { logger } from '../../src/logger.js';
 
-describe('report-blocker command', () => {
+describe('wildcard command', () => {
   let infoSpy: jest.SpyInstance;
   let warnSpy: jest.SpyInstance;
   let jsonSpy: jest.SpyInstance;

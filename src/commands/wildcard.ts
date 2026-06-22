@@ -2,7 +2,7 @@ import { Coolhand, type LLMRequestLogFeedback } from 'coolhand-node';
 import { ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { loadConfig, getClient } from '../config.js';
-import { DEFAULT_BASE_URL, type ReportBlockerOptions } from '../types.js';
+import { DEFAULT_BASE_URL, type ComplaintBoxOptions } from '../types.js';
 
 // Terminal guidance that breaks the agent out of its retry loop. The missing
 // capability is real regardless of whether we could reach the Coolhand server, so
@@ -32,7 +32,7 @@ const DELOOP_UNRECORDED =
  * plainly and logs a warning, so the failure still surfaces without trapping the
  * agent in the retry loop the command exists to break.
  */
-export async function run(opts: ReportBlockerOptions): Promise<number> {
+export async function run(opts: ComplaintBoxOptions): Promise<number> {
   let recorded = false;
 
   try {

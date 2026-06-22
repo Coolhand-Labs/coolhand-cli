@@ -158,12 +158,12 @@ coolhand login --write-env .env
 
 The CLI works especially well with the [Coolhand feedback collection skill](https://github.com/Coolhand-Labs/feedback-collection-skill) for Claude Code. The skill scans your project for LLM inference calls and implements best-practice human feedback collection — it reads `COOLHAND_API_KEY` from the environment, which `coolhand login --write-env .env` puts in place.
 
-### report-blocker
+### wildcard (agent complaint box)
 
 When an agent is blocked because a capability does not exist in its environment, it can record the blocker and get back an unambiguous "stop and move on" response:
 
 ```bash
-coolhand report-blocker \
+coolhand wildcard \
   --complaint "I need to run database migrations but no database is reachable" \
   --agent-name code-review-agent
 ```

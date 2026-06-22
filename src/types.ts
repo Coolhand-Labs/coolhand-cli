@@ -104,7 +104,7 @@ export interface CaptureSessionsOptions {
   json?: boolean;
 }
 
-export interface ReportBlockerOptions {
+export interface ComplaintBoxOptions {
   complaint: string;
   agentName: string;
   thinking?: string;

@@ -1,18 +1,18 @@
-# report-blocker test agent
+# wildcard (agent complaint box) test agent
 
-An adoption test for the `coolhand report-blocker` command: does a real Claude
+An adoption test for the `coolhand wildcard` command: does a real Claude
 agent actually reach for it when it hits a wall, instead of looping on doomed
 retries?
 
 The harness gives an agent an impossible task (a capability that genuinely does
 not exist in its sandbox) and a shell to drive, then watches whether it runs
-`coolhand report-blocker` to record the blocker and stop.
+`coolhand wildcard` to record the blocker and stop.
 
 ## What it proves
 
 It runs against the **real** built CLI (`../dist/bin.js`), so the help text and
 the de-loop behaviour under test are the genuine ones. No Coolhand server or
-login is needed: while offline `report-blocker` still de-loops and exits `0`
+login is needed: while offline `wildcard` still de-loops and exits `0`
 (noting that the feedback could not be recorded), and the harness forces an empty
 config dir so every run is deterministic.
 
@@ -20,7 +20,7 @@ config dir so every run is deterministic.
 
 The mode answers *where* any adoption gap is:
 
-- `--mode=prompted` (default): the system prompt names `report-blocker`. Tests
+- `--mode=prompted` (default): the system prompt names `wildcard`. Tests
   whether the agent uses a tool it has been told about.
 - `--mode=discover`: the prompt only says "inspect tools with `--help`". Tests
   whether the CLI help text alone is enough to drive adoption.
@@ -55,6 +55,6 @@ so, run it on a machine you are comfortable letting an agent poke at.
 
 ## Reading the result
 
-Each run prints a `VERDICT` block: PASS if the agent called `report-blocker`
+Each run prints a `VERDICT` block: PASS if the agent called `wildcard`
 (with the exact command it used), or FAIL with a one-line hint about whether the
 gap looks like the help text or the prompt.
