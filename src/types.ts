@@ -104,5 +104,14 @@ export interface CaptureSessionsOptions {
   json?: boolean;
 }
 
+export interface ComplaintBoxOptions {
+  complaint: string;
+  agentName: string;
+  thinking?: string;
+  logId?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
 export const DEFAULT_BASE_URL = 'https://coolhandlabs.com';
 export const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;

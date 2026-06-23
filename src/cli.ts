@@ -10,6 +10,7 @@ import { run as runSearchOptimizations } from './commands/search-optimizations.j
 import { run as runGetOptimization } from './commands/get-optimization.js';
 import { run as runCloseOptimization } from './commands/close-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
+import { run as runWildcard } from './commands/wildcard.js';
 import { run as runCaptureSessions } from './commands/capture-sessions.js';
 import type {
   ClientsOptions,
@@ -21,6 +22,7 @@ import type {
   GetOptimizationOptions,
   CloseOptimizationOptions,
   UpdateOptimizationOptions,
+  ComplaintBoxOptions,
   CaptureSessionsOptions,
 } from './types.js';
 
@@ -32,6 +34,7 @@ interface ParsedArgs {
 
 interface CommandMeta {
   name: string;
+  aliases?: readonly string[];
   oneLiner: string;
   usage: string;
   options: Array<{ flag: string; description: string }>;
@@ -138,6 +141,20 @@ const COMMANDS: CommandMeta[] = [
     ],
   },
   {
+    name: 'wildcard',
+    aliases: ['complaint-box', 'report-blocker'],
+    oneLiner: 'Agent complaint box: report an unavailable capability and stop',
+    usage: 'coolhand wildcard --complaint "<what is blocking you>" --agent-name <name> [options]',
+    options: [
+      { flag: '--complaint TEXT', description: 'What capability is missing or blocking you (required)' },
+      { flag: '--agent-name NAME', description: 'Identifier for the calling agent (or set COOLHAND_AGENT_NAME)' },
+      { flag: '--thinking TEXT', description: 'Optional reasoning/context that led to the blocker' },
+      { flag: '--log-id N', description: 'Optional LLM request log id this blocker relates to' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
     name: 'capture-sessions',
     oneLiner: 'Scan local Claude Code sessions and submit them to Coolhand',
     usage: 'coolhand capture-sessions [options]',
@@ -155,9 +172,14 @@ const COMMANDS: CommandMeta[] = [
   },
 ];
 
+function findCommand(name: string): CommandMeta | undefined {
+  return COMMANDS.find((c) => c.name === name || c.aliases?.includes(name));
+}
+
 function buildSummaryHelp(): string {
-  const nameWidth = Math.max(...COMMANDS.map((c) => c.name.length)) + 2;
-  const commandLines = COMMANDS.map((c) => `  ${c.name.padEnd(nameWidth)}${c.oneLiner}`).join('\n');
+  const rows = COMMANDS.flatMap((c) => [c, ...(c.aliases ?? []).map((a) => ({ ...c, name: a }))]);
+  const nameWidth = Math.max(...rows.map((r) => r.name.length)) + 2;
+  const commandLines = rows.map((r) => `  ${r.name.padEnd(nameWidth)}${r.oneLiner}`).join('\n');
   return `coolhand-cli — authenticate with Coolhand from your terminal
 
 Usage:
@@ -420,6 +442,35 @@ function captureSessionsOptions(parsed: ParsedArgs): CaptureSessionsOptions {
   return opts;
 }
 
+function wildcardOptions(parsed: ParsedArgs): ComplaintBoxOptions {
+  const complaint = typeof parsed.flags.complaint === 'string' ? parsed.flags.complaint.trim() : '';
+  if (!complaint) {
+    throw new CliError('INVALID_ARGS', 'wildcard requires --complaint "<what is blocking you>"');
+  }
+  const agentName =
+    typeof parsed.flags['agent-name'] === 'string' ? parsed.flags['agent-name'] : process.env.COOLHAND_AGENT_NAME;
+  if (!agentName) {
+    throw new CliError('INVALID_ARGS', 'wildcard requires --agent-name <name> (or set COOLHAND_AGENT_NAME)');
+  }
+  const opts: ComplaintBoxOptions = { complaint, agentName };
+  if (typeof parsed.flags.thinking === 'string') {
+    opts.thinking = parsed.flags.thinking;
+  }
+  if (typeof parsed.flags['log-id'] === 'string') {
+    const n = parseInt(parsed.flags['log-id'], 10);
+    if (!isNaN(n)) {
+      opts.logId = n;
+    }
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 export async function run(argv: string[]): Promise<number> {
   if (argv.length === 0) {
     logger.info(buildSummaryHelp());
@@ -436,7 +487,7 @@ export async function run(argv: string[]): Promise<number> {
   if (parsed.command === 'help' || parsed.command === '') {
     const target = parsed.positional[0];
     if (target) {
-      const meta = COMMANDS.find((c) => c.name === target);
+      const meta = findCommand(target);
       if (!meta) {
         logger.info(`Unknown command: ${target}`);
         logger.info(buildSummaryHelp());
@@ -450,7 +501,7 @@ export async function run(argv: string[]): Promise<number> {
   }
 
   if (parsed.flags.help === true || parsed.flags.h === true) {
-    const meta = COMMANDS.find((c) => c.name === parsed.command);
+    const meta = findCommand(parsed.command);
     if (meta) {
       logger.info(buildCommandHelp(meta));
     } else {
@@ -460,7 +511,7 @@ export async function run(argv: string[]): Promise<number> {
   }
 
   try {
-    switch (parsed.command) {
+    switch (findCommand(parsed.command)?.name ?? parsed.command) {
       case 'login':
         return await runLogin(loginOptions(parsed));
       case 'logout':
@@ -479,6 +530,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runCloseOptimization(closeOptimizationOptions(parsed));
       case 'update-optimization':
         return await runUpdateOptimization(updateOptimizationOptions(parsed));
+      case 'wildcard':
+        return await runWildcard(wildcardOptions(parsed));
       case 'capture-sessions':
         return await runCaptureSessions(captureSessionsOptions(parsed));
       default:

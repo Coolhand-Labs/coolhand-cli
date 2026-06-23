@@ -2,6 +2,12 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.4.0] - 2026-06-03
+
+### Added
+- `wildcard` command (agent complaint box; also aliased as `complaint-box` and `report-blocker`): records a free-form "this capability is unavailable" complaint as feedback tagged `creator_type: agent`. Always prints a terminal de-loop message and exits `0` so the agent stops retrying; if the feedback could not be recorded (not logged in, server error) the message says so and a warning is logged so the failure still surfaces. Requires `--complaint` and `--agent-name` (or the `COOLHAND_AGENT_NAME` environment variable); accepts optional `--thinking` and `--log-id`.
+- `coolhand-node` is now a runtime dependency, used by `wildcard` to submit feedback.
+
 ## [0.3.0] - 2026-05-27
 
 ### Added
