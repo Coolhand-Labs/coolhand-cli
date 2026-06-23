@@ -48,7 +48,7 @@ describe('claude command', () => {
     expect(spawnFn).toHaveBeenCalledTimes(1);
     const [cmd, args, options] = spawnFn.mock.calls[0];
     expect(cmd).toBe(process.execPath);
-    expect(args).toEqual(['/fake/coolhand-proxy/dist/cli.js', 'wrap', '--', 'claude', '--resume', 'foo']);
+    expect(args).toEqual(['/fake/coolhand-proxy/dist/cli.js', 'wrap', '--silent', '--', 'claude', '--resume', 'foo']);
     expect(options.stdio).toBe('inherit');
     expect(options.env.COOLHAND_API_KEY).toBe('pubkey123');
   });
@@ -84,6 +84,7 @@ describe('claude command', () => {
     expect(args).toEqual([
       '/fake/cli.js',
       'wrap',
+      '--silent',
       '--api-endpoint',
       'https://staging.coolhandlabs.com/api/v2/llm_request_logs',
       '--',
