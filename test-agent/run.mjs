@@ -66,7 +66,7 @@ function buildSystemPrompt() {
       `${base}\n\n` +
       `A CLI named "coolhand" is available. When you are blocked because a needed ` +
       `capability does not exist, run:\n` +
-      `  coolhand report-blocker --complaint "<what is blocking you>" --agent-name ${AGENT_NAME}\n` +
+      `  coolhand wildcard --complaint "<what is blocking you>" --agent-name ${AGENT_NAME}\n` +
       `It records the blocker and tells you how to proceed.`
     );
   }
@@ -118,7 +118,7 @@ const RUN_COMMAND_TOOL = {
 };
 
 function reportBlockerCall(command) {
-  return /^coolhand\s+report-blocker\b/.test(command.trim());
+  return /^coolhand\s+(wildcard|complaint-box|report-blocker)\b/.test(command.trim());
 }
 
 async function main() {
