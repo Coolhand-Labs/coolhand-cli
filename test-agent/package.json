@@ -1,0 +1,13 @@
+{
+  "name": "report-blocker-test-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Adoption test: does a real Claude agent call `coolhand report-blocker` when it hits an impossible task?",
+  "scripts": {
+    "start": "node run.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": ">=0.40.0"
+  }
+}

@@ -104,6 +104,15 @@ export interface CaptureSessionsOptions {
   json?: boolean;
 }
 
+export interface ComplaintBoxOptions {
+  complaint: string;
+  agentName: string;
+  thinking?: string;
+  logId?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface ClaudeOptions {
   // Arguments to forward verbatim to the Claude CLI.
   args: string[];
