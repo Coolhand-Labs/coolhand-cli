@@ -115,8 +115,12 @@ export async function run(opts: CaptureSessionsOptions): Promise<number> {
           logger.warn(`Failed to submit session: ${redact((err as Error).message)}`);
         }
       }
-      // Advance the local cutoff. Prefer the server's authoritative time; otherwise stamp now.
-      state.lastSyncAt = (serverTime ?? new Date()).toISOString();
+      // Advance the local cutoff ONLY when nothing failed. A failed-but-grown session keeps its
+      // older mtime; if we moved the cutoff past it, the next run's mtime filter would skip it and
+      // the growth would be lost. Prefer the server's authoritative time; otherwise stamp now.
+      if (failed === 0) {
+        state.lastSyncAt = (serverTime ?? new Date()).toISOString();
+      }
     } finally {
       try {
         await saveCaptureState(state);

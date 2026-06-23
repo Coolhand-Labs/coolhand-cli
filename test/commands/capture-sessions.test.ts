@@ -123,6 +123,20 @@ describe('capture-sessions command', () => {
     expect(code).not.toBe(0);
   });
 
+  test('does NOT advance lastSyncAt when a submission fails (failed-but-grown sessions stay catchable)', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    (logRequest as jest.Mock).mockRejectedValueOnce(new CliError('INGEST_ERROR', 'boom'));
+    await run({});
+    const raw = JSON.parse(await fs.readFile(path.join(dir, 'capture-state.json'), 'utf8'));
+    expect(raw.lastSyncAt).toBeUndefined();
+  });
+
+  test('advances lastSyncAt after a fully successful run', async () => {
+    await run({});
+    const raw = JSON.parse(await fs.readFile(path.join(dir, 'capture-state.json'), 'utf8'));
+    expect(typeof raw.lastSyncAt).toBe('string');
+  });
+
   test('aborts immediately on a fatal config error', async () => {
     const { CliError } = await import('../../src/errors.js');
     (scanSessions as jest.Mock).mockResolvedValue({
