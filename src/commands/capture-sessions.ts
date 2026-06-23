@@ -1,12 +1,14 @@
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
-import { scanSessions, sessionIdOf } from '../sessions/claude-scanner.js';
+import { scanSessions, sessionIdOf, type CaptureEnvelope } from '../sessions/claude-scanner.js';
 import {
   loadCaptureState,
-  isSubmitted,
-  markSubmitted,
+  getTurnsSubmitted,
+  recordSubmission,
   saveCaptureState,
+  type CaptureState,
 } from '../sessions/capture-state.js';
+import { fetchLastSync } from '../api/last-sync.js';
 import { loadConfig, getClient } from '../config.js';
 import { logRequest } from '../log-request.js';
 import type { CaptureSessionsOptions } from '../types.js';
@@ -14,39 +16,97 @@ import type { CaptureSessionsOptions } from '../types.js';
 /** Errors that apply to every session (auth/config), so the run should abort, not keep retrying. */
 const FATAL_CODES = new Set(['NOT_CONFIGURED', 'CLIENT_NOT_FOUND', 'INVALID_BASE_URL']);
 
+/**
+ * Reference cutoff for the mtime pre-filter: server `last_sync` → local `lastSyncAt` → epoch.
+ * Epoch (upload everything) is the safe fallback when neither is available.
+ */
+function resolveReferenceTime(serverTime: Date | null, state: CaptureState): Date {
+  if (serverTime) {
+    return serverTime;
+  }
+  if (state.lastSyncAt) {
+    const local = new Date(state.lastSyncAt);
+    if (!Number.isNaN(local.getTime())) {
+      return local;
+    }
+  }
+  return new Date(0);
+}
+
 export async function run(opts: CaptureSessionsOptions): Promise<number> {
   try {
-    const { envelopes, sessionCount } = await scanSessions();
-
-    // Scope the "already submitted" list to the client we're submitting to, so the same sessions
-    // can be sent to a different client if needed.
+    // (1) Resolve the client and load local state up front — both feed the reference time and the
+    // per-session turn-count comparison.
     const cfg = await loadConfig();
     const stateClientId = getClient(cfg, opts.clientId)?.client_id ?? opts.clientId ?? '_default';
     const state = await loadCaptureState();
 
-    const pending = envelopes.filter((e) => !isSubmitted(state, stateClientId, sessionIdOf(e)));
-    const skipped = envelopes.length - pending.length;
+    // (2) Work out the reference timestamp. The server call degrades to null (endpoint may not exist
+    // yet), in which case we fall back to the local lastSyncAt, then to epoch.
+    const serverTime = await fetchLastSync({ clientId: opts.clientId });
+    const referenceTime = resolveReferenceTime(serverTime, state);
+
+    // (3) Scan, skipping files unchanged since the reference time.
+    const { envelopes, sessionCount } = await scanSessions({ sinceTime: referenceTime });
+
+    // (4) Classify each examined session as new / updated / unchanged by comparing its current turn
+    // count against what we last submitted. The turn-count guard — not the mtime filter — is what
+    // makes re-uploads correct.
+    const toSubmit: CaptureEnvelope[] = [];
+    let newCount = 0;
+    let updatedCount = 0;
+    let unchangedCount = 0;
+    for (const envelope of envelopes) {
+      const sessionId = sessionIdOf(envelope);
+      const already = getTurnsSubmitted(state, stateClientId, sessionId);
+      if (already === 0) {
+        newCount += 1;
+        toSubmit.push(envelope);
+      } else if (envelope.turnCount > already) {
+        updatedCount += 1;
+        toSubmit.push(envelope);
+      } else {
+        unchangedCount += 1;
+      }
+    }
 
     if (opts.dryRun) {
       if (opts.json) {
-        logger.json({ ok: true, dryRun: true, sessions: sessionCount, toSubmit: pending.length, skipped });
+        logger.json({
+          ok: true,
+          dryRun: true,
+          scanned: sessionCount,
+          new: newCount,
+          updated: updatedCount,
+          unchanged: unchangedCount,
+          toSubmit: toSubmit.length,
+        });
       } else {
         logger.info(
-          `Dry run: found ${sessionCount} session(s), ${pending.length} new to submit, ` +
-            `${skipped} already submitted. Nothing sent.`
+          `Dry run: ${newCount} new session(s), ${updatedCount} updated, ` +
+            `${unchangedCount} unchanged (${sessionCount} scanned). Nothing sent.`
         );
       }
       return ExitCode.OK;
     }
 
-    let submitted = 0;
+    // (5) Submit new + updated sessions, recording the full current turn count on success, then stamp
+    // lastSyncAt and persist — even if a fatal error aborts the run partway.
+    let submittedNew = 0;
+    let submittedUpdated = 0;
     let failed = 0;
     try {
-      for (const envelope of pending) {
+      for (const envelope of toSubmit) {
+        const sessionId = sessionIdOf(envelope);
+        const prior = getTurnsSubmitted(state, stateClientId, sessionId);
         try {
           await logRequest(envelope, { clientId: opts.clientId });
-          markSubmitted(state, stateClientId, sessionIdOf(envelope));
-          submitted += 1;
+          recordSubmission(state, stateClientId, sessionId, envelope.turnCount);
+          if (prior === 0) {
+            submittedNew += 1;
+          } else {
+            submittedUpdated += 1;
+          }
         } catch (err) {
           if (err instanceof CliError && FATAL_CODES.has(err.code)) {
             throw err;
@@ -55,8 +115,9 @@ export async function run(opts: CaptureSessionsOptions): Promise<number> {
           logger.warn(`Failed to submit session: ${redact((err as Error).message)}`);
         }
       }
+      // Advance the local cutoff. Prefer the server's authoritative time; otherwise stamp now.
+      state.lastSyncAt = (serverTime ?? new Date()).toISOString();
     } finally {
-      // Persist whatever we recorded, even if a fatal error aborts the run partway.
       try {
         await saveCaptureState(state);
       } catch (err) {
@@ -65,12 +126,19 @@ export async function run(opts: CaptureSessionsOptions): Promise<number> {
     }
 
     if (opts.json) {
-      logger.json({ ok: failed === 0, sessions: sessionCount, submitted, skipped, failed });
+      logger.json({
+        ok: failed === 0,
+        scanned: sessionCount,
+        new: submittedNew,
+        updated: submittedUpdated,
+        unchanged: unchangedCount,
+        failed,
+      });
     } else {
       const failureNote = failed > 0 ? `, ${failed} failed` : '';
-      const skippedNote = skipped > 0 ? `, ${skipped} already submitted` : '';
       logger.info(
-        `Submitted ${submitted} session(s) of ${sessionCount} scanned${skippedNote}${failureNote}.`
+        `Submitted ${submittedNew} new, ${submittedUpdated} updated, ` +
+          `${unchangedCount} unchanged (${sessionCount} scanned)${failureNote}.`
       );
     }
 

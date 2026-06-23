@@ -31,6 +31,8 @@ export interface CaptureEnvelope {
     content: unknown;
     usage?: unknown;
   };
+  /** Number of assistant turns in this session — compared against state to detect growth. */
+  turnCount: number;
 }
 
 export interface ScanResult {
@@ -83,6 +85,7 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
   let sawUsage = false;
   let sessionModel: string | undefined;
   let lastAssistant: { id: string; content: unknown; model?: string } | null = null;
+  let turnCount = 0;
 
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
@@ -123,6 +126,7 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
             : undefined;
 
       messages.push({ role: 'assistant', content: extractText(message.content) });
+      turnCount += 1;
 
       const model = typeof message.model === 'string' ? message.model : undefined;
       if (model) {
@@ -166,15 +170,23 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
       content: lastAssistant.content,
       usage: sawUsage ? usage : undefined,
     },
+    turnCount,
   };
 }
 
 /**
  * Find every Claude Code transcript under `projectsDir` (default `~/.claude/projects`) and build one
  * conversation envelope per session. A missing directory simply yields zero sessions.
+ *
+ * When `sinceTime` is given, files whose last-modified time is older than it are skipped entirely
+ * (not even read) — they cannot have grown since the last sync. `sessionCount` therefore counts only
+ * the files actually examined this run, so it reflects the work done rather than the whole corpus.
  */
-export async function scanSessions(options: { projectsDir?: string } = {}): Promise<ScanResult> {
+export async function scanSessions(
+  options: { projectsDir?: string; sinceTime?: Date } = {}
+): Promise<ScanResult> {
   const dir = options.projectsDir ?? defaultProjectsDir();
+  const sinceMs = options.sinceTime?.getTime();
 
   let names: string[];
   try {
@@ -191,9 +203,26 @@ export async function scanSessions(options: { projectsDir?: string } = {}): Prom
   let sessionCount = 0;
 
   for (const relativePath of files) {
+    const fullPath = path.join(dir, relativePath);
+
+    if (sinceMs !== undefined) {
+      let stat;
+      try {
+        stat = await fs.stat(fullPath);
+      } catch {
+        // Unreadable transcript — skip it rather than failing the whole scan.
+        continue;
+      }
+      // Skip files unchanged since the cutoff. Use `>=` so a file touched exactly at the cutoff
+      // is still examined.
+      if (stat.mtimeMs < sinceMs) {
+        continue;
+      }
+    }
+
     let content: string;
     try {
-      content = await fs.readFile(path.join(dir, relativePath), 'utf8');
+      content = await fs.readFile(fullPath, 'utf8');
     } catch {
       // Unreadable transcript — skip it rather than failing the whole scan.
       continue;
