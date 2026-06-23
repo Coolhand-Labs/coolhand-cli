@@ -64,7 +64,7 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
       return ExitCode.INTERNAL;
     }
 
-    const wrapArgs = ['wrap'];
+    const wrapArgs = ['wrap', '--silent'];
     const endpoint = endpointForBaseUrl(entry.base_url);
     if (endpoint) {
       wrapArgs.push('--api-endpoint', endpoint);
