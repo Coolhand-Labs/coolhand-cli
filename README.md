@@ -150,7 +150,7 @@ Submit your historical Claude Code sessions to Coolhand for analysis. Coolhand s
 - **Efficiency gaps** — workflows with unnecessary back-and-forth or redundant steps
 - **Cost insights** — sessions with high token usage relative to their outcome
 
-The command scans `~/.claude/projects/` for Claude Code transcripts, skips sessions already submitted, and posts each as a single conversation log. It is safe to re-run — previously submitted sessions are always skipped.
+The command scans `~/.claude/projects/` for Claude Code transcripts and posts each as a single conversation log. New sessions are submitted on first run; sessions that have grown (more turns added since the last sync) are re-uploaded with the full updated conversation. Unchanged sessions are skipped. It is safe to re-run at any time.
 
 Use `--dry-run` to preview what would be sent without submitting anything.
 
@@ -209,19 +209,6 @@ coolhand wildcard \
 The command records the complaint as feedback tagged `creator_type: agent`, prints a terminal de-loop message, and exits `0` so the agent stops and moves on. The de-loop always fires — even if the feedback could not be recorded (not logged in or a server error) — because the missing capability is real regardless of whether the server was reachable, and a logged-out agent in a sandbox is exactly who this command is for. When recording fails the message says so plainly and a warning is logged, so the failure still surfaces without trapping the agent in the retry loop the command exists to break.
 
 Set `COOLHAND_AGENT_NAME` to avoid passing `--agent-name` on every call. Optional `--thinking` attaches the reasoning that led to the blocker; `--log-id` ties it to a specific LLM request log.
-
-### capture-sessions
-
-Import locally-saved Claude Code sessions into Coolhand for analysis:
-
-```bash
-coolhand capture-sessions           # scan ~/.claude/projects/ and submit new sessions
-coolhand capture-sessions --dry-run # report what would be submitted without sending
-```
-
-Each Claude Code session is submitted as one conversation log. A local state file (`~/.coolhand/capture-state.json`) tracks which sessions have already been sent per client, so re-running is always safe — already-submitted sessions are skipped.
-
-See [docs/session-capture.md](./docs/session-capture.md) for the full envelope format and deduplication details.
 
 ## Configuration file
 

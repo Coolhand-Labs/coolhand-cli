@@ -2,6 +2,24 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.5.0] - 2026-06-24
+
+### Added
+- `coolhand claude` command: runs Claude Code behind the Coolhand proxy, routing all outbound traffic through the configured client.
+- `analyze-claude-sessions` command: now re-uploads sessions that have been updated since the last sync, in addition to new sessions.
+
+### Changed
+- `capture-sessions` renamed to `analyze-claude-sessions`; documentation (README, CLAUDE.md) updated accordingly.
+
+### Breaking
+- `coolhand capture-sessions` no longer exists — update any scripts to use `coolhand analyze-claude-sessions`.
+
+### Fixed
+- Stray merge-conflict markers removed from README Documentation section.
+
+### Security
+- Upgraded `coolhand-node` to 0.8.0, resolving a `js-yaml` audit vulnerability.
+
 ## [0.4.0] - 2026-06-03
 
 ### Added
