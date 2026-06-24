@@ -47,9 +47,11 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
     const stateClientId = getClient(cfg, opts.clientId)?.client_id ?? opts.clientId ?? '_default';
     const state = await loadCaptureState();
 
-    // (2) Work out the reference timestamp. The server call degrades to null (endpoint may not exist
-    // yet), in which case we fall back to the local lastSyncAt, then to epoch.
-    const serverTime = await fetchLastSync({ clientId: opts.clientId });
+    // (2) Work out the reference timestamp. serverTime is only used when local state is absent or
+    // invalid (resolveReferenceTime prefers lastSyncAt), so skip the round-trip when unneeded.
+    const localSyncAt = state.lastSyncAt ? new Date(state.lastSyncAt) : null;
+    const needsServerTime = !localSyncAt || Number.isNaN(localSyncAt.getTime());
+    const serverTime = needsServerTime ? await fetchLastSync({ clientId: opts.clientId }) : null;
     const referenceTime = resolveReferenceTime(serverTime, state);
 
     // (3) Stamp the cutoff before scanning. Any transcript written after this point will have an
