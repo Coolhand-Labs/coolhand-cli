@@ -52,7 +52,12 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
     const serverTime = await fetchLastSync({ clientId: opts.clientId });
     const referenceTime = resolveReferenceTime(serverTime, state);
 
-    // (3) Scan, skipping files unchanged since the reference time.
+    // (3) Stamp the cutoff before scanning. Any transcript written after this point will have an
+    // mtime >= runStartedAt and will be picked up by the next run's filter — closing the window
+    // where a turn added during the submit loop (between scan and lastSyncAt stamp) would be
+    // silently skipped because its mtime fell before a later timestamp.
+    const runStartedAt = new Date();
+
     const { envelopes, sessionCount } = await scanSessions({ sinceTime: referenceTime });
 
     // (4) Classify each examined session as new / updated / unchanged by comparing its current turn
@@ -128,12 +133,10 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
       }
       // Advance the local cutoff ONLY when nothing failed. A failed-but-grown session keeps its
       // older mtime; if we moved the cutoff past it, the next run's mtime filter would skip it and
-      // the growth would be lost. Always stamp local time: lastSyncAt is compared against local
-      // file mtimes, so keeping it on the local clock avoids skipping files due to server/client
-      // clock skew. serverTime is still used as a fallback in resolveReferenceTime when no local
-      // stamp exists yet (first ever run).
+      // the growth would be lost. Use runStartedAt (captured before scanSessions) so any transcript
+      // written during the submit loop has mtime >= runStartedAt and is caught by the next run.
       if (failed === 0) {
-        state.lastSyncAt = new Date().toISOString();
+        state.lastSyncAt = runStartedAt.toISOString();
       }
     } finally {
       try {
