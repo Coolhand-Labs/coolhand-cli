@@ -36,6 +36,8 @@ coolhand search-optimizations [--status V] [--type V] [--category V] [--query V]
 coolhand get-optimization <id>                   [--client-id ID] [--json]
 coolhand update-optimization <id>                [--title V] [--analysis V] [--plan V] [--client-id ID] [--json]
 coolhand close-optimization <id> <reason>        [--client-id ID] [--json]
+
+coolhand analyze-claude-sessions                 [--dry-run] [--client-id ID] [--json]
 ```
 
 ### login
@@ -118,6 +120,24 @@ coolhand close-optimization <id> <reason>
 
 Closes an optimization. The reason is a free-text positional argument (quote it if it contains spaces).
 
+## Analyze Claude Code sessions
+
+```bash
+coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json]
+```
+
+Submit your historical Claude Code sessions to Coolhand for analysis. Coolhand scans the uploaded sessions to surface:
+
+- **Repeatable patterns** — tasks you do by hand on repeat that could be scripted or automated
+- **Efficiency gaps** — workflows with unnecessary back-and-forth or redundant steps
+- **Cost insights** — sessions with high token usage relative to their outcome
+
+The command scans `~/.claude/projects/` for Claude Code transcripts, skips sessions already submitted, and posts each as a single conversation log. It is safe to re-run — previously submitted sessions are always skipped.
+
+Use `--dry-run` to preview what would be sent without submitting anything.
+
+See [Session capture](./docs/session-capture.md) for scan logic, duplicate-avoidance details, and the full flag reference.
+
 ## Security
 
 - The callback listener binds to `127.0.0.1` only — never reachable from the LAN.
@@ -191,6 +211,16 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
   }
 }
 ```
+
+## Documentation
+
+- [Authentication flow](./docs/auth-flow.md) — end-to-end token acquisition, security boundaries, timeout behavior
+- [Configuration file](./docs/config-file.md) — schema reference, file permissions, multi-client management
+- [Session capture](./docs/session-capture.md) — how `analyze-claude-sessions` scans, assembles, and deduplicates Claude Code transcripts
+
+## About Coolhand Labs
+
+[Coolhand Labs](https://coolhandlabs.com) builds observability and feedback tooling for AI-powered applications.
 
 ## License
 

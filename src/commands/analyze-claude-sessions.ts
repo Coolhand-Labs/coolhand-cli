@@ -9,12 +9,12 @@ import {
 } from '../sessions/capture-state.js';
 import { loadConfig, getClient } from '../config.js';
 import { logRequest } from '../log-request.js';
-import type { CaptureSessionsOptions } from '../types.js';
+import type { AnalyzeClaudeSessionsOptions } from '../types.js';
 
 /** Errors that apply to every session (auth/config), so the run should abort, not keep retrying. */
 const FATAL_CODES = new Set(['NOT_CONFIGURED', 'CLIENT_NOT_FOUND', 'INVALID_BASE_URL']);
 
-export async function run(opts: CaptureSessionsOptions): Promise<number> {
+export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
   try {
     const { envelopes, sessionCount } = await scanSessions();
 
