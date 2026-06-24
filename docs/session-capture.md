@@ -1,6 +1,6 @@
 # Session Capture
 
-`coolhand capture-sessions` imports locally-saved **Claude Code** sessions into Coolhand so the
+`coolhand analyze-claude-sessions` imports locally-saved **Claude Code** sessions into Coolhand so the
 platform can analyse work that never went through an instrumented SDK. Each Claude Code session is
 captured as **one conversation log** (not one log per message).
 
@@ -30,7 +30,7 @@ as the per-session unique id.
 The tool keeps a small local **state file** (`capture-state.json`, in the same config folder as
 `config.json`) listing the session ids it has already submitted, **scoped per client**. Before
 sending a session it checks this list and **skips** anything already sent, so re-running
-`capture-sessions` does not create duplicate logs.
+`analyze-claude-sessions` does not create duplicate logs.
 
 This is done in the tool because the server cannot reliably deduplicate these logs itself: its
 duplicate check runs before a log is classified, and once a log is matched to a template it is never
@@ -38,7 +38,7 @@ re-checked.
 
 ## Scope: one-time historical import
 
-`capture-sessions` is a **one-time historical import**, and safe to re-run (already-submitted
+`analyze-claude-sessions` is a **one-time historical import**, and safe to re-run (already-submitted
 sessions are skipped). It does **not** incrementally pick up new turns added to a session after it was
 first submitted — a re-scan skips that session entirely. Ongoing, real-time capture is intended to
 move to the Coolhand proxy, which submits each turn live with its session id.

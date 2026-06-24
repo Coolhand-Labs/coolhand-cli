@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
-import { run } from '../../src/commands/capture-sessions.js';
+import { run } from '../../src/commands/analyze-claude-sessions.js';
 
 jest.mock('../../src/sessions/claude-scanner.js', () => {
   const actual = jest.requireActual('../../src/sessions/claude-scanner.js');
@@ -22,7 +22,7 @@ const envelope = {
   response_body: { id: 'r', type: 'message', role: 'assistant', content: [] },
 };
 
-describe('capture-sessions command', () => {
+describe('analyze-claude-sessions command', () => {
   let dir: string;
   let prev: string | undefined;
 

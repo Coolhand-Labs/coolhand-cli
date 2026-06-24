@@ -9,20 +9,21 @@ npm install
 ## Verify before committing
 
 ```bash
-npm run lint && npm run typecheck && npm test
+npm run build && npm run lint && npm run typecheck && npm test
 ```
 
-This is exactly what `prepublishOnly` runs before an npm publish. A green run here means a clean publish.
+This runs the same steps as the `prepublishOnly` CI gate. Run this as the single verification pass — don't run steps individually as a substitute.
 
-## Running individual tools
+## Individual commands
 
-```bash
-npm run build       # compile TypeScript → dist/
-npm run lint        # ESLint across src/ and test/
-npm run typecheck   # tsc --noEmit (no output files)
-npm test            # Jest test suite
-npm run smoke       # quick binary sanity check (--version)
-```
+| Command | What it does |
+|---------|--------------|
+| `npm run build` | Compile TypeScript → `dist/` |
+| `npm test` | Run the full Jest test suite |
+| `npm run lint` | ESLint across `src/` and `test/` |
+| `npm run typecheck` | Type-check without emitting |
+| `npm run smoke` | Quick sanity check: `dist/bin.js --version` |
+| `npm run dev` | Watch mode TypeScript compilation |
 
 ## Releasing
 
@@ -30,14 +31,15 @@ See [RELEASING.md](./RELEASING.md) for the full release checklist.
 
 ## README and docs philosophy
 
-The README is a quick-start landing page — install, command reference, security notes. Keep it scannable. When content needs more than a short paragraph, move it to `docs/` and link from the README.
+The README is a landing page — install, quick start, commands, where to go next. Keep it scannable. When in doubt, link rather than expand.
 
-**What goes where:**
-- `README.md` — install, command synopses, one-paragraph descriptions, security model, programmatic use snippet
-- `docs/auth-flow.md` — detailed browser-callback sequence, state machine, timeout and error paths
-- `docs/config-file.md` — full config schema, multi-client model, `COOLHAND_CONFIG_DIR` override
-- `docs/session-capture.md` — session scanning, envelope format, deduplication, scope and limitations
+**Three rules:**
+- **Auth flow**: the one-liner install and the login command belong in the README. The full callback sequence, security boundaries, and timeout details go in `docs/auth-flow.md`.
+- **Configuration**: the schema snippet belongs in the README. Multi-client management details and atomic write guarantees go in `docs/config-file.md`.
+- **Session capture**: the `analyze-claude-sessions` command belongs in the README command table. Full scan logic, duplicate-avoidance, and flags go in `docs/session-capture.md`.
 
-**Align with coolhand-node and coolhand-python.** When adding a section that exists in a sibling README, match its structure and tone.
+**Align with coolhand-python and coolhand-node.** When adding a section that exists in sibling READMEs, match structure and tone.
 
-**Discoverability (SEO / AEO).** The README is indexed by search engines and consumed by AI agents doing package research. Write headings, the package description, and command descriptions with this in mind: use full proper names ("Claude Code", "Coolhand", "npm") rather than abbreviations, and keep the one-line description accurate and keyword-rich. The goal is that both humans and agents searching for "CLI LLM monitoring", "Claude Code authentication", or "Coolhand command line" land here.
+## Discoverability (SEO / AEO)
+
+The README is indexed by search engines and consumed by AI agents doing package research. Write headings, the package description, and command names with this in mind: use full proper names ("Coolhand CLI", "Claude Code", "API token", "LLM monitoring") rather than abbreviations. The goal is that searches like "CLI LLM monitoring", "Claude Code auth login", or "Coolhand command line" surface this package.

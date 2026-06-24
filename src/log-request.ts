@@ -14,7 +14,7 @@ const COLLECTOR = 'coolhand-cli/claude-code';
  * deduplicates by the envelope's `response_body.id`, so re-submitting the same turn is harmless.
  *
  * The SDK swallows submission failures and returns `null`; we translate that (and a base_url
- * rejection from the SDK constructor) back into a `CliError` so `capture-sessions` keeps its
+ * rejection from the SDK constructor) back into a `CliError` so `analyze-claude-sessions` keeps its
  * per-session success/failure accounting intact.
  */
 export async function logRequest(
