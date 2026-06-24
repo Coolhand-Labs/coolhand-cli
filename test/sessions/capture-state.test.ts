@@ -5,37 +5,40 @@ import { randomBytes } from 'crypto';
 import {
   loadCaptureState,
   saveCaptureState,
-  isSubmitted,
-  markSubmitted,
+  captureStatePath,
+  getTurnsSubmitted,
+  recordSubmission,
+  V1_MIGRATION_SENTINEL,
   type CaptureState,
 } from '../../src/sessions/capture-state.js';
 
 describe('capture-state (pure helpers)', () => {
   function empty(): CaptureState {
-    return { version: 1, submitted: {} };
+    return { version: 2, submitted: {} };
   }
 
-  test('a fresh session is not yet submitted', () => {
-    expect(isSubmitted(empty(), 'client-1', 'sess-a')).toBe(false);
+  test('a fresh session reports 0 turns submitted', () => {
+    expect(getTurnsSubmitted(empty(), 'client-1', 'sess-a')).toBe(0);
   });
 
-  test('markSubmitted records a session, isSubmitted then reports it', () => {
+  test('recordSubmission stores the turn count, getTurnsSubmitted reads it back', () => {
     const state = empty();
-    markSubmitted(state, 'client-1', 'sess-a');
-    expect(isSubmitted(state, 'client-1', 'sess-a')).toBe(true);
+    recordSubmission(state, 'client-1', 'sess-a', 3);
+    expect(getTurnsSubmitted(state, 'client-1', 'sess-a')).toBe(3);
   });
 
-  test('markSubmitted is idempotent (no duplicate ids stored)', () => {
+  test('recordSubmission overwrites a prior count (a grown session)', () => {
     const state = empty();
-    markSubmitted(state, 'client-1', 'sess-a');
-    markSubmitted(state, 'client-1', 'sess-a');
-    expect(state.submitted['client-1']).toEqual(['sess-a']);
+    recordSubmission(state, 'client-1', 'sess-a', 3);
+    recordSubmission(state, 'client-1', 'sess-a', 7);
+    expect(getTurnsSubmitted(state, 'client-1', 'sess-a')).toBe(7);
+    expect(state.submitted['client-1']).toEqual({ 'sess-a': { turnsSubmitted: 7 } });
   });
 
   test('keeps clients separate', () => {
     const state = empty();
-    markSubmitted(state, 'client-1', 'sess-a');
-    expect(isSubmitted(state, 'client-2', 'sess-a')).toBe(false);
+    recordSubmission(state, 'client-1', 'sess-a', 2);
+    expect(getTurnsSubmitted(state, 'client-2', 'sess-a')).toBe(0);
   });
 });
 
@@ -58,20 +61,62 @@ describe('capture-state (persistence)', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  test('returns an empty state when no file exists yet', async () => {
+  test('returns an empty v2 state when no file exists yet', async () => {
     const state = await loadCaptureState();
-    expect(state).toEqual({ version: 1, submitted: {} });
+    expect(state).toEqual({ version: 2, submitted: {} });
   });
 
-  test('round-trips submitted sessions through save and load', async () => {
+  test('round-trips submitted turn counts through save and load', async () => {
     const state = await loadCaptureState();
-    markSubmitted(state, 'client-1', 'sess-a');
-    markSubmitted(state, 'client-1', 'sess-b');
+    recordSubmission(state, 'client-1', 'sess-a', 4);
+    recordSubmission(state, 'client-1', 'sess-b', 1);
     await saveCaptureState(state);
 
     const reloaded = await loadCaptureState();
-    expect(isSubmitted(reloaded, 'client-1', 'sess-a')).toBe(true);
-    expect(isSubmitted(reloaded, 'client-1', 'sess-b')).toBe(true);
-    expect(isSubmitted(reloaded, 'client-1', 'sess-c')).toBe(false);
+    expect(reloaded.version).toBe(2);
+    expect(getTurnsSubmitted(reloaded, 'client-1', 'sess-a')).toBe(4);
+    expect(getTurnsSubmitted(reloaded, 'client-1', 'sess-b')).toBe(1);
+    expect(getTurnsSubmitted(reloaded, 'client-1', 'sess-c')).toBe(0);
+  });
+
+  test('persists lastSyncAt', async () => {
+    const state = await loadCaptureState();
+    state.lastSyncAt = '2026-06-10T14:23:00.000Z';
+    await saveCaptureState(state);
+
+    const reloaded = await loadCaptureState();
+    expect(reloaded.lastSyncAt).toBe('2026-06-10T14:23:00.000Z');
+  });
+
+  test('migrates a v1 file: every old session id becomes the migration sentinel', async () => {
+    // Write an old-format (v1) file directly to disk.
+    await fs.mkdir(dir, { recursive: true });
+    const v1 = { version: 1, submitted: { 'client-1': ['sess-a', 'sess-b'] } };
+    await fs.writeFile(captureStatePath(), `${JSON.stringify(v1, null, 2)}\n`);
+
+    const state = await loadCaptureState();
+    expect(state.version).toBe(2);
+    // Sentinel (-1) means "submitted under v1, turn count unknown". run() will record the real
+    // count on the next scan without re-submitting, preventing duplicate uploads on first upgrade.
+    expect(getTurnsSubmitted(state, 'client-1', 'sess-a')).toBe(V1_MIGRATION_SENTINEL);
+    expect(getTurnsSubmitted(state, 'client-1', 'sess-b')).toBe(V1_MIGRATION_SENTINEL);
+    expect(state.submitted['client-1']).toEqual({
+      'sess-a': { turnsSubmitted: V1_MIGRATION_SENTINEL },
+      'sess-b': { turnsSubmitted: V1_MIGRATION_SENTINEL },
+    });
+  });
+
+  test('a migrated v1 file is rewritten as v2 on next save', async () => {
+    await fs.mkdir(dir, { recursive: true });
+    const v1 = { version: 1, submitted: { 'client-1': ['sess-a'] } };
+    await fs.writeFile(captureStatePath(), `${JSON.stringify(v1, null, 2)}\n`);
+
+    const state = await loadCaptureState();
+    recordSubmission(state, 'client-1', 'sess-a', 5);
+    await saveCaptureState(state);
+
+    const raw = JSON.parse(await fs.readFile(captureStatePath(), 'utf8'));
+    expect(raw.version).toBe(2);
+    expect(raw.submitted['client-1']['sess-a']).toEqual({ turnsSubmitted: 5 });
   });
 });

@@ -68,6 +68,19 @@ describe('parseTranscript', () => {
     });
   });
 
+  test('counts one turn per assistant response', () => {
+    const env = parseTranscript(SAMPLE, 'sess-1');
+    expect(env?.turnCount).toBe(2);
+  });
+
+  test('a single-assistant transcript has turnCount 1', () => {
+    const line = JSON.stringify({
+      type: 'assistant',
+      message: { role: 'assistant', id: 'm', content: [{ type: 'text', text: 'hi' }] },
+    });
+    expect(parseTranscript(line, 's')?.turnCount).toBe(1);
+  });
+
   test('returns null when the session has no assistant turns', () => {
     const onlyUser = JSON.stringify({ type: 'user', message: { role: 'user', content: 'hi' } });
     expect(parseTranscript(onlyUser, 'sess-1')).toBeNull();
@@ -142,5 +155,34 @@ describe('scanSessions', () => {
     const res = await scanSessions({ projectsDir: dir });
     expect(res.sessionCount).toBe(1);
     expect(res.envelopes).toHaveLength(0);
+  });
+
+  test('sinceTime skips files older than the cutoff and reads newer ones', async () => {
+    const oldFile = path.join(dir, 'proj-a', 'old.jsonl');
+    const newFile = path.join(dir, 'proj-a', 'new.jsonl');
+    await fs.writeFile(oldFile, SAMPLE);
+    await fs.writeFile(newFile, SAMPLE);
+
+    const cutoff = new Date('2026-06-10T00:00:00.000Z');
+    const past = new Date('2026-06-01T00:00:00.000Z');
+    const future = new Date('2026-06-20T00:00:00.000Z');
+    await fs.utimes(oldFile, past, past);
+    await fs.utimes(newFile, future, future);
+
+    const res = await scanSessions({ projectsDir: dir, sinceTime: cutoff });
+    // Only the future-mtime file is examined; "scanned" reflects work done this run.
+    expect(res.sessionCount).toBe(1);
+    expect(res.envelopes).toHaveLength(1);
+    expect(res.envelopes[0].url).toBe('claudecode://session/new');
+  });
+
+  test('sinceTime includes a file whose mtime equals the cutoff', async () => {
+    const file = path.join(dir, 'proj-a', 'edge.jsonl');
+    await fs.writeFile(file, SAMPLE);
+    const cutoff = new Date('2026-06-10T00:00:00.000Z');
+    await fs.utimes(file, cutoff, cutoff);
+
+    const res = await scanSessions({ projectsDir: dir, sinceTime: cutoff });
+    expect(res.envelopes).toHaveLength(1);
   });
 });

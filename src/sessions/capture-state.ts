@@ -5,17 +5,31 @@ import { configDir } from '../config.js';
 import { CliError } from '../errors.js';
 
 /**
- * Local record of which Claude Code sessions have already been submitted, so re-running
- * `analyze-claude-sessions` does not resend (and therefore re-create) a session the server already stored.
+ * Local record of how much of each Claude Code session has already been submitted, so re-running
+ * `analyze-claude-sessions` does not resend a session unchanged — but DOES resend one whose transcript has
+ * grown with new turns since last time.
  *
  * The server cannot deduplicate these logs itself (its dedup runs before a log is classified, and
- * matched logs are never re-checked), so the tool keeps this list and skips sessions already sent.
+ * matched logs are never re-checked), so the tool keeps this record and decides what to (re)send.
  * Keyed per client id, since the same session may legitimately be submitted to more than one client.
+ *
+ * We store a turn COUNT per session (not a yes/no flag): a chat transcript keeps growing, so a
+ * boolean "already submitted?" silently drops later turns. Comparing the current turn count against
+ * `turnsSubmitted` is what lets a grown session be re-submitted.
  */
+export interface SubmittedSession {
+  /** Number of assistant turns submitted the last time this session was sent. */
+  turnsSubmitted: number;
+}
+
 export interface CaptureState {
   version: number;
-  submitted: Record<string, string[]>;
+  /** ISO timestamp of the last sync; used as a cheap mtime cutoff to skip unchanged files. */
+  lastSyncAt?: string;
+  submitted: Record<string, Record<string, SubmittedSession>>;
 }
+
+const STATE_VERSION = 2;
 
 const STATE_FILENAME = 'capture-state.json';
 const DIR_MODE = 0o700;
@@ -26,7 +40,57 @@ export function captureStatePath(): string {
 }
 
 function emptyState(): CaptureState {
-  return { version: 1, submitted: {} };
+  return { version: STATE_VERSION, submitted: {} };
+}
+
+/**
+ * Sentinel stored for sessions migrated from v1 (where only a boolean "submitted?" was tracked).
+ * `run()` treats this as "already submitted, turn count unknown" — it records the actual count
+ * without re-submitting, so subsequent runs can detect growth correctly.
+ */
+export const V1_MIGRATION_SENTINEL = -1;
+
+/** Read a turn count defensively (hand-edited files may hold garbage). */
+function toTurnCount(value: unknown): number {
+  // Allow the migration sentinel (-1) through; reject everything else outside [0, ∞).
+  if (value === V1_MIGRATION_SENTINEL) { return V1_MIGRATION_SENTINEL; }
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+/**
+ * Normalize the on-disk `submitted` map into the v2 shape, migrating v1 as we go.
+ *
+ * v1 stored `clientId -> sessionId[]` (a yes/no list). v2 stores
+ * `clientId -> { sessionId: { turnsSubmitted } }`. Migrating a v1 entry sets `turnsSubmitted`
+ * to `V1_MIGRATION_SENTINEL` (-1). On the first v2 run, `run()` treats the sentinel as unchanged —
+ * it records the actual current turn count without re-submitting, so previously-submitted sessions
+ * are not duplicated on the server.
+ */
+function normalizeSubmitted(raw: unknown): Record<string, Record<string, SubmittedSession>> {
+  if (!raw || typeof raw !== 'object') {
+    return {};
+  }
+  const out: Record<string, Record<string, SubmittedSession>> = {};
+  for (const [clientId, value] of Object.entries(raw as Record<string, unknown>)) {
+    const sessions: Record<string, SubmittedSession> = {};
+    if (Array.isArray(value)) {
+      // v1: a plain list of session ids. Use the migration sentinel so run() can learn the real
+      // turn count on the next scan without re-submitting sessions the server already holds.
+      for (const sessionId of value) {
+        if (typeof sessionId === 'string') {
+          sessions[sessionId] = { turnsSubmitted: V1_MIGRATION_SENTINEL };
+        }
+      }
+    } else if (value && typeof value === 'object') {
+      // v2: a map of session id → { turnsSubmitted }.
+      for (const [sessionId, entry] of Object.entries(value as Record<string, unknown>)) {
+        const turns = (entry as { turnsSubmitted?: unknown })?.turnsSubmitted;
+        sessions[sessionId] = { turnsSubmitted: toTurnCount(turns) };
+      }
+    }
+    out[clientId] = sessions;
+  }
+  return out;
 }
 
 export async function loadCaptureState(): Promise<CaptureState> {
@@ -41,10 +105,11 @@ export async function loadCaptureState(): Promise<CaptureState> {
     throw new CliError('CONFIG_READ_FAILED', `Failed to read ${filePath}: ${(err as Error).message}`);
   }
   try {
-    const parsed = JSON.parse(raw) as Partial<CaptureState>;
+    const parsed = JSON.parse(raw) as Partial<CaptureState> & { submitted?: unknown };
     return {
-      version: 1,
-      submitted: parsed.submitted ?? {},
+      version: STATE_VERSION,
+      lastSyncAt: typeof parsed.lastSyncAt === 'string' ? parsed.lastSyncAt : undefined,
+      submitted: normalizeSubmitted(parsed.submitted),
     };
   } catch (err) {
     throw new CliError(
@@ -54,18 +119,20 @@ export async function loadCaptureState(): Promise<CaptureState> {
   }
 }
 
-/** True if this session id has already been submitted for this client. */
-export function isSubmitted(state: CaptureState, clientId: string, sessionId: string): boolean {
-  const list = state.submitted[clientId];
-  return Array.isArray(list) && list.includes(sessionId);
+/** Turns already submitted for this session/client, or 0 if it has never been submitted. */
+export function getTurnsSubmitted(state: CaptureState, clientId: string, sessionId: string): number {
+  return state.submitted[clientId]?.[sessionId]?.turnsSubmitted ?? 0;
 }
 
-/** Record a session as submitted for this client (idempotent — no duplicate ids stored). */
-export function markSubmitted(state: CaptureState, clientId: string, sessionId: string): void {
-  const list = state.submitted[clientId] ?? (state.submitted[clientId] = []);
-  if (!list.includes(sessionId)) {
-    list.push(sessionId);
-  }
+/** Record that `turns` turns of this session have now been submitted for this client. */
+export function recordSubmission(
+  state: CaptureState,
+  clientId: string,
+  sessionId: string,
+  turns: number
+): void {
+  const sessions = state.submitted[clientId] ?? (state.submitted[clientId] = {});
+  sessions[sessionId] = { turnsSubmitted: turns };
 }
 
 async function ensureDir(dir: string): Promise<void> {
