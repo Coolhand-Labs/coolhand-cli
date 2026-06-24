@@ -36,12 +36,19 @@ This is done in the tool because the server cannot reliably deduplicate these lo
 duplicate check runs before a log is classified, and once a log is matched to a template it is never
 re-checked.
 
-## Scope: one-time historical import
+## Scope: initial import and incremental updates
 
-`analyze-claude-sessions` is a **one-time historical import**, and safe to re-run (already-submitted
-sessions are skipped). It does **not** incrementally pick up new turns added to a session after it was
-first submitted — a re-scan skips that session entirely. Ongoing, real-time capture is intended to
-move to the Coolhand proxy, which submits each turn live with its session id.
+`analyze-claude-sessions` handles both the initial import and incremental updates in one command:
+
+- **New sessions** — submitted on first run, recorded in local state.
+- **Updated sessions** — if a session has more turns than when it was last submitted, the full
+  updated conversation is re-uploaded. Turn count (not file mtime) is the source of truth for
+  whether a re-upload is needed; mtime is only used as a cheap pre-filter to skip files that
+  clearly haven't changed.
+- **Unchanged sessions** — skipped entirely.
+
+The command is safe to re-run at any time. Ongoing, real-time capture (each turn as it happens)
+is handled by the Coolhand proxy (`coolhand claude`), which submits turns live with their session id.
 
 ## Flags
 

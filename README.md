@@ -150,7 +150,7 @@ Submit your historical Claude Code sessions to Coolhand for analysis. Coolhand s
 - **Efficiency gaps** — workflows with unnecessary back-and-forth or redundant steps
 - **Cost insights** — sessions with high token usage relative to their outcome
 
-The command scans `~/.claude/projects/` for Claude Code transcripts, skips sessions already submitted, and posts each as a single conversation log. It is safe to re-run — previously submitted sessions are always skipped.
+The command scans `~/.claude/projects/` for Claude Code transcripts and posts each as a single conversation log. New sessions are submitted on first run; sessions that have grown (more turns added since the last sync) are re-uploaded with the full updated conversation. Unchanged sessions are skipped. It is safe to re-run at any time.
 
 Use `--dry-run` to preview what would be sent without submitting anything.
 
