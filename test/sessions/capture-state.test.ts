@@ -8,6 +8,7 @@ import {
   captureStatePath,
   getTurnsSubmitted,
   recordSubmission,
+  V1_MIGRATION_SENTINEL,
   type CaptureState,
 } from '../../src/sessions/capture-state.js';
 
@@ -87,7 +88,7 @@ describe('capture-state (persistence)', () => {
     expect(reloaded.lastSyncAt).toBe('2026-06-10T14:23:00.000Z');
   });
 
-  test('migrates a v1 file: every old session id becomes turnsSubmitted 0', async () => {
+  test('migrates a v1 file: every old session id becomes the migration sentinel', async () => {
     // Write an old-format (v1) file directly to disk.
     await fs.mkdir(dir, { recursive: true });
     const v1 = { version: 1, submitted: { 'client-1': ['sess-a', 'sess-b'] } };
@@ -95,12 +96,13 @@ describe('capture-state (persistence)', () => {
 
     const state = await loadCaptureState();
     expect(state.version).toBe(2);
-    // turnsSubmitted 0 intentionally forces a re-check of previously-submitted sessions.
-    expect(getTurnsSubmitted(state, 'client-1', 'sess-a')).toBe(0);
-    expect(getTurnsSubmitted(state, 'client-1', 'sess-b')).toBe(0);
+    // Sentinel (-1) means "submitted under v1, turn count unknown". run() will record the real
+    // count on the next scan without re-submitting, preventing duplicate uploads on first upgrade.
+    expect(getTurnsSubmitted(state, 'client-1', 'sess-a')).toBe(V1_MIGRATION_SENTINEL);
+    expect(getTurnsSubmitted(state, 'client-1', 'sess-b')).toBe(V1_MIGRATION_SENTINEL);
     expect(state.submitted['client-1']).toEqual({
-      'sess-a': { turnsSubmitted: 0 },
-      'sess-b': { turnsSubmitted: 0 },
+      'sess-a': { turnsSubmitted: V1_MIGRATION_SENTINEL },
+      'sess-b': { turnsSubmitted: V1_MIGRATION_SENTINEL },
     });
   });
 

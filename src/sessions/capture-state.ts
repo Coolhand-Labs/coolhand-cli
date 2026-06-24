@@ -43,8 +43,17 @@ function emptyState(): CaptureState {
   return { version: STATE_VERSION, submitted: {} };
 }
 
+/**
+ * Sentinel stored for sessions migrated from v1 (where only a boolean "submitted?" was tracked).
+ * `run()` treats this as "already submitted, turn count unknown" — it records the actual count
+ * without re-submitting, so subsequent runs can detect growth correctly.
+ */
+export const V1_MIGRATION_SENTINEL = -1;
+
 /** Read a turn count defensively (hand-edited files may hold garbage). */
 function toTurnCount(value: unknown): number {
+  // Allow the migration sentinel (-1) through; reject everything else outside [0, ∞).
+  if (value === V1_MIGRATION_SENTINEL) return V1_MIGRATION_SENTINEL;
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
@@ -64,10 +73,11 @@ function normalizeSubmitted(raw: unknown): Record<string, Record<string, Submitt
   for (const [clientId, value] of Object.entries(raw as Record<string, unknown>)) {
     const sessions: Record<string, SubmittedSession> = {};
     if (Array.isArray(value)) {
-      // v1: a plain list of session ids → migrate each to { turnsSubmitted: 0 }.
+      // v1: a plain list of session ids. Use the migration sentinel so run() can learn the real
+      // turn count on the next scan without re-submitting sessions the server already holds.
       for (const sessionId of value) {
         if (typeof sessionId === 'string') {
-          sessions[sessionId] = { turnsSubmitted: 0 };
+          sessions[sessionId] = { turnsSubmitted: V1_MIGRATION_SENTINEL };
         }
       }
     } else if (value && typeof value === 'object') {

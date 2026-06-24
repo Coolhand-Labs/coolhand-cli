@@ -6,6 +6,7 @@ import {
   getTurnsSubmitted,
   recordSubmission,
   saveCaptureState,
+  V1_MIGRATION_SENTINEL,
   type CaptureState,
 } from '../sessions/capture-state.js';
 import { fetchLastSync } from '../api/last-sync.js';
@@ -17,18 +18,23 @@ import type { AnalyzeClaudeSessionsOptions } from '../types.js';
 const FATAL_CODES = new Set(['NOT_CONFIGURED', 'CLIENT_NOT_FOUND', 'INVALID_BASE_URL']);
 
 /**
- * Reference cutoff for the mtime pre-filter: server `last_sync` → local `lastSyncAt` → epoch.
- * Epoch (upload everything) is the safe fallback when neither is available.
+ * Reference cutoff for the mtime pre-filter: local `lastSyncAt` → server `last_sync` → epoch.
+ *
+ * Local `lastSyncAt` is preferred: it is only advanced when a run completes with zero failures,
+ * so it accurately reflects the point past which all sessions have been submitted. Using server
+ * time instead would advance the cutoff past sessions that failed to submit on a prior run,
+ * causing the mtime filter to skip them permanently. Server time is also on a different clock
+ * from local file mtimes, so clock skew can silently exclude freshly-written files.
  */
 function resolveReferenceTime(serverTime: Date | null, state: CaptureState): Date {
-  if (serverTime) {
-    return serverTime;
-  }
   if (state.lastSyncAt) {
     const local = new Date(state.lastSyncAt);
     if (!Number.isNaN(local.getTime())) {
       return local;
     }
+  }
+  if (serverTime) {
+    return serverTime;
   }
   return new Date(0);
 }
@@ -62,6 +68,11 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
       if (already === 0) {
         newCount += 1;
         toSubmit.push(envelope);
+      } else if (already === V1_MIGRATION_SENTINEL) {
+        // Session was submitted under v1 but its turn count was not recorded. Record the actual
+        // count now so future runs can detect growth, without re-submitting (server already has it).
+        recordSubmission(state, stateClientId, sessionId, envelope.turnCount);
+        unchangedCount += 1;
       } else if (envelope.turnCount > already) {
         updatedCount += 1;
         toSubmit.push(envelope);
