@@ -78,7 +78,7 @@ Multiple clients can be stored at once. `coolhand clients` lists them, `coolhand
 
 Coolhand can wrap any LLM-backed process to capture its sessions, then evaluate them to find where prompts, context, or workflows can be made more efficient.
 
-`coolhand claude` is the built-in example — it runs Claude behind the proxy with zero setup:
+Use `coolhand claude` to wrap a single Claude session and capture it for later evaluation — a coding session, a skill walkthrough, a debugging run:
 
 ```bash
 coolhand claude           # starts Claude with capture on
