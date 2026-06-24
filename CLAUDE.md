@@ -25,6 +25,10 @@ This runs the same steps as the `prepublishOnly` CI gate. Run this as the single
 | `npm run smoke` | Quick sanity check: `dist/bin.js --version` |
 | `npm run dev` | Watch mode TypeScript compilation |
 
+## Releasing
+
+See [RELEASING.md](./RELEASING.md) for the full release checklist.
+
 ## README and docs philosophy
 
 The README is a landing page — install, quick start, commands, where to go next. Keep it scannable. When in doubt, link rather than expand.
