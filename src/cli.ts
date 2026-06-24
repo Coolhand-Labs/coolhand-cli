@@ -11,7 +11,6 @@ import { run as runGetOptimization } from './commands/get-optimization.js';
 import { run as runCloseOptimization } from './commands/close-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
 import { run as runWildcard } from './commands/wildcard.js';
-import { run as runCaptureSessions } from './commands/capture-sessions.js';
 import { run as runClaude } from './commands/claude.js';
 import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
 import type {
