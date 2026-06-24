@@ -61,9 +61,10 @@ function toTurnCount(value: unknown): number {
  * Normalize the on-disk `submitted` map into the v2 shape, migrating v1 as we go.
  *
  * v1 stored `clientId -> sessionId[]` (a yes/no list). v2 stores
- * `clientId -> { sessionId: { turnsSubmitted } }`. Migrating a v1 entry sets `turnsSubmitted: 0`,
- * which intentionally forces a re-check of every previously-submitted session on the first v2 run —
- * so sessions that grew before this feature existed are caught.
+ * `clientId -> { sessionId: { turnsSubmitted } }`. Migrating a v1 entry sets `turnsSubmitted`
+ * to `V1_MIGRATION_SENTINEL` (-1). On the first v2 run, `run()` treats the sentinel as unchanged —
+ * it records the actual current turn count without re-submitting, so previously-submitted sessions
+ * are not duplicated on the server.
  */
 function normalizeSubmitted(raw: unknown): Record<string, Record<string, SubmittedSession>> {
   if (!raw || typeof raw !== 'object') {

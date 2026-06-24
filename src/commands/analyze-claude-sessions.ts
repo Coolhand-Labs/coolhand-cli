@@ -128,9 +128,12 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
       }
       // Advance the local cutoff ONLY when nothing failed. A failed-but-grown session keeps its
       // older mtime; if we moved the cutoff past it, the next run's mtime filter would skip it and
-      // the growth would be lost. Prefer the server's authoritative time; otherwise stamp now.
+      // the growth would be lost. Always stamp local time: lastSyncAt is compared against local
+      // file mtimes, so keeping it on the local clock avoids skipping files due to server/client
+      // clock skew. serverTime is still used as a fallback in resolveReferenceTime when no local
+      // stamp exists yet (first ever run).
       if (failed === 0) {
-        state.lastSyncAt = (serverTime ?? new Date()).toISOString();
+        state.lastSyncAt = new Date().toISOString();
       }
     } finally {
       try {
