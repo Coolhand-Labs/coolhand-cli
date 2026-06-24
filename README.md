@@ -79,7 +79,6 @@ Multiple clients can be stored at once. `coolhand clients` lists them, `coolhand
 `coolhand claude [args...]` runs the Claude CLI behind the Coolhand proxy, so every LLM call Claude makes is captured and sent to your Coolhand account — with no manual env-var setup. It reads your stored API key and runs the proxy's `wrap` for you under the hood.
 
 ```bash
-coolhand login            # once, to store your key
 coolhand claude           # starts Claude with capture on
 coolhand claude --resume  # any args after `claude` go straight to the Claude CLI
 ```
