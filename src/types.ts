@@ -113,5 +113,11 @@ export interface ComplaintBoxOptions {
   clientId?: string;
 }
 
+export interface ClaudeOptions {
+  // Arguments to forward verbatim to the Claude CLI.
+  args: string[];
+  clientId?: string;
+}
+
 export const DEFAULT_BASE_URL = 'https://coolhandlabs.com';
 export const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;

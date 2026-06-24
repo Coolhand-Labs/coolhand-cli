@@ -11,6 +11,7 @@ import { run as runGetOptimization } from './commands/get-optimization.js';
 import { run as runCloseOptimization } from './commands/close-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
 import { run as runWildcard } from './commands/wildcard.js';
+import { run as runClaude } from './commands/claude.js';
 import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
 import type {
   ClientsOptions,
@@ -162,6 +163,14 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--dry-run', description: 'Scan and report what would be submitted, without sending' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'claude',
+    oneLiner: 'Run the Claude CLI through the Coolhand proxy (captures LLM calls)',
+    usage: 'coolhand claude [claude args...]',
+    options: [
+      { flag: '[claude args...]', description: 'Everything after `claude` is passed straight to the Claude CLI' },
     ],
   },
   {
@@ -475,6 +484,12 @@ export async function run(argv: string[]): Promise<number> {
   if (argv.length === 0) {
     logger.info(buildSummaryHelp());
     return ExitCode.OK;
+  }
+
+  // `claude` is a passthrough wrapper: everything after it goes to the Claude CLI
+  // verbatim (e.g. `coolhand claude --resume`), so it must skip the flag parser.
+  if (argv[0] === 'claude') {
+    return await runClaude({ args: argv.slice(1) });
   }
 
   const parsed = parseArgs(argv);

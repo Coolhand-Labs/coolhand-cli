@@ -59,7 +59,8 @@
     "smoke": "node dist/bin.js --version"
   },
   "dependencies": {
-    "coolhand-node": "^0.8.0"
+    "coolhand-node": "^0.8.0",
+    "coolhand-proxy": "^0.0.1"
   },
   "overrides": {
     "js-yaml": "^4.2.0"

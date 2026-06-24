@@ -27,6 +27,7 @@ coolhand logout   [--client-id ID | --all] [--json]
 coolhand status   [--client-id ID] [--json]
 coolhand whoami   [--client-id ID]
 coolhand clients [use <id>] [--json]
+coolhand claude  [claude args...]
 
 coolhand search-optimizations [--status V] [--type V] [--category V] [--query V]
                                [--from DATE] [--to DATE] [--days-back N]
@@ -72,6 +73,19 @@ Exit code is `0` if a token is configured for the default (or requested) client,
 ### clients
 
 Multiple clients can be stored at once. `coolhand clients` lists them, `coolhand clients use <id>` switches the default. Each `coolhand login` adds (or refreshes) one entry, keyed by the server-assigned `client_id`.
+
+### run
+
+Coolhand can wrap any LLM-backed process to capture its sessions, then evaluate them to find where prompts, context, or workflows can be made more efficient.
+
+Use `coolhand claude` to wrap a single Claude session and capture it for later evaluation — a coding session, a skill walkthrough, a debugging run:
+
+```bash
+coolhand claude           # starts Claude with capture on
+coolhand claude --resume  # any args after `claude` go straight to the Claude CLI
+```
+
+Captured sessions flow into your Coolhand account, where they can be analyzed for optimization opportunities — reduced token usage, tighter prompts, better context management.
 
 ## Optimization commands
 
