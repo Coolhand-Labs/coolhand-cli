@@ -231,15 +231,9 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
 
 ## Documentation
 
-<<<<<<< HEAD
-- [Authentication flow](./docs/auth-flow.md) — end-to-end token acquisition, security boundaries, timeout behavior
-- [Configuration file](./docs/config-file.md) — schema reference, file permissions, multi-client management
-- [Session capture](./docs/session-capture.md) — how `analyze-claude-sessions` scans, assembles, and deduplicates Claude Code transcripts
-=======
 - [Auth Flow](./docs/auth-flow.md) — browser-callback sequence, state machine, timeout and error paths
 - [Configuration File](./docs/config-file.md) — full config schema, multi-client model, `COOLHAND_CONFIG_DIR` override
 - [Session Capture](./docs/session-capture.md) — session scanning, envelope format, deduplication, scope and limitations
->>>>>>> origin/main
 
 ## About Coolhand Labs
 
