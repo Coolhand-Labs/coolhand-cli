@@ -53,7 +53,7 @@ export const V1_MIGRATION_SENTINEL = -1;
 /** Read a turn count defensively (hand-edited files may hold garbage). */
 function toTurnCount(value: unknown): number {
   // Allow the migration sentinel (-1) through; reject everything else outside [0, ∞).
-  if (value === V1_MIGRATION_SENTINEL) return V1_MIGRATION_SENTINEL;
+  if (value === V1_MIGRATION_SENTINEL) { return V1_MIGRATION_SENTINEL; }
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
