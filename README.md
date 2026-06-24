@@ -84,7 +84,7 @@ coolhand claude           # starts Claude with capture on
 coolhand claude --resume  # any args after `claude` go straight to the Claude CLI
 ```
 
-Requires the `claude` CLI to be installed and on your `PATH`. Capture stops when the Claude session exits. To send to a non-default workspace, switch first with `coolhand clients use <id>`.
+Every LLM call from that session lands in your Coolhand account automatically — no per-project config, no env vars to manage. Review, analyze, and act on your Claude usage in one place.
 
 ## Optimization commands
 
