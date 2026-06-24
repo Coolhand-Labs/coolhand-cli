@@ -6,7 +6,7 @@ import { CliError } from '../errors.js';
 
 /**
  * Local record of how much of each Claude Code session has already been submitted, so re-running
- * `capture-sessions` does not resend a session unchanged — but DOES resend one whose transcript has
+ * `analyze-claude-sessions` does not resend a session unchanged — but DOES resend one whose transcript has
  * grown with new turns since last time.
  *
  * The server cannot deduplicate these logs itself (its dedup runs before a log is classified, and
