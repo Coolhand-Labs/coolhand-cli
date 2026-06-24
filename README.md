@@ -210,19 +210,6 @@ The command records the complaint as feedback tagged `creator_type: agent`, prin
 
 Set `COOLHAND_AGENT_NAME` to avoid passing `--agent-name` on every call. Optional `--thinking` attaches the reasoning that led to the blocker; `--log-id` ties it to a specific LLM request log.
 
-### capture-sessions
-
-Import locally-saved Claude Code sessions into Coolhand for analysis:
-
-```bash
-coolhand capture-sessions           # scan ~/.claude/projects/ and submit new sessions
-coolhand capture-sessions --dry-run # report what would be submitted without sending
-```
-
-Each Claude Code session is submitted as one conversation log. A local state file (`~/.coolhand/capture-state.json`) tracks which sessions have already been sent per client, so re-running is always safe — already-submitted sessions are skipped.
-
-See [docs/session-capture.md](./docs/session-capture.md) for the full envelope format and deduplication details.
-
 ## Configuration file
 
 Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` for testing). Schema:
