@@ -6,7 +6,7 @@ import { CliError } from '../errors.js';
 
 /**
  * Local record of which Claude Code sessions have already been submitted, so re-running
- * `capture-sessions` does not resend (and therefore re-create) a session the server already stored.
+ * `analyze-claude-sessions` does not resend (and therefore re-create) a session the server already stored.
  *
  * The server cannot deduplicate these logs itself (its dedup runs before a log is classified, and
  * matched logs are never re-checked), so the tool keeps this list and skips sessions already sent.

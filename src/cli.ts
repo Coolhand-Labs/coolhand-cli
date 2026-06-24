@@ -13,6 +13,7 @@ import { run as runUpdateOptimization } from './commands/update-optimization.js'
 import { run as runWildcard } from './commands/wildcard.js';
 import { run as runCaptureSessions } from './commands/capture-sessions.js';
 import { run as runClaude } from './commands/claude.js';
+import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
 import type {
   ClientsOptions,
   LoginOptions,
@@ -24,7 +25,7 @@ import type {
   CloseOptimizationOptions,
   UpdateOptimizationOptions,
   ComplaintBoxOptions,
-  CaptureSessionsOptions,
+  AnalyzeClaudeSessionsOptions,
 } from './types.js';
 
 interface ParsedArgs {
@@ -156,9 +157,9 @@ const COMMANDS: CommandMeta[] = [
     ],
   },
   {
-    name: 'capture-sessions',
-    oneLiner: 'Scan local Claude Code sessions and submit them to Coolhand',
-    usage: 'coolhand capture-sessions [options]',
+    name: 'analyze-claude-sessions',
+    oneLiner: 'Submit historical Claude Code sessions to Coolhand for pattern and cost analysis',
+    usage: 'coolhand analyze-claude-sessions [options]',
     options: [
       { flag: '--dry-run', description: 'Scan and report what would be submitted, without sending' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
@@ -437,8 +438,8 @@ function updateOptimizationOptions(parsed: ParsedArgs): UpdateOptimizationOption
   return opts;
 }
 
-function captureSessionsOptions(parsed: ParsedArgs): CaptureSessionsOptions {
-  const opts: CaptureSessionsOptions = {};
+function analyzeClaudeSessionsOptions(parsed: ParsedArgs): AnalyzeClaudeSessionsOptions {
+  const opts: AnalyzeClaudeSessionsOptions = {};
   if (parsed.flags['dry-run'] === true) {
     opts.dryRun = true;
   }
@@ -547,8 +548,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runUpdateOptimization(updateOptimizationOptions(parsed));
       case 'wildcard':
         return await runWildcard(wildcardOptions(parsed));
-      case 'capture-sessions':
-        return await runCaptureSessions(captureSessionsOptions(parsed));
+      case 'analyze-claude-sessions':
+        return await runAnalyzeClaudeSessions(analyzeClaudeSessionsOptions(parsed));
       default:
         logger.info(`Unknown command: ${parsed.command}`);
         logger.info(buildSummaryHelp());

@@ -98,7 +98,7 @@ export interface UpdateOptimizationOptions {
   clientId?: string;
 }
 
-export interface CaptureSessionsOptions {
+export interface AnalyzeClaudeSessionsOptions {
   dryRun?: boolean;
   clientId?: string;
   json?: boolean;
