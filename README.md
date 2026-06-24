@@ -36,6 +36,12 @@ coolhand search-optimizations [--status V] [--type V] [--category V] [--query V]
 coolhand get-optimization <id>                   [--client-id ID] [--json]
 coolhand update-optimization <id>                [--title V] [--analysis V] [--plan V] [--client-id ID] [--json]
 coolhand close-optimization <id> <reason>        [--client-id ID] [--json]
+
+coolhand capture-sessions                        [--dry-run] [--client-id ID] [--json]
+
+coolhand wildcard    --complaint "..." --agent-name "..." [--thinking "..."] [--log-id ID] [--json]
+coolhand report-blocker  (alias for wildcard)
+coolhand complaint-box   (alias for wildcard)
 ```
 
 ### login
@@ -172,6 +178,19 @@ The command records the complaint as feedback tagged `creator_type: agent`, prin
 
 Set `COOLHAND_AGENT_NAME` to avoid passing `--agent-name` on every call. Optional `--thinking` attaches the reasoning that led to the blocker; `--log-id` ties it to a specific LLM request log.
 
+### capture-sessions
+
+Import locally-saved Claude Code sessions into Coolhand for analysis:
+
+```bash
+coolhand capture-sessions           # scan ~/.claude/projects/ and submit new sessions
+coolhand capture-sessions --dry-run # report what would be submitted without sending
+```
+
+Each Claude Code session is submitted as one conversation log. A local state file (`~/.coolhand/capture-state.json`) tracks which sessions have already been sent per client, so re-running is always safe — already-submitted sessions are skipped.
+
+See [docs/session-capture.md](./docs/session-capture.md) for the full envelope format and deduplication details.
+
 ## Configuration file
 
 Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` for testing). Schema:
@@ -191,6 +210,16 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
   }
 }
 ```
+
+## Documentation
+
+- [Auth Flow](./docs/auth-flow.md) — browser-callback sequence, state machine, timeout and error paths
+- [Configuration File](./docs/config-file.md) — full config schema, multi-client model, `COOLHAND_CONFIG_DIR` override
+- [Session Capture](./docs/session-capture.md) — session scanning, envelope format, deduplication, scope and limitations
+
+## About Coolhand Labs
+
+[Coolhand Labs](https://coolhandlabs.com) builds observability and feedback tooling for AI-powered applications.
 
 ## License
 
