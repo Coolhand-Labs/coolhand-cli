@@ -2,6 +2,17 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.5.1] - 2026-06-25
+
+### Added
+- `analyze-claude-sessions` now captures **Claude Cowork** sessions in addition to Claude Code sessions. Scans `~/Library/Application Support/Claude/local-agent-mode-sessions/**/local_*/audit.jsonl` (macOS only); each agent invocation is submitted as a `cowork://session/<uuid>` envelope.
+- `capture-state.json` gains a `coworkLastSyncAt` field so the Cowork mtime cutoff is tracked independently from Claude Code — first run imports all historical Cowork sessions from epoch regardless of when Claude Code was last synced.
+- `ScanResult` interface now carries an `ok: boolean` field; `coworkLastSyncAt` is only advanced when the Cowork directory was actually read (`ok: true`), preventing a swallowed readdir error from permanently hiding pre-existing sessions.
+
+### Fixed
+- `scanCoworkSessions` swallows all directory read errors (not just `ENOENT`) so an unreadable Cowork directory never aborts the Claude Code half of the run.
+- `sessionIdOf()` now extracts the session ID from any `<scheme>://session/<id>` URL, enabling both `claudecode://` and `cowork://` sources to share the same dedup state.
+
 ## [0.5.0] - 2026-06-24
 
 ### Added
