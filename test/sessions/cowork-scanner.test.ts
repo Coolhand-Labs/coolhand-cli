@@ -79,6 +79,17 @@ describe('scanCoworkSessions', () => {
     expect(res).toEqual({ envelopes: [], sessionCount: 0 });
   });
 
+  test('returns empty when the sessions dir is unreadable (does not abort the run)', async () => {
+    await fs.mkdir(dir, { recursive: true });
+    await fs.chmod(dir, 0o000);
+    try {
+      const res = await scanCoworkSessions({ sessionsDir: dir });
+      expect(res).toEqual({ envelopes: [], sessionCount: 0 });
+    } finally {
+      await fs.chmod(dir, 0o755);
+    }
+  });
+
   test('produces one envelope per local session', async () => {
     await writeCoworkSession(dir, 'ws-1', 'cs-1', 'local-uuid-a', COWORK_SAMPLE);
     await writeCoworkSession(dir, 'ws-1', 'cs-1', 'local-uuid-b', COWORK_SAMPLE);

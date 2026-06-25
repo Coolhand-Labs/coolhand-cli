@@ -41,11 +41,11 @@ export async function scanCoworkSessions(
   let names: string[];
   try {
     names = await fs.readdir(dir, { recursive: true });
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { envelopes: [], sessionCount: 0 };
-    }
-    throw err;
+  } catch {
+    // Treat any readdir failure (ENOENT, EACCES, ENOTDIR, …) as an empty result. Cowork scanning
+    // is best-effort and macOS-only; an error here must not abort the Claude Code capture running
+    // in parallel inside Promise.all.
+    return { envelopes: [], sessionCount: 0 };
   }
 
   const files = (names as string[]).filter((name) => LOCAL_AUDIT_RE.test(name));
