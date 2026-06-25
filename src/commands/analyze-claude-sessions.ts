@@ -1,6 +1,7 @@
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { scanSessions, sessionIdOf, type CaptureEnvelope } from '../sessions/claude-scanner.js';
+import { scanCoworkSessions } from '../sessions/cowork-scanner.js';
 import {
   loadCaptureState,
   getTurnsSubmitted,
@@ -60,7 +61,16 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
     // silently skipped because its mtime fell before a later timestamp.
     const runStartedAt = new Date();
 
-    const { envelopes, sessionCount } = await scanSessions({ sinceTime: referenceTime });
+    // Cowork sessions have their own independent mtime cutoff. On first run it starts at epoch so
+    // all historical sessions are picked up; subsequent runs use the Cowork-specific stamp.
+    const coworkSinceTime = state.coworkLastSyncAt ? new Date(state.coworkLastSyncAt) : new Date(0);
+
+    const [claudeResult, coworkResult] = await Promise.all([
+      scanSessions({ sinceTime: referenceTime }),
+      scanCoworkSessions({ sinceTime: coworkSinceTime }),
+    ]);
+    const envelopes = [...claudeResult.envelopes, ...coworkResult.envelopes];
+    const sessionCount = claudeResult.sessionCount + coworkResult.sessionCount;
 
     // (4) Classify each examined session as new / updated / unchanged by comparing its current turn
     // count against what we last submitted. The turn-count guard — not the mtime filter — is what
@@ -139,6 +149,7 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
       // written during the submit loop has mtime >= runStartedAt and is caught by the next run.
       if (failed === 0) {
         state.lastSyncAt = runStartedAt.toISOString();
+        state.coworkLastSyncAt = runStartedAt.toISOString();
       }
     } finally {
       try {

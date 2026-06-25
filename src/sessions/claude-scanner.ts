@@ -240,5 +240,6 @@ export async function scanSessions(
 
 /** The session id this envelope represents — used as the local dedup key. */
 export function sessionIdOf(envelope: CaptureEnvelope): string {
-  return envelope.url.replace(/^claudecode:\/\/session\//, '');
+  const m = envelope.url.match(/^[a-z]+:\/\/session\/(.+)$/);
+  return m ? m[1] : envelope.url;
 }
