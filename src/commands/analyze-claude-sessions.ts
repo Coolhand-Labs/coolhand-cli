@@ -61,9 +61,12 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
     // silently skipped because its mtime fell before a later timestamp.
     const runStartedAt = new Date();
 
-    // Cowork sessions have their own independent mtime cutoff. On first run it starts at epoch so
-    // all historical sessions are picked up; subsequent runs use the Cowork-specific stamp.
-    const coworkSinceTime = state.coworkLastSyncAt ? new Date(state.coworkLastSyncAt) : new Date(0);
+    // Cowork sessions have their own independent mtime cutoff. Falls back to serverTime (same as
+    // Claude Code) so a lost/reset capture-state.json on a second machine doesn't re-submit every
+    // historical session from epoch — serverTime is null only on a genuine first run.
+    const coworkSinceTime = state.coworkLastSyncAt
+      ? new Date(state.coworkLastSyncAt)
+      : (serverTime ?? new Date(0));
 
     const [claudeResult, coworkResult] = await Promise.all([
       scanSessions({ sinceTime: referenceTime }),
