@@ -138,19 +138,24 @@ coolhand close-optimization <id> <reason>
 
 Closes an optimization. The reason is a free-text positional argument (quote it if it contains spaces).
 
-## Analyze Claude Code sessions
+## Analyze Claude sessions
 
 ```bash
 coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json]
 ```
 
-Submit your historical Claude Code sessions to Coolhand for analysis. Coolhand scans the uploaded sessions to surface:
+Submit your historical Claude sessions to Coolhand for analysis. Coolhand scans the uploaded sessions to surface:
 
 - **Repeatable patterns** — tasks you do by hand on repeat that could be scripted or automated
 - **Efficiency gaps** — workflows with unnecessary back-and-forth or redundant steps
 - **Cost insights** — sessions with high token usage relative to their outcome
 
-The command scans `~/.claude/projects/` for Claude Code transcripts and posts each as a single conversation log. New sessions are submitted on first run; sessions that have grown (more turns added since the last sync) are re-uploaded with the full updated conversation. Unchanged sessions are skipped. It is safe to re-run at any time.
+The command scans two local sources and merges the results:
+
+- **Claude Code** — `~/.claude/projects/` (all platforms)
+- **Claude Cowork** — `~/Library/Application Support/Claude/local-agent-mode-sessions/` (macOS)
+
+Each session is posted as a single conversation log. New sessions are submitted on first run; sessions that have grown (more turns added since the last sync) are re-uploaded with the full updated conversation. Unchanged sessions are skipped. It is safe to re-run at any time.
 
 Use `--dry-run` to preview what would be sent without submitting anything.
 

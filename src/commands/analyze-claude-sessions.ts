@@ -1,6 +1,7 @@
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { scanSessions, sessionIdOf, type CaptureEnvelope } from '../sessions/claude-scanner.js';
+import { scanCoworkSessions } from '../sessions/cowork-scanner.js';
 import {
   loadCaptureState,
   getTurnsSubmitted,
@@ -60,7 +61,18 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
     // silently skipped because its mtime fell before a later timestamp.
     const runStartedAt = new Date();
 
-    const { envelopes, sessionCount } = await scanSessions({ sinceTime: referenceTime });
+    // Cowork sessions have their own independent mtime cutoff, starting at epoch when coworkLastSyncAt
+    // is absent. Unlike Claude Code, we don't fall back to serverTime here: serverTime comes from the
+    // Claude Code collector and predates any Cowork uploads, so using it would silently skip
+    // never-submitted Cowork history on a reset or second-machine scenario.
+    const coworkSinceTime = state.coworkLastSyncAt ? new Date(state.coworkLastSyncAt) : new Date(0);
+
+    const [claudeResult, coworkResult] = await Promise.all([
+      scanSessions({ sinceTime: referenceTime }),
+      scanCoworkSessions({ sinceTime: coworkSinceTime }),
+    ]);
+    const envelopes = [...claudeResult.envelopes, ...coworkResult.envelopes];
+    const sessionCount = claudeResult.sessionCount + coworkResult.sessionCount;
 
     // (4) Classify each examined session as new / updated / unchanged by comparing its current turn
     // count against what we last submitted. The turn-count guard — not the mtime filter — is what
@@ -139,6 +151,12 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
       // written during the submit loop has mtime >= runStartedAt and is caught by the next run.
       if (failed === 0) {
         state.lastSyncAt = runStartedAt.toISOString();
+        // Only advance Cowork's cutoff when the scan actually read the directory. A swallowed
+        // readdir error returns ok:false; advancing the cutoff in that case would permanently hide
+        // pre-existing audit.jsonl files whose mtimes predate the new stamp.
+        if (coworkResult.ok) {
+          state.coworkLastSyncAt = runStartedAt.toISOString();
+        }
       }
     } finally {
       try {

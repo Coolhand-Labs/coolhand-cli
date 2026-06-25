@@ -4,11 +4,24 @@
 platform can analyse work that never went through an instrumented SDK. Each Claude Code session is
 captured as **one conversation log** (not one log per message).
 
+## Sources
+
+The command scans two local session stores and merges the results:
+
+| Source | Path | URL scheme |
+| ------ | ---- | ---------- |
+| Claude Code | `~/.claude/projects/**/*.jsonl` | `claudecode://session/<id>` |
+| Claude Cowork | `~/Library/Application Support/Claude/local-agent-mode-sessions/**/local_*/audit.jsonl` | `cowork://session/<uuid>` |
+
+The Cowork path is macOS-specific; on other platforms it simply yields zero sessions. Both sources
+use the same deduplication state, so a session submitted from one source is never re-submitted as
+the other.
+
 ## What it does
 
-1. **Scan.** Reads every `*.jsonl` transcript under `~/.claude/projects/` (recursively). A missing
-   directory simply yields zero sessions. The tool is general — each user runs it on their own
-   machine and submits to their own Coolhand account.
+1. **Scan.** Reads every session transcript from both sources above. A missing directory simply
+   yields zero sessions. The tool is general — each user runs it on their own machine and submits
+   to their own Coolhand account.
 2. **Assemble.** Turns each transcript into **one** envelope holding the whole conversation: every
    user and assistant message, in order, in `request_body.messages`; the final assistant turn in
    `response_body`; and the session's **summed** token usage in `response_body.usage`.

@@ -8,6 +8,9 @@ jest.mock('../../src/sessions/claude-scanner.js', () => {
   const actual = jest.requireActual('../../src/sessions/claude-scanner.js');
   return { ...actual, scanSessions: jest.fn() };
 });
+jest.mock('../../src/sessions/cowork-scanner.js', () => ({
+  scanCoworkSessions: jest.fn(),
+}));
 jest.mock('../../src/log-request.js', () => ({
   logRequest: jest.fn(),
 }));
@@ -15,6 +18,7 @@ jest.mock('../../src/api/last-sync.js', () => ({
   fetchLastSync: jest.fn(),
 }));
 import { scanSessions } from '../../src/sessions/claude-scanner.js';
+import { scanCoworkSessions } from '../../src/sessions/cowork-scanner.js';
 import { logRequest } from '../../src/log-request.js';
 import { fetchLastSync } from '../../src/api/last-sync.js';
 
@@ -37,6 +41,7 @@ describe('analyze-claude-sessions command', () => {
     prev = process.env.COOLHAND_CONFIG_DIR;
     process.env.COOLHAND_CONFIG_DIR = dir;
     (scanSessions as jest.Mock).mockReset().mockResolvedValue({ envelopes: [envelope], sessionCount: 1 });
+    (scanCoworkSessions as jest.Mock).mockReset().mockResolvedValue({ envelopes: [], sessionCount: 0, ok: true });
     (logRequest as jest.Mock).mockReset().mockResolvedValue({ id: 1 });
     (fetchLastSync as jest.Mock).mockReset().mockResolvedValue(null);
   });
@@ -101,11 +106,29 @@ describe('analyze-claude-sessions command', () => {
     (fetchLastSync as jest.Mock).mockResolvedValue(serverTime);
     await run({});
     expect(scanSessions).toHaveBeenCalledWith({ sinceTime: serverTime });
+    // Cowork always falls back to epoch (not serverTime) — serverTime is Claude Code-only
+    expect(scanCoworkSessions).toHaveBeenCalledWith({ sinceTime: new Date(0) });
   });
 
   test('falls back to epoch when no server time and no local state', async () => {
     await run({});
     expect(scanSessions).toHaveBeenCalledWith({ sinceTime: new Date(0) });
+    expect(scanCoworkSessions).toHaveBeenCalledWith({ sinceTime: new Date(0) });
+  });
+
+  test('advances coworkLastSyncAt after a fully successful run', async () => {
+    await run({});
+    const raw = JSON.parse(await fs.readFile(path.join(dir, 'capture-state.json'), 'utf8'));
+    expect(typeof raw.coworkLastSyncAt).toBe('string');
+  });
+
+  test('does NOT advance coworkLastSyncAt when Cowork scan returned ok:false', async () => {
+    (scanCoworkSessions as jest.Mock).mockResolvedValue({ envelopes: [], sessionCount: 0, ok: false });
+    await run({});
+    const raw = JSON.parse(await fs.readFile(path.join(dir, 'capture-state.json'), 'utf8'));
+    expect(raw.coworkLastSyncAt).toBeUndefined();
+    // Claude Code cutoff still advances normally
+    expect(typeof raw.lastSyncAt).toBe('string');
   });
 
   test('dry-run does not record anything', async () => {

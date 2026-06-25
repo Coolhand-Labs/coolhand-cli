@@ -38,6 +38,11 @@ export interface CaptureEnvelope {
 export interface ScanResult {
   envelopes: CaptureEnvelope[];
   sessionCount: number;
+  /** False when the scan directory could not be read and the error was swallowed. The caller must
+   *  not advance its mtime cutoff in this case — doing so would permanently hide pre-existing files
+   *  whose mtimes predate the new cutoff, since the turn-count guard never sees them if they are
+   *  never read. */
+  ok: boolean;
 }
 
 export function defaultProjectsDir(): string {
@@ -193,7 +198,7 @@ export async function scanSessions(
     names = await fs.readdir(dir, { recursive: true });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { envelopes: [], sessionCount: 0 };
+      return { envelopes: [], sessionCount: 0, ok: true };
     }
     throw err;
   }
@@ -235,10 +240,11 @@ export async function scanSessions(
     }
   }
 
-  return { envelopes, sessionCount };
+  return { envelopes, sessionCount, ok: true };
 }
 
 /** The session id this envelope represents — used as the local dedup key. */
 export function sessionIdOf(envelope: CaptureEnvelope): string {
-  return envelope.url.replace(/^claudecode:\/\/session\//, '');
+  const m = envelope.url.match(/^[a-z]+:\/\/session\/(.+)$/);
+  return m ? m[1] : envelope.url;
 }

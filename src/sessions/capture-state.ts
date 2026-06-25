@@ -24,8 +24,10 @@ export interface SubmittedSession {
 
 export interface CaptureState {
   version: number;
-  /** ISO timestamp of the last sync; used as a cheap mtime cutoff to skip unchanged files. */
+  /** ISO timestamp of the last Claude Code session sync; mtime cutoff for ~/.claude/projects. */
   lastSyncAt?: string;
+  /** ISO timestamp of the last Cowork session sync; mtime cutoff for local-agent-mode-sessions. */
+  coworkLastSyncAt?: string;
   submitted: Record<string, Record<string, SubmittedSession>>;
 }
 
@@ -109,6 +111,7 @@ export async function loadCaptureState(): Promise<CaptureState> {
     return {
       version: STATE_VERSION,
       lastSyncAt: typeof parsed.lastSyncAt === 'string' ? parsed.lastSyncAt : undefined,
+      coworkLastSyncAt: typeof parsed.coworkLastSyncAt === 'string' ? parsed.coworkLastSyncAt : undefined,
       submitted: normalizeSubmitted(parsed.submitted),
     };
   } catch (err) {
