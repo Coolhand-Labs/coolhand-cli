@@ -106,8 +106,8 @@ describe('analyze-claude-sessions command', () => {
     (fetchLastSync as jest.Mock).mockResolvedValue(serverTime);
     await run({});
     expect(scanSessions).toHaveBeenCalledWith({ sinceTime: serverTime });
-    // Cowork falls back to serverTime (not epoch) when coworkLastSyncAt is absent
-    expect(scanCoworkSessions).toHaveBeenCalledWith({ sinceTime: serverTime });
+    // Cowork always falls back to epoch (not serverTime) — serverTime is Claude Code-only
+    expect(scanCoworkSessions).toHaveBeenCalledWith({ sinceTime: new Date(0) });
   });
 
   test('falls back to epoch when no server time and no local state', async () => {
