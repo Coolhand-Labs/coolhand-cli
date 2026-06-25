@@ -76,7 +76,7 @@ describe('scanCoworkSessions', () => {
 
   test('returns empty when the sessions dir does not exist', async () => {
     const res = await scanCoworkSessions({ sessionsDir: path.join(dir, 'missing') });
-    expect(res).toEqual({ envelopes: [], sessionCount: 0 });
+    expect(res).toEqual({ envelopes: [], sessionCount: 0, ok: false });
   });
 
   test('returns empty when the sessions dir is unreadable (does not abort the run)', async () => {
@@ -84,7 +84,7 @@ describe('scanCoworkSessions', () => {
     await fs.chmod(dir, 0o000);
     try {
       const res = await scanCoworkSessions({ sessionsDir: dir });
-      expect(res).toEqual({ envelopes: [], sessionCount: 0 });
+      expect(res).toEqual({ envelopes: [], sessionCount: 0, ok: false });
     } finally {
       await fs.chmod(dir, 0o755);
     }

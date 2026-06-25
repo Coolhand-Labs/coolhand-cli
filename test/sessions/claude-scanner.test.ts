@@ -132,7 +132,7 @@ describe('scanSessions', () => {
 
   test('returns empty when the projects dir does not exist', async () => {
     const res = await scanSessions({ projectsDir: path.join(dir, 'missing') });
-    expect(res).toEqual({ envelopes: [], sessionCount: 0 });
+    expect(res).toEqual({ envelopes: [], sessionCount: 0, ok: true });
   });
 
   test('produces one envelope per session file', async () => {

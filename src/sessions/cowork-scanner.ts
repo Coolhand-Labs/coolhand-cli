@@ -45,7 +45,7 @@ export async function scanCoworkSessions(
     // Treat any readdir failure (ENOENT, EACCES, ENOTDIR, …) as an empty result. Cowork scanning
     // is best-effort and macOS-only; an error here must not abort the Claude Code capture running
     // in parallel inside Promise.all.
-    return { envelopes: [], sessionCount: 0 };
+    return { envelopes: [], sessionCount: 0, ok: false };
   }
 
   const files = (names as string[]).filter((name) => LOCAL_AUDIT_RE.test(name));
@@ -85,5 +85,5 @@ export async function scanCoworkSessions(
     }
   }
 
-  return { envelopes, sessionCount };
+  return { envelopes, sessionCount, ok: true };
 }

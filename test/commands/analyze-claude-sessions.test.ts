@@ -41,7 +41,7 @@ describe('analyze-claude-sessions command', () => {
     prev = process.env.COOLHAND_CONFIG_DIR;
     process.env.COOLHAND_CONFIG_DIR = dir;
     (scanSessions as jest.Mock).mockReset().mockResolvedValue({ envelopes: [envelope], sessionCount: 1 });
-    (scanCoworkSessions as jest.Mock).mockReset().mockResolvedValue({ envelopes: [], sessionCount: 0 });
+    (scanCoworkSessions as jest.Mock).mockReset().mockResolvedValue({ envelopes: [], sessionCount: 0, ok: true });
     (logRequest as jest.Mock).mockReset().mockResolvedValue({ id: 1 });
     (fetchLastSync as jest.Mock).mockReset().mockResolvedValue(null);
   });
@@ -120,6 +120,15 @@ describe('analyze-claude-sessions command', () => {
     await run({});
     const raw = JSON.parse(await fs.readFile(path.join(dir, 'capture-state.json'), 'utf8'));
     expect(typeof raw.coworkLastSyncAt).toBe('string');
+  });
+
+  test('does NOT advance coworkLastSyncAt when Cowork scan returned ok:false', async () => {
+    (scanCoworkSessions as jest.Mock).mockResolvedValue({ envelopes: [], sessionCount: 0, ok: false });
+    await run({});
+    const raw = JSON.parse(await fs.readFile(path.join(dir, 'capture-state.json'), 'utf8'));
+    expect(raw.coworkLastSyncAt).toBeUndefined();
+    // Claude Code cutoff still advances normally
+    expect(typeof raw.lastSyncAt).toBe('string');
   });
 
   test('dry-run does not record anything', async () => {

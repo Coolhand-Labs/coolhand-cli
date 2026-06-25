@@ -151,7 +151,12 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
       // written during the submit loop has mtime >= runStartedAt and is caught by the next run.
       if (failed === 0) {
         state.lastSyncAt = runStartedAt.toISOString();
-        state.coworkLastSyncAt = runStartedAt.toISOString();
+        // Only advance Cowork's cutoff when the scan actually read the directory. A swallowed
+        // readdir error returns ok:false; advancing the cutoff in that case would permanently hide
+        // pre-existing audit.jsonl files whose mtimes predate the new stamp.
+        if (coworkResult.ok) {
+          state.coworkLastSyncAt = runStartedAt.toISOString();
+        }
       }
     } finally {
       try {
