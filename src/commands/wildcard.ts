@@ -1,5 +1,6 @@
 import { Coolhand, type LLMRequestLogFeedback } from 'coolhand-node';
 import { ExitCode } from '../errors.js';
+import { PACKAGE_IDENTIFIER } from '../version.js';
 import { logger, redact } from '../logger.js';
 import { loadConfig, getClient } from '../config.js';
 import { DEFAULT_BASE_URL, type ComplaintBoxOptions } from '../types.js';
@@ -51,6 +52,7 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
         explanation: opts.complaint,
         creator_unique_id: opts.agentName,
         creator_type: 'agent',
+        collector: PACKAGE_IDENTIFIER,
         ...(opts.thinking ? { original_output: opts.thinking } : {}),
         ...(opts.logId !== undefined ? { llm_request_log_id: opts.logId } : {}),
       };
