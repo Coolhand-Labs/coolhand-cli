@@ -2,7 +2,7 @@
 
 [![npm version](https://badge.fury.io/js/coolhand-cli.svg)](https://badge.fury.io/js/coolhand-cli)
 
-Command-line authentication helper for [Coolhand](https://coolhandlabs.com). Opens a browser, captures your public API token via a localhost callback (same flow as `gh auth login` and `gcloud auth login`), and stores it in `~/.coolhand/config.json`.
+`coolhand-cli` is a free command-line tool that helps you analyze and improve your local AI workflows, identify silent agent failures, and interact with the [Coolhand](https://coolhandlabs.com) APIs to find improvements for your production agents.
 
 ## Install
 
@@ -18,6 +18,39 @@ coolhand login
 ```
 
 Requires Node 20 or newer.
+
+## Analyze Claude sessions
+
+```bash
+coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json]
+```
+
+Submit your historical Claude sessions to Coolhand for analysis. Coolhand scans the uploaded sessions to surface:
+
+- **Repeatable patterns** — tasks you do by hand on repeat that could be scripted or automated
+- **Efficiency gaps** — workflows with unnecessary back-and-forth or redundant steps
+- **Cost insights** — sessions with high token usage relative to their outcome
+
+Use `--dry-run` to preview what would be sent without submitting anything.
+
+See [Session capture](./docs/session-capture.md) for scan logic, duplicate-avoidance details, and the full flag reference.
+
+## Wildcard (agent complaint box)
+
+When an agent is blocked because a capability does not exist in its environment, it can record the blocker and get back an unambiguous "stop and move on" response:
+
+```bash
+coolhand wildcard \
+  --complaint "I need to run database migrations but no database is reachable" \
+  --agent-name code-review-agent \
+  --thinking "I attempted to connect to localhost:5432 but got connection refused. I checked for a running postgres process and found none. Without a live database I cannot apply or validate the migration."
+```
+
+The command records the complaint as feedback tagged `creator_type: agent`, prints a terminal de-loop message, and exits `0` so the agent stops and moves on. The de-loop always fires — even if the feedback could not be recorded (not logged in or a server error) — because the missing capability is real regardless of whether the server was reachable, and a logged-out agent in a sandbox is exactly who this command is for. When recording fails the message says so plainly and a warning is logged, so the failure still surfaces without trapping the agent in the retry loop the command exists to break.
+
+Set `COOLHAND_AGENT_NAME` to avoid passing `--agent-name` on every call. Optional `--thinking` attaches the reasoning that led to the blocker; `--log-id` ties it to a specific LLM request log.
+
+See [Your AI agent has notes](http://michael.carroll.io/talks/2026/your-ai-agent-has-notes) for a presention on the research & best practices for using this pattern.
 
 ## Commands
 
@@ -138,29 +171,6 @@ coolhand close-optimization <id> <reason>
 
 Closes an optimization. The reason is a free-text positional argument (quote it if it contains spaces).
 
-## Analyze Claude sessions
-
-```bash
-coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json]
-```
-
-Submit your historical Claude sessions to Coolhand for analysis. Coolhand scans the uploaded sessions to surface:
-
-- **Repeatable patterns** — tasks you do by hand on repeat that could be scripted or automated
-- **Efficiency gaps** — workflows with unnecessary back-and-forth or redundant steps
-- **Cost insights** — sessions with high token usage relative to their outcome
-
-The command scans two local sources and merges the results:
-
-- **Claude Code** — `~/.claude/projects/` (all platforms)
-- **Claude Cowork** — `~/Library/Application Support/Claude/local-agent-mode-sessions/` (macOS)
-
-Each session is posted as a single conversation log. New sessions are submitted on first run; sessions that have grown (more turns added since the last sync) are re-uploaded with the full updated conversation. Unchanged sessions are skipped. It is safe to re-run at any time.
-
-Use `--dry-run` to preview what would be sent without submitting anything.
-
-See [Session capture](./docs/session-capture.md) for scan logic, duplicate-avoidance details, and the full flag reference.
-
 ## Security
 
 - The callback listener binds to `127.0.0.1` only — never reachable from the LAN.
@@ -200,20 +210,6 @@ coolhand login --write-env .env
 ```
 
 The CLI works especially well with the [Coolhand feedback collection skill](https://github.com/Coolhand-Labs/feedback-collection-skill) for Claude Code. The skill scans your project for LLM inference calls and implements best-practice human feedback collection — it reads `COOLHAND_API_KEY` from the environment, which `coolhand login --write-env .env` puts in place.
-
-### wildcard (agent complaint box)
-
-When an agent is blocked because a capability does not exist in its environment, it can record the blocker and get back an unambiguous "stop and move on" response:
-
-```bash
-coolhand wildcard \
-  --complaint "I need to run database migrations but no database is reachable" \
-  --agent-name code-review-agent
-```
-
-The command records the complaint as feedback tagged `creator_type: agent`, prints a terminal de-loop message, and exits `0` so the agent stops and moves on. The de-loop always fires — even if the feedback could not be recorded (not logged in or a server error) — because the missing capability is real regardless of whether the server was reachable, and a logged-out agent in a sandbox is exactly who this command is for. When recording fails the message says so plainly and a warning is logged, so the failure still surfaces without trapping the agent in the retry loop the command exists to break.
-
-Set `COOLHAND_AGENT_NAME` to avoid passing `--agent-name` on every call. Optional `--thinking` attaches the reasoning that led to the blocker; `--log-id` ties it to a specific LLM request log.
 
 ## Configuration file
 
