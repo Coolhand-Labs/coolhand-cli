@@ -50,7 +50,7 @@ The command records the complaint as feedback tagged `creator_type: agent`, prin
 
 Set `COOLHAND_AGENT_NAME` to avoid passing `--agent-name` on every call. Optional `--thinking` attaches the reasoning that led to the blocker; `--log-id` ties it to a specific LLM request log.
 
-See [Your AI agent has notes](http://michael.carroll.io/talks/2026/your-ai-agent-has-notes) for a presention on the research & best practices for using this pattern.
+See [Your AI agent has notes](https://michael.carroll.io/talks/2026/your-ai-agent-has-notes) for a presentation on the research & best practices for using this pattern.
 
 ## Commands
 
