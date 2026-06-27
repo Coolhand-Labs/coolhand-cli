@@ -72,8 +72,8 @@ describe('fetchLastSync', () => {
       await configureClient(server.url);
       const result = await fetchLastSync();
       expect(result?.toISOString()).toBe('2026-06-10T14:23:00.000Z');
-      expect(server.requests[0].path).toBe(
-        '/api/v2/llm_request_logs/last_sync?collector=coolhand-cli%2Fclaude-code'
+      expect(server.requests[0].path).toMatch(
+        /^\/api\/v2\/llm_request_logs\/last_sync\?collector=coolhand-cli-[\d.]+%2Fclaude-code$/
       );
       expect(server.requests[0].apiKey).toBe('pub-key-123');
     } finally {

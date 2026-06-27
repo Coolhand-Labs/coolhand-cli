@@ -47,7 +47,7 @@ describe('logRequest (coolhand-node SDK transport)', () => {
 
   test('submits the envelope with the cli collector', async () => {
     await logRequest(envelope);
-    expect(mockLogRequest).toHaveBeenCalledWith(envelope, { collector: 'coolhand-cli/claude-code' });
+    expect(mockLogRequest).toHaveBeenCalledWith(envelope, { collector: expect.stringMatching(/^coolhand-cli-[\d.]+\/claude-code$/) });
   });
 
   test('returns the SDK result on success', async () => {

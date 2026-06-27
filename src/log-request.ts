@@ -2,9 +2,10 @@ import { Coolhand, type CoolhandCallData } from 'coolhand-node';
 import { CliError } from './errors.js';
 import { loadConfig, getClient } from './config.js';
 import { DEFAULT_BASE_URL } from './types.js';
+import { PACKAGE_IDENTIFIER } from './version.js';
 
 /** Identifies submissions from this tool in the server's collector field. */
-const COLLECTOR = 'coolhand-cli/claude-code';
+const COLLECTOR = `${PACKAGE_IDENTIFIER}/claude-code`;
 
 /**
  * Submit one captured request/response envelope to the Coolhand ingest endpoint.
