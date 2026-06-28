@@ -1,37 +1,40 @@
 import { spawn } from 'child_process';
-import { createRequire } from 'module';
-import { realpathSync } from 'fs';
 import { ExitCode, CliError } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { loadConfig, getClient } from '../config.js';
 import { DEFAULT_BASE_URL, type ClaudeOptions } from '../types.js';
+import { startProxy, type ProxyInstance } from '../proxy/proxy.js';
+import { getOrCreateCA, getCertPath } from '../proxy/certs.js';
 
 interface ClaudeDeps {
   spawnFn?: typeof spawn;
-  // Resolves the installed coolhand-proxy CLI entry file. Injectable for tests.
-  resolveProxyCli?: () => string;
+  startProxyFn?: (ca: Awaited<ReturnType<typeof getOrCreateCA>>, opts: Parameters<typeof startProxy>[1]) => Promise<ProxyInstance>;
 }
 
 /**
- * Locate the coolhand-proxy CLI (`dist/cli.js`, which hosts the `wrap` command).
- * coolhand-proxy ships dist/ and declares no `exports` restriction, so deep
- * subpath resolution works. We resolve a file path and later run it with `node`
- * rather than via the `.bin` shim, which avoids the Windows `.bin` ENOENT gotcha.
+ * On Windows, .cmd shims cannot be spawned without a shell. Rather than using
+ * shell:true (which forwards args as an unquoted string to cmd.exe, enabling
+ * metacharacter injection), we invoke cmd.exe /d /s /c directly with each arg
+ * double-quoted and windowsVerbatimArguments:true so Node does not re-quote them.
  */
-function defaultResolveProxyCli(): string {
-  // Anchor resolution at the real path of the running CLI entry (dist/bin.js),
-  // following any global-install symlink, so we resolve coolhand-proxy from this
-  // package's node_modules. Avoids `import.meta` (keeps the ts-jest build happy).
-  const anchor = realpathSync(process.argv[1] ?? process.cwd());
-  const require = createRequire(anchor);
-  return require.resolve('coolhand-proxy/dist/cli.js');
+function resolveSpawn(args: string[]): { cmd: string; spawnArgs: string[]; windowsVerbatimArguments?: true } {
+  if (process.platform !== 'win32') {
+    return { cmd: 'claude', spawnArgs: args };
+  }
+  const escaped = args.map((a) =>
+    /[\s"<>|^&]/.test(a) ? `"${a.replace(/"/g, '""')}"` : a
+  );
+  return {
+    cmd: process.env['ComSpec'] ?? 'cmd.exe',
+    spawnArgs: ['/d', '/s', '/c', ['claude', ...escaped].join(' ')],
+    windowsVerbatimArguments: true,
+  };
 }
 
 /**
- * Build the full ingest endpoint the proxy should post to for a given client.
- * The proxy's `--api-endpoint` wants the full path; the CLI stores only the
- * site base_url, so append the ingest path. Returns undefined for the default
- * base_url (the proxy already targets the right endpoint).
+ * Build the full ingest endpoint for a given client's base_url.
+ * The CLI stores only the site base_url, so append the ingest path here.
+ * Returns undefined for the default base_url (the proxy already uses the right endpoint).
  */
 function endpointForBaseUrl(baseUrl: string): string | undefined {
   if (!baseUrl || baseUrl === DEFAULT_BASE_URL) {
@@ -42,12 +45,11 @@ function endpointForBaseUrl(baseUrl: string): string | undefined {
 
 /**
  * `coolhand claude [args...]` — run the Claude CLI behind the Coolhand proxy with
- * the stored API key filled in. Shells out to `coolhand-proxy wrap -- claude ...`
- * so the proxy's battle-tested wrap behavior is reused, not duplicated.
+ * the stored API key filled in. Starts an in-process HTTPS MITM proxy and spawns
+ * claude with proxy env vars set.
  */
 export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<number> {
   const spawnFn = deps.spawnFn ?? spawn;
-  const resolveProxyCli = deps.resolveProxyCli ?? defaultResolveProxyCli;
 
   try {
     const cfg = await loadConfig();
@@ -56,32 +58,50 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
       throw new CliError('NOT_CONFIGURED', 'No Coolhand account configured. Run `coolhand login` first.');
     }
 
-    let proxyCli: string;
-    try {
-      proxyCli = resolveProxyCli();
-    } catch {
-      logger.info('Error: could not locate the coolhand-proxy dependency. Try reinstalling coolhand-cli.');
-      return ExitCode.INTERNAL;
-    }
+    const ca = await getOrCreateCA();
+    const certPath = getCertPath();
+    const apiEndpoint = endpointForBaseUrl(entry.base_url);
+    const proxy = await (deps.startProxyFn ?? startProxy)(ca, {
+      apiKey: entry.api_key,
+      apiEndpoint,
+      silent: true,
+    });
 
-    const wrapArgs = ['wrap', '--silent'];
-    const endpoint = endpointForBaseUrl(entry.base_url);
-    if (endpoint) {
-      wrapArgs.push('--api-endpoint', endpoint);
-    }
-    wrapArgs.push('--', 'claude', ...opts.args);
+    return new Promise<number>((resolve) => {
+      let stopped = false;
+      const stopOnce = () => {
+        if (stopped) { return Promise.resolve(); }
+        stopped = true;
+        return proxy.stop();
+      };
 
-    return await new Promise<number>((resolve) => {
-      const child = spawnFn(process.execPath, [proxyCli, ...wrapArgs], {
+      const { cmd, spawnArgs, windowsVerbatimArguments } = resolveSpawn(opts.args);
+      const child = spawnFn(cmd, spawnArgs, {
         stdio: 'inherit',
-        env: { ...process.env, COOLHAND_API_KEY: entry.api_key },
+        windowsVerbatimArguments,
+        env: {
+          ...process.env,
+          HTTP_PROXY: `http://127.0.0.1:${proxy.port}`,
+          HTTPS_PROXY: `http://127.0.0.1:${proxy.port}`,
+          SSL_CERT_FILE: certPath,
+          NODE_EXTRA_CA_CERTS: certPath,
+          REQUESTS_CA_BUNDLE: certPath,
+        },
       });
-      child.on('error', (err: Error) => {
-        logger.info(`Error: failed to start coolhand-proxy: ${redact(err.message)}`);
-        resolve(ExitCode.INTERNAL);
+      child.on('error', async (err: Error) => {
+        try {
+          await stopOnce();
+        } finally {
+          logger.info(`Error: ${redact(err.message)}`);
+          resolve(ExitCode.INTERNAL);
+        }
       });
-      child.on('close', (code: number | null) => {
-        resolve(code ?? ExitCode.INTERNAL);
+      child.on('close', async (code: number | null) => {
+        try {
+          await stopOnce();
+        } finally {
+          resolve(code ?? ExitCode.INTERNAL);
+        }
       });
     });
   } catch (err) {
@@ -89,6 +109,9 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
       logger.info(`Error: ${redact(err.message)} [${err.code}]`);
       return err.exitCode;
     }
-    throw err;
+    if (err instanceof Error) {
+      logger.info(`Error: ${redact(err.message)}`);
+    }
+    return ExitCode.INTERNAL;
   }
 }

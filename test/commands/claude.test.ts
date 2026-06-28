@@ -5,6 +5,13 @@ jest.mock('../../src/config.js', () => ({
   loadConfig: jest.fn(),
   getClient: jest.fn(),
 }));
+jest.mock('../../src/proxy/certs.js', () => ({
+  getOrCreateCA: jest.fn().mockResolvedValue({ key: 'fake-key', cert: 'fake-cert' }),
+  getCertPath: jest.fn().mockReturnValue('/fake/.coolhand/proxy/ca-cert.pem'),
+}));
+jest.mock('../../src/proxy/proxy.js', () => ({
+  startProxy: jest.fn(),
+}));
 import { loadConfig, getClient } from '../../src/config.js';
 
 type Spawn = typeof import('child_process').spawn;
@@ -17,8 +24,6 @@ const ENTRY = {
   saved_at: '2026-01-01T00:00:00Z',
 };
 
-// A fake spawn whose child emits `close` (with the given code) on the next tick,
-// so the awaited run() resolves without launching a real process.
 function spawnClosingWith(code: number): jest.Mock {
   return jest.fn().mockImplementation(() => {
     const child = new EventEmitter();
@@ -37,71 +42,76 @@ describe('claude command', () => {
     (getClient as jest.Mock).mockReset().mockReturnValue(ENTRY);
   });
 
-  test('spawns the proxy wrap with claude + forwarded args and the stored key', async () => {
+  test('spawns claude directly with proxy env vars', async () => {
+    const stopFn = jest.fn().mockResolvedValue(undefined);
+    const startProxyFn = jest.fn().mockResolvedValue({ port: 9999, stop: stopFn });
     const spawnFn = spawnClosingWith(0);
+
     const code = await run(
       { args: ['--resume', 'foo'] },
-      { spawnFn: spawnFn as unknown as Spawn, resolveProxyCli: () => '/fake/coolhand-proxy/dist/cli.js' }
+      { spawnFn: spawnFn as unknown as Spawn, startProxyFn }
     );
 
     expect(code).toBe(0);
     expect(spawnFn).toHaveBeenCalledTimes(1);
     const [cmd, args, options] = spawnFn.mock.calls[0];
-    expect(cmd).toBe(process.execPath);
-    expect(args).toEqual(['/fake/coolhand-proxy/dist/cli.js', 'wrap', '--silent', '--', 'claude', '--resume', 'foo']);
+    expect(cmd).toBe('claude');
+    expect(args).toEqual(['--resume', 'foo']);
     expect(options.stdio).toBe('inherit');
-    expect(options.env.COOLHAND_API_KEY).toBe('pubkey123');
+    expect(options.env.HTTP_PROXY).toBe('http://127.0.0.1:9999');
+    expect(options.env.HTTPS_PROXY).toBe('http://127.0.0.1:9999');
+    expect(options.env.SSL_CERT_FILE).toBe('/fake/.coolhand/proxy/ca-cert.pem');
+    expect(options.env.NODE_EXTRA_CA_CERTS).toBe('/fake/.coolhand/proxy/ca-cert.pem');
+    expect(options.env.REQUESTS_CA_BUNDLE).toBe('/fake/.coolhand/proxy/ca-cert.pem');
   });
 
-  test('forwards the child exit code', async () => {
+  test('forwards child exit code', async () => {
+    const startProxyFn = jest.fn().mockResolvedValue({ port: 9999, stop: jest.fn().mockResolvedValue(undefined) });
     const spawnFn = spawnClosingWith(3);
+
     const code = await run(
       { args: [] },
-      { spawnFn: spawnFn as unknown as Spawn, resolveProxyCli: () => '/fake/cli.js' }
+      { spawnFn: spawnFn as unknown as Spawn, startProxyFn }
     );
     expect(code).toBe(3);
   });
 
-  test('errors (exit 1) and does not spawn when no client is configured', async () => {
+  test('errors when no client configured', async () => {
     (getClient as jest.Mock).mockReturnValue(undefined);
+    const startProxyFn = jest.fn();
     const spawnFn = jest.fn();
+
     const code = await run(
       { args: [] },
-      { spawnFn: spawnFn as unknown as Spawn, resolveProxyCli: () => '/fake/cli.js' }
+      { spawnFn: spawnFn as unknown as Spawn, startProxyFn }
     );
     expect(code).toBe(1);
+    expect(startProxyFn).not.toHaveBeenCalled();
     expect(spawnFn).not.toHaveBeenCalled();
   });
 
-  test('adds --api-endpoint only for a non-default base_url, with the ingest path', async () => {
+  test('passes apiEndpoint to startProxyFn for non-default base_url', async () => {
     (getClient as jest.Mock).mockReturnValue({ ...ENTRY, base_url: 'https://staging.coolhandlabs.com' });
+    const startProxyFn = jest.fn().mockResolvedValue({ port: 9999, stop: jest.fn().mockResolvedValue(undefined) });
     const spawnFn = spawnClosingWith(0);
+
     await run(
       { args: [] },
-      { spawnFn: spawnFn as unknown as Spawn, resolveProxyCli: () => '/fake/cli.js' }
+      { spawnFn: spawnFn as unknown as Spawn, startProxyFn }
     );
-    const [, args] = spawnFn.mock.calls[0];
-    expect(args).toEqual([
-      '/fake/cli.js',
-      'wrap',
-      '--silent',
-      '--api-endpoint',
-      'https://staging.coolhandlabs.com/api/v2/llm_request_logs',
-      '--',
-      'claude',
-    ]);
+
+    expect(startProxyFn).toHaveBeenCalledTimes(1);
+    const [, proxyOpts] = startProxyFn.mock.calls[0];
+    expect(proxyOpts.apiEndpoint).toBe('https://staging.coolhandlabs.com/api/v2/llm_request_logs');
   });
 
-  test('returns INTERNAL (exit 2) when the proxy cannot be resolved', async () => {
+  test('returns INTERNAL if startProxyFn throws', async () => {
+    const startProxyFn = jest.fn().mockRejectedValue(new Error('proxy failed'));
     const spawnFn = jest.fn();
+
     const code = await run(
       { args: [] },
-      {
-        spawnFn: spawnFn as unknown as Spawn,
-        resolveProxyCli: () => {
-          throw new Error('not found');
-        },
-      }
+      { spawnFn: spawnFn as unknown as Spawn, startProxyFn }
     );
     expect(code).toBe(2);
     expect(spawnFn).not.toHaveBeenCalled();

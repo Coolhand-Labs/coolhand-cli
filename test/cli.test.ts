@@ -1,3 +1,10 @@
+jest.mock('../src/proxy/proxy.js', () => ({
+  startProxy: jest.fn(),
+}));
+jest.mock('../src/proxy/certs.js', () => ({
+  getOrCreateCA: jest.fn(),
+  getCertPath: jest.fn(),
+}));
 import { parseArgs, run } from '../src/cli.js';
 import { createTmpHome, TmpHome } from './helpers/tmp-home.js';
 
