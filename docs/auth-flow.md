@@ -19,6 +19,8 @@ This document describes the end-to-end token-acquisition flow used by `coolhand 
      │                                │     ?redirect_uri=http://...:P/   │
      │                                │     callback                      │
      │                                │     &state=...                    │
+     │                                │     [&client_id=...]              │
+     │                                │     [&scope=private]              │
      │                                │ ────────────────────────────────► │
      │                                │                                   │
      │                                │       (consent page, user picks   │
@@ -27,10 +29,12 @@ This document describes the end-to-end token-acquisition flow used by `coolhand 
      │                                │                                   │
      │                                │   302 redirect to                 │
      │                                │   http://127.0.0.1:P/callback     │
-     │                                │     ?token=<64-hex>               │
-     │                                │     &state=...                    │
+     │                                │     ?state=...                    │
      │                                │     &client_name=...             │
      │                                │     &client_id=...               │
+     │                                │     [&token=<hex>]  (if public)  │
+     │                                │     [&private_token=<hex>]        │
+     │                                │                      (if private) │
      │                                │ ◄──────────────────────────────── │
      │                                │                                   │
      │                                │ verify state matches              │
@@ -39,6 +43,7 @@ This document describes the end-to-end token-acquisition flow used by `coolhand 
      │                                │                                   │
      │                                │ persist to ~/.coolhand/config.json│
      │                                │ optional: write COOLHAND_API_KEY  │
+     │                                │   and/or COOLHAND_PRIVATE_KEY     │
      │                                │           to --write-env PATH     │
      │                                │                                   │
      │  exit 0 / JSON or human output │                                   │
@@ -55,13 +60,16 @@ This document describes the end-to-end token-acquisition flow used by `coolhand 
 
 ## Server contract
 
-`coolhand-cli` expects the server callback to encode four query parameters:
+`coolhand-cli` expects the server callback to encode these query parameters:
 
-| Parameter      | Description                                              |
-| -------------- | -------------------------------------------------------- |
-| `token`        | The selected client's **public** `api_key`               |
-| `state`        | The same value the CLI sent in the auth URL              |
-| `client_name` | Human-readable name of the selected client              |
-| `client_id`   | Stable identifier of the selected client                |
+| Parameter       | Present when              | Description                                    |
+| --------------- | ------------------------- | ---------------------------------------------- |
+| `state`         | Always                    | The same value the CLI sent in the auth URL    |
+| `client_name`  | Always                    | Human-readable name of the selected client    |
+| `client_id`    | Always                    | Stable identifier of the selected client      |
+| `token`         | Public key was granted    | The selected client's **public** `api_key`     |
+| `private_token` | Private key was granted   | The selected client's **private** (MCP) key   |
+
+At least one of `token` or `private_token` is always present — the server is expected to reject an empty key selection before issuing the redirect. The CLI independently validates this and informs the user if fewer keys were granted than requested.
 
 The relevant Rails controller is `Cli::AuthController` in the `coolhand` repo.

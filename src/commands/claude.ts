@@ -57,6 +57,12 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
     if (!entry) {
       throw new CliError('NOT_CONFIGURED', 'No Coolhand account configured. Run `coolhand login` first.');
     }
+    if (!entry.api_key) {
+      throw new CliError(
+        'NOT_CONFIGURED',
+        'This client has no public API key — LLM capture requires the public key. Run `coolhand login` to re-authenticate.'
+      );
+    }
 
     const ca = await getOrCreateCA();
     const certPath = getCertPath();

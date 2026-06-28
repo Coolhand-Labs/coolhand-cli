@@ -43,13 +43,14 @@ On Windows, POSIX permission bits are not enforced. The file is still confined t
 
 ### ClientEntry
 
-| Field          | Type     | Description                                                    |
-| -------------- | -------- | -------------------------------------------------------------- |
-| `client_id`   | `string` | Server-assigned client identifier.                             |
-| `client_name` | `string` | Human-readable client name.                                    |
-| `api_key`      | `string` | The **public** Coolhand API key. Secret on disk.               |
-| `base_url`     | `string` | The Coolhand server origin this token was issued from.         |
-| `saved_at`     | `string` | ISO-8601 timestamp of the login that produced this entry.      |
+| Field           | Type                | Description                                                                  |
+| --------------- | ------------------- | ---------------------------------------------------------------------------- |
+| `client_id`    | `string`            | Server-assigned client identifier.                                           |
+| `client_name`  | `string`            | Human-readable client name.                                                  |
+| `api_key`       | `string` (optional) | The **public** Coolhand API key. Present only when the public key was granted on the consent page. |
+| `private_key`   | `string` (optional) | The **private** (MCP) Coolhand key. Present only when the private key was granted on the consent page. |
+| `base_url`      | `string`            | The Coolhand server origin this token was issued from.                       |
+| `saved_at`      | `string`            | ISO-8601 timestamp of the login that produced this entry.                    |
 
 ## Multi-client
 
