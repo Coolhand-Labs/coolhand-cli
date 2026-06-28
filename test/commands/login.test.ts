@@ -150,7 +150,7 @@ describe('login command', () => {
     expect(cfg.clients.scopeacct.private_key).toBe('ch_priv_SCOPEPRIVTOKEN123456789');
   });
 
-  test('--scope private rejects callback without private_token', async () => {
+  test('--scope private proceeds when private_token absent, stores only public key', async () => {
     rails = await startFakeRails(({ state }) => ({
       token: 'ch_pub_NOPRIVTOKEN1234567890',
       state,
@@ -167,9 +167,33 @@ describe('login command', () => {
     });
 
     const code = await runLogin({ baseUrl: rails.url, scope: 'private', json: true });
-    expect(code).not.toBe(0);
+    expect(code).toBe(0);
     const cfg = await loadConfig();
-    expect(cfg.clients.nopriv).toBeUndefined();
+    expect(cfg.clients.nopriv.api_key).toBe('ch_pub_NOPRIVTOKEN1234567890');
+    expect(cfg.clients.nopriv.private_key).toBeUndefined();
+  });
+
+  test('only private_token returned stores private_key without api_key', async () => {
+    rails = await startFakeRails(({ state }) => ({
+      private_token: 'ch_priv_ONLYPRIVTOKEN123456789',
+      state,
+      clientName: 'Priv Only',
+      clientId: 'privonly',
+    }));
+
+    (openBrowser as jest.Mock).mockImplementation(async (url: string) => {
+      const res = await fetch(url, { redirect: 'manual' });
+      const location = res.headers.get('location');
+      if (location) {
+        await fetch(location).catch(() => undefined);
+      }
+    });
+
+    const code = await runLogin({ baseUrl: rails.url, scope: 'private', json: true });
+    expect(code).toBe(0);
+    const cfg = await loadConfig();
+    expect(cfg.clients.privonly.api_key).toBeUndefined();
+    expect(cfg.clients.privonly.private_key).toBe('ch_priv_ONLYPRIVTOKEN123456789');
   });
 
   test('--scope private --write-env writes both keys to env file', async () => {

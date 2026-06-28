@@ -80,11 +80,11 @@ coolhand complaint-box   (alias for wildcard)
 
 ### login
 
-Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the callback, and stores the returned token. The token is the **public** `api_key` for the client you select — the same key you would use with `coolhand-node`, `coolhand-python`, or the `coolhand-js` widget.
+Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the callback, and stores the granted key(s). The **public** `api_key` is used for LLM capture with `coolhand-node`, `coolhand-python`, and the `coolhand-js` widget. See [docs/auth-flow.md](docs/auth-flow.md) for the full callback sequence.
 
-`--scope private` authenticates against a private workspace instead of the default shared workspace.
+`--scope private` requests the **private (MCP) key** in addition to the public key. The user may grant either or both on the consent page; the CLI stores whichever keys are granted and notes if any were withheld.
 
-`--write-env PATH` will additionally set `COOLHAND_API_KEY=<token>` in the target `.env` file (idempotent — replaces an existing value rather than appending a duplicate).
+`--write-env PATH` will additionally write granted keys to the target `.env` file: `COOLHAND_API_KEY=<token>` when the public key was granted, and `COOLHAND_PRIVATE_KEY=<private_token>` when the private key was granted (both idempotent — replaces existing values rather than appending duplicates).
 
 ### status
 
@@ -96,6 +96,7 @@ Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the 
   "clients": [
     {"client_id": "acme", "client_name": "Acme Inc",
      "masked_token": "e885b463…1148", "base_url": "https://coolhandlabs.com"}
+    // masked_token is "(no public key)" when only a private key was granted
   ],
   "default_client_id": "acme"
 }
@@ -189,7 +190,7 @@ await run(['login', '--json']);
 
 const cfg = await loadConfig();
 const client = getClient(cfg);
-console.log(maskToken(client!.api_key));
+console.log(client!.api_key ? maskToken(client!.api_key) : '(no public key)');
 ```
 
 The CLI is shipped as an ES module. Importers must be ESM as well, or use a dynamic `import()`.

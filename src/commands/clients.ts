@@ -36,7 +36,7 @@ async function useClient(clientId: string, opts: ClientsOptions): Promise<number
       client: {
         client_id: entry.client_id,
         client_name: entry.client_name,
-        masked_token: maskToken(entry.api_key),
+        masked_token: entry.api_key ? maskToken(entry.api_key) : '(no public key)',
         base_url: entry.base_url,
       },
     });
