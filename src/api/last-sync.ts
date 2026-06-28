@@ -1,8 +1,9 @@
 import { loadConfig, getClient } from '../config.js';
 import { DEFAULT_BASE_URL } from '../types.js';
+import { PACKAGE_IDENTIFIER } from '../version.js';
 
 /** Identifies this tool's logs in the server's collector field (matches the ingest collector). */
-const COLLECTOR = 'coolhand-cli/claude-code';
+const COLLECTOR = `${PACKAGE_IDENTIFIER}/claude-code`;
 
 /**
  * Ask the server for the timestamp of the most recent log it already holds from this collector, so

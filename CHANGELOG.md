@@ -2,6 +2,14 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.5.2] - 2026-06-27
+
+### Changed
+- `wildcard` feedback submissions are now labeled `coolhand-cli-x.x.x` (the running CLI version) so the source is identifiable in the Coolhand dashboard.
+
+### Docs
+- README value prop rewritten and sections restructured for clarity.
+
 ## [0.5.1] - 2026-06-25
 
 ### Added
