@@ -7,6 +7,12 @@ All notable changes to `coolhand-cli` will be documented in this file.
 ### Added
 - `list-workloads` command: browse and search workloads by name with pagination (`--search`, `--page`, `--per-page`, `--include-archived`, `--include-system`). Requires a private API key.
 
+### Changed
+- `coolhand login --scope private` no longer errors (`INVALID_CALLBACK`) when the user declines the private key on the consent page. It now succeeds, stores only the public key, and prints a note that MCP access was not granted.
+- Login can now succeed with only a private (MCP) key — `api_key` is omitted from the stored config entry when the public key was not granted.
+- `coolhand claude` now exits with a clear error if the configured client has no public API key, rather than spawning the proxy silently without a logging key.
+- `status`, `whoami`, and `clients` display `(no public key)` instead of `***` for clients that have only a private key.
+
 ## [0.5.2] - 2026-06-27
 
 ### Changed

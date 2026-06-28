@@ -8,7 +8,7 @@ export function buildStatusOutput(cfg: Awaited<ReturnType<typeof loadConfig>>): 
   const clients = Object.values(cfg.clients).map((entry) => ({
     client_id: entry.client_id,
     client_name: entry.client_name,
-    masked_token: maskToken(entry.api_key),
+    masked_token: entry.api_key ? maskToken(entry.api_key) : '(no public key)',
     base_url: entry.base_url,
   }));
   return {
@@ -27,7 +27,7 @@ export async function run(opts: StatusOptions): Promise<number> {
   if (opts.json) {
     logger.json({ ...output, configured });
   } else if (configured && target) {
-    logger.info(`Configured: "${target.client_name}" (${target.client_id}) — ${maskToken(target.api_key)}`);
+    logger.info(`Configured: "${target.client_name}" (${target.client_id}) — ${target.api_key ? maskToken(target.api_key) : '(no public key)'}`);
   } else if (opts.clientId) {
     logger.info(`No token configured for client "${opts.clientId}".`);
   } else {

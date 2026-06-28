@@ -79,19 +79,19 @@ export async function run(opts: LoginOptions): Promise<number> {
     await openBrowser(authUrl.toString());
 
     const callback = await handle.result;
+    const privateToken = callback.private_token;
     const wantsPrivate = opts.scope === 'private';
-    if (wantsPrivate && !callback.private_token) {
-      throw new CliError(
-        'INVALID_CALLBACK',
-        'Private scope was requested, but the callback was missing private_token. Make sure your Coolhand server is up to date.'
-      );
+    if (wantsPrivate && !privateToken) {
+      logger.info('Note: MCP access (private key) was not granted — re-authenticate and approve the private key on the consent page to enable it.');
     }
-    const privateToken = wantsPrivate ? callback.private_token : undefined;
+    if (!callback.token) {
+      logger.info('Note: LLM capture (public key) was not granted — `coolhand claude` will not work. Re-authenticate and approve the public key on the consent page to enable it.');
+    }
 
     const entry: ClientEntry = {
       client_id: callback.clientId,
       client_name: callback.clientName,
-      api_key: callback.token,
+      ...(callback.token ? { api_key: callback.token } : {}),
       ...(privateToken ? { private_key: privateToken } : {}),
       base_url: baseUrl.origin,
       saved_at: new Date().toISOString(),
@@ -101,7 +101,9 @@ export async function run(opts: LoginOptions): Promise<number> {
     let envResult: { path: string; created: boolean; replaced: boolean } | undefined;
     let privateEnvResult: { path: string; created: boolean; replaced: boolean } | undefined;
     if (opts.writeEnv) {
-      envResult = await writeEnvKey(opts.writeEnv, 'COOLHAND_API_KEY', callback.token);
+      if (callback.token) {
+        envResult = await writeEnvKey(opts.writeEnv, 'COOLHAND_API_KEY', callback.token);
+      }
       if (privateToken) {
         privateEnvResult = await writeEnvKey(opts.writeEnv, 'COOLHAND_PRIVATE_KEY', privateToken);
       }
@@ -110,7 +112,7 @@ export async function run(opts: LoginOptions): Promise<number> {
     if (opts.json) {
       logger.json({
         ok: true,
-        masked_token: maskToken(callback.token),
+        ...(callback.token ? { masked_token: maskToken(callback.token) } : {}),
         ...(privateToken ? { masked_private_key: maskToken(privateToken) } : {}),
         client_id: callback.clientId,
         client_name: callback.clientName,

@@ -79,7 +79,7 @@ export async function startCallbackServer(opts: StartCallbackServerOptions): Pro
       return;
     }
 
-    if (!token || !clientId || !clientName) {
+    if (!clientId || !clientName || (!token && !privateToken)) {
       consumed = true;
       res.statusCode = 400;
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -87,7 +87,7 @@ export async function startCallbackServer(opts: StartCallbackServerOptions): Pro
       rejectResult(
         new CliError(
           'INVALID_CALLBACK',
-          'Callback was missing token, client_id, or client_name. Make sure your Coolhand server is up to date.'
+          'Callback was missing client_id, client_name, or any token. Make sure your Coolhand server is up to date.'
         )
       );
       closeServerSoon();
@@ -98,7 +98,7 @@ export async function startCallbackServer(opts: StartCallbackServerOptions): Pro
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.end(SUCCESS_HTML);
-    resolveResult({ token, clientName, clientId, private_token: privateToken });
+    resolveResult({ token: token ?? undefined, clientName, clientId, private_token: privateToken });
     closeServerSoon();
   }
 

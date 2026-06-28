@@ -1,7 +1,7 @@
 export interface ClientEntry {
   client_id: string;
   client_name: string;
-  api_key: string;
+  api_key?: string;
   private_key?: string;
   base_url: string;
   saved_at: string;
@@ -42,7 +42,7 @@ export interface ClientsOptions {
 }
 
 export interface CallbackResult {
-  token: string;
+  token?: string;
   clientName: string;
   clientId: string;
   private_token?: string;
