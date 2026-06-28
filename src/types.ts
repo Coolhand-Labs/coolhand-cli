@@ -59,6 +59,16 @@ export interface StatusOutput {
   default_client_id: string | null;
 }
 
+export interface ListWorkloadsOptions {
+  search?: string;
+  page?: number;
+  perPage?: number;
+  includeArchived?: boolean;
+  includeSystem?: boolean;
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface SearchOptimizationsOptions {
   status?: string;
   type?: string;

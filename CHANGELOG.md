@@ -2,6 +2,11 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- `list-workloads` command: browse and search workloads by name with pagination (`--search`, `--page`, `--per-page`, `--include-archived`, `--include-system`). Requires a private API key.
+
 ## [0.5.2] - 2026-06-27
 
 ### Changed
