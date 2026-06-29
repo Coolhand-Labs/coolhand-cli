@@ -63,6 +63,7 @@ describe('claude command', () => {
     expect(options.env.SSL_CERT_FILE).toBe('/fake/.coolhand/proxy/ca-cert.pem');
     expect(options.env.NODE_EXTRA_CA_CERTS).toBe('/fake/.coolhand/proxy/ca-cert.pem');
     expect(options.env.REQUESTS_CA_BUNDLE).toBe('/fake/.coolhand/proxy/ca-cert.pem');
+    expect(stopFn).toHaveBeenCalledTimes(1);
   });
 
   test('forwards child exit code', async () => {
@@ -103,6 +104,23 @@ describe('claude command', () => {
     expect(startProxyFn).toHaveBeenCalledTimes(1);
     const [, proxyOpts] = startProxyFn.mock.calls[0];
     expect(proxyOpts.apiEndpoint).toBe('https://staging.coolhandlabs.com/api/v2/llm_request_logs');
+  });
+
+  test('stops proxy and returns INTERNAL on child error event', async () => {
+    const stopFn = jest.fn().mockResolvedValue(undefined);
+    const startProxyFn = jest.fn().mockResolvedValue({ port: 9999, stop: stopFn });
+    const spawnFn = jest.fn().mockImplementation(() => {
+      const child = new EventEmitter();
+      setImmediate(() => child.emit('error', new Error('ENOENT')));
+      return child;
+    });
+
+    const code = await run(
+      { args: [] },
+      { spawnFn: spawnFn as unknown as Spawn, startProxyFn }
+    );
+    expect(code).toBe(2);
+    expect(stopFn).toHaveBeenCalledTimes(1);
   });
 
   test('returns INTERNAL if startProxyFn throws', async () => {

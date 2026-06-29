@@ -13,7 +13,6 @@ export interface CapturedInteraction {
     headers: Record<string, string>;
     body: string | undefined;
   };
-  durationMs: number;
   timestamp: string;
 }
 

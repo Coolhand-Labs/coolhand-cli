@@ -35,10 +35,17 @@ export async function getOrCreateCA(
   // mismatched key/cert pair on disk (TOCTOU guard).
   const keyTmp = keyPath + ".tmp";
   const certTmp = certPath + ".tmp";
-  fs.writeFileSync(keyTmp, ca.key, { mode: 0o600 });
-  fs.writeFileSync(certTmp, ca.cert, { mode: 0o644 });
-  fs.renameSync(keyTmp, keyPath);
-  fs.renameSync(certTmp, certPath);
+  try {
+    fs.writeFileSync(keyTmp, ca.key, { mode: 0o600 });
+    fs.writeFileSync(certTmp, ca.cert, { mode: 0o644 });
+    fs.renameSync(keyTmp, keyPath);
+    fs.renameSync(certTmp, certPath);
+  } catch (err) {
+    for (const tmp of [keyTmp, certTmp]) {
+      try { fs.unlinkSync(tmp); } catch { /* ignore */ }
+    }
+    throw err;
+  }
 
   return ca;
 }

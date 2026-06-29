@@ -85,6 +85,8 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
 
     return new Promise<number>((resolve) => {
       let stopped = false;
+      // stopped is set synchronously before the first await so concurrent
+      // callers (error + close can both fire) see it immediately and skip.
       const stopOnce = () => {
         if (stopped) { return Promise.resolve(); }
         stopped = true;
@@ -109,7 +111,9 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
         });
       } catch (spawnErr) {
         if (spawnErr instanceof Error) { logger.info(`Error: ${redact(spawnErr.message)}`); }
-        void stopOnce();
+        stopOnce().catch((e: unknown) => {
+          if (e instanceof Error) { logger.info(`Error: ${redact(e.message)}`); }
+        });
         resolve(ExitCode.INTERNAL);
         return;
       }

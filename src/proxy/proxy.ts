@@ -23,6 +23,7 @@ interface PendingRequest {
   headers: Record<string, string>;
   bodyPromise: Promise<string | undefined>;
   startTimestamp: number;
+  timestamp: string;
 }
 
 /**
@@ -50,6 +51,7 @@ export async function startProxy(
       headers: req.headers as Record<string, string>,
       bodyPromise: req.body.getText(),
       startTimestamp: req.timingEvents?.startTimestamp ?? performance.now(),
+      timestamp: new Date().toISOString(),
     });
   });
 
@@ -80,8 +82,7 @@ export async function startProxy(
             headers: sanitizeHeaders(res.headers as Record<string, string>),
             body: responseBodyText,
           },
-          durationMs: Math.round(durationMs),
-          timestamp: new Date().toISOString(),
+          timestamp: req.timestamp,
         };
 
         if (!options.silent) {

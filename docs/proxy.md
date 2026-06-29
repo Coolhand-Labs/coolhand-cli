@@ -51,8 +51,8 @@ The proxy sets these environment variables in the spawned Claude process:
 
 | Variable | Purpose |
 |----------|---------|
-| `HTTP_PROXY` | Route HTTP traffic through the local proxy |
-| `HTTPS_PROXY` | Route HTTPS traffic through the local proxy |
+| `HTTP_PROXY` | Route HTTP traffic through the local proxy (respected by curl, Python, Go, and many CLIs; Node.js `https` ignores it without a proxy agent) |
+| `HTTPS_PROXY` | Route HTTPS traffic through the local proxy (same caveat as `HTTP_PROXY`) |
 | `SSL_CERT_FILE` | Trust the Coolhand CA cert (used by curl, Python, etc.) |
 | `NODE_EXTRA_CA_CERTS` | Trust the CA cert in Node.js subprocesses |
 | `REQUESTS_CA_BUNDLE` | Trust the CA cert in Python's `requests` library |
