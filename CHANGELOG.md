@@ -4,6 +4,9 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `coolhand claude` now starts an in-process HTTPS MITM proxy (powered by `mockttp`) instead of shelling out to the `coolhand-proxy` binary. A CA certificate is generated on first run and persisted to `~/.coolhand/proxy/ca-cert.pem`; install it in your system trust store if needed.
+
 ### Changed
 - `coolhand login --scope private` no longer errors (`INVALID_CALLBACK`) when the user declines the private key on the consent page. It now succeeds, stores only the public key, and prints a note that MCP access was not granted.
 - Login can now succeed with only a private (MCP) key — `api_key` is omitted from the stored config entry when the public key was not granted.

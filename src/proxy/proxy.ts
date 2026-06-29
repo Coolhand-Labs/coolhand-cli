@@ -1,5 +1,5 @@
 import * as mockttp from "mockttp";
-import type { CompletedRequest, CompletedResponse } from "mockttp";
+import type { CompletedRequest, CompletedResponse, AbortedRequest } from "mockttp";
 import { shouldCapture, sanitizeHeaders } from "./interceptor.js";
 import { sendToCoolhand, type CapturedInteraction } from "./sender.js";
 import type { CACredentials } from "./certs.js";
@@ -42,7 +42,7 @@ export async function startProxy(
   // Track in-flight sendToCoolhand calls so stop() can drain them before halting
   const inFlightSends = new Set<Promise<void>>();
 
-  server.on("request", (req: CompletedRequest) => {
+  await server.on("request", (req: CompletedRequest) => {
     if (!shouldCapture(req.url)) { return; }
     pendingRequests.set(req.id, {
       method: req.method,
@@ -53,11 +53,11 @@ export async function startProxy(
     });
   });
 
-  server.on("abort", (req: { id: string }) => {
+  await server.on("abort", (req: AbortedRequest) => {
     pendingRequests.delete(req.id);
   });
 
-  server.on("response", (res: CompletedResponse) => {
+  await server.on("response", (res: CompletedResponse) => {
     const req = pendingRequests.get(res.id);
     if (!req) { return; }
     pendingRequests.delete(res.id);

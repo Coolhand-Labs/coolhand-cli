@@ -16,14 +16,24 @@ interface ClaudeDeps {
  * shell:true (which forwards args as an unquoted string to cmd.exe, enabling
  * metacharacter injection), we invoke cmd.exe /d /s /c directly with each arg
  * double-quoted and windowsVerbatimArguments:true so Node does not re-quote them.
+ *
+ * Quoting rules applied per arg:
+ *   1. Double trailing backslashes (a trailing \ would escape the closing ")
+ *   2. Escape embedded " as ""
+ *   3. Escape % as %% to prevent cmd.exe environment-variable expansion
+ *   4. Wrap in double quotes unconditionally
  */
 function resolveSpawn(args: string[]): { cmd: string; spawnArgs: string[]; windowsVerbatimArguments?: true } {
   if (process.platform !== 'win32') {
     return { cmd: 'claude', spawnArgs: args };
   }
-  const escaped = args.map((a) =>
-    /[\s"<>|^&]/.test(a) ? `"${a.replace(/"/g, '""')}"` : a
-  );
+  const escaped = args.map((a) => {
+    const s = a
+      .replace(/(\\+)$/, '$1$1')  // double trailing backslashes
+      .replace(/"/g, '""')         // escape embedded quotes
+      .replace(/%/g, '%%');        // prevent env-var expansion
+    return `"${s}"`;
+  });
   return {
     cmd: process.env['ComSpec'] ?? 'cmd.exe',
     spawnArgs: ['/d', '/s', '/c', ['claude', ...escaped].join(' ')],
@@ -87,6 +97,7 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
         windowsVerbatimArguments,
         env: {
           ...process.env,
+          COOLHAND_API_KEY: entry.api_key,
           HTTP_PROXY: `http://127.0.0.1:${proxy.port}`,
           HTTPS_PROXY: `http://127.0.0.1:${proxy.port}`,
           SSL_CERT_FILE: certPath,

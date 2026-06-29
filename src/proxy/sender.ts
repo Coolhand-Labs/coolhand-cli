@@ -1,4 +1,5 @@
 import { parseBody } from "coolhand-node";
+import { PACKAGE_IDENTIFIER } from "../version.js";
 
 export interface CapturedInteraction {
   request: {
@@ -50,7 +51,7 @@ export async function sendToCoolhand(
         timestamp: captured.timestamp,
         protocol: "https",
       },
-      collector: "coolhand-proxy",
+      collector: `${PACKAGE_IDENTIFIER}/claude`,
     },
   };
 

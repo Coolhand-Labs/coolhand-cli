@@ -29,8 +29,14 @@ export async function getOrCreateCA(
 
   const ca = await mockttp.generateCACertificate();
   fs.mkdirSync(certDir, { recursive: true });
-  fs.writeFileSync(keyPath, ca.key, { mode: 0o600 });
-  fs.writeFileSync(certPath, ca.cert, { mode: 0o644 });
+  // Write via temp+rename so a crash between the two writes never leaves a
+  // mismatched key/cert pair on disk (TOCTOU guard).
+  const keyTmp = keyPath + ".tmp";
+  const certTmp = certPath + ".tmp";
+  fs.writeFileSync(keyTmp, ca.key, { mode: 0o600 });
+  fs.writeFileSync(certTmp, ca.cert, { mode: 0o644 });
+  fs.renameSync(keyTmp, keyPath);
+  fs.renameSync(certTmp, certPath);
 
   return ca;
 }
