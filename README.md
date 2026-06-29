@@ -54,126 +54,23 @@ See [Your AI agent has notes](https://michael.carroll.io/talks/2026/your-ai-agen
 
 ## Commands
 
-```
-coolhand login    [--base-url URL] [--scope private] [--write-env PATH] [--client-id ID] [--json]
-coolhand logout   [--client-id ID | --all] [--json]
-coolhand status   [--client-id ID] [--json]
-coolhand whoami   [--client-id ID]
-coolhand clients [use <id>] [--json]
-coolhand claude  [claude args...]
+| Command | Description |
+|---------|-------------|
+| `coolhand login` | Authenticate and store API keys |
+| `coolhand logout` | Remove a stored client |
+| `coolhand status` | Check whether a token is configured |
+| `coolhand whoami` | Show the currently configured client |
+| `coolhand clients` | List or switch the default client |
+| `coolhand claude` | Run Claude CLI through the Coolhand proxy |
+| `coolhand list-workloads` | List workloads with optional search and pagination |
+| `coolhand search-optimizations` | List and filter optimization records |
+| `coolhand get-optimization` | Fetch a single optimization by ID |
+| `coolhand update-optimization` | Update an optimization's fields |
+| `coolhand close-optimization` | Close an optimization with a reason |
+| `coolhand analyze-claude-sessions` | Submit Claude sessions for pattern and cost analysis |
+| `coolhand wildcard` | Record an agent blocker and exit cleanly |
 
-coolhand list-workloads                          [--search TEXT] [--page N] [--per-page N]
-                                                 [--include-archived] [--include-system]
-                                                 [--client-id ID] [--json]
-coolhand search-optimizations [--status V] [--type V] [--category V] [--query V]
-                               [--from DATE] [--to DATE] [--days-back N]
-                               [--template-id ID] [--workload-id ID]
-                               [--sort-by impact_desc|complexity_asc|created_at_desc]
-                               [--page N] [--per-page N] [--client-id ID] [--json]
-coolhand get-optimization <id>                   [--client-id ID] [--json]
-coolhand update-optimization <id>                [--title V] [--analysis V] [--plan V] [--client-id ID] [--json]
-coolhand close-optimization <id> <reason>        [--client-id ID] [--json]
-
-coolhand analyze-claude-sessions                 [--dry-run] [--client-id ID] [--json]
-
-coolhand wildcard    --complaint "..." --agent-name "..." [--thinking "..."] [--log-id ID] [--json]
-coolhand report-blocker  (alias for wildcard)
-coolhand complaint-box   (alias for wildcard)
-```
-
-### login
-
-Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the callback, and stores the granted key(s). The **public** `api_key` is used for LLM capture with `coolhand-node`, `coolhand-python`, and the `coolhand-js` widget. See [docs/auth-flow.md](docs/auth-flow.md) for the full callback sequence.
-
-`--scope private` requests the **private (MCP) key** in addition to the public key. The user may grant either or both on the consent page; the CLI stores whichever keys are granted and notes if any were withheld.
-
-`--write-env PATH` will additionally write granted keys to the target `.env` file: `COOLHAND_API_KEY=<token>` when the public key was granted, and `COOLHAND_PRIVATE_KEY=<private_token>` when the private key was granted (both idempotent — replaces existing values rather than appending duplicates).
-
-### status
-
-`coolhand status --json` is the programmatic check used by integrations:
-
-```json
-{
-  "configured": true,
-  "clients": [
-    {"client_id": "acme", "client_name": "Acme Inc",
-     "masked_token": "e885b463…1148", "base_url": "https://coolhandlabs.com"}
-    // masked_token is "(no public key)" when only a private key was granted
-  ],
-  "default_client_id": "acme"
-}
-```
-
-Exit code is `0` if a token is configured for the default (or requested) client, `1` otherwise.
-
-### clients
-
-Multiple clients can be stored at once. `coolhand clients` lists them, `coolhand clients use <id>` switches the default. Each `coolhand login` adds (or refreshes) one entry, keyed by the server-assigned `client_id`.
-
-### run
-
-Coolhand can wrap any LLM-backed process to capture its sessions, then evaluate them to find where prompts, context, or workflows can be made more efficient.
-
-Use `coolhand claude` to wrap a single Claude session and capture it for later evaluation — a coding session, a skill walkthrough, a debugging run:
-
-```bash
-coolhand claude           # starts Claude with capture on
-coolhand claude --resume  # any args after `claude` go straight to the Claude CLI
-```
-
-Captured sessions flow into your Coolhand account, where they can be analyzed for optimization opportunities — reduced token usage, tighter prompts, better context management.
-
-## Optimization commands
-
-Coolhand stores LLM-generated optimization suggestions as structured records. These commands let you query, update, and comment on them from the terminal or from agent workflows.
-
-### search-optimizations
-
-Lists optimizations with optional filtering and pagination.
-
-| Flag | Description |
-|------|-------------|
-| `--status V` | Filter by status (e.g. `open`, `closed`) |
-| `--type V` | Filter by optimization type |
-| `--category V` | Filter by category |
-| `--query V` | Free-text search |
-| `--from DATE` | Start of date range |
-| `--to DATE` | End of date range |
-| `--days-back N` | Only show optimizations from the last N days |
-| `--template-id ID` | Filter to a specific template |
-| `--workload-id ID` | Filter to a specific workload |
-| `--sort-by V` | Sort order: `impact_desc`, `complexity_asc`, or `created_at_desc` |
-| `--page N` | Page number (default: 1) |
-| `--per-page N` | Results per page (default: 20, max: 50) |
-| `--client-id ID` | Use a specific stored client |
-| `--json` | Emit JSON output |
-
-Human-readable output includes a pagination hint: `Page N of M (X total)`.
-
-### get-optimization
-
-```bash
-coolhand get-optimization <id>
-```
-
-Fetches a single optimization by ID. When present, the output includes PR information (`PR: #N <url>`) and a `--- Coding Prompt ---` block with the full coding prompt text.
-
-### update-optimization
-
-```bash
-coolhand update-optimization <id> --title "..." --analysis "..." --plan "..."
-```
-
-Updates an existing optimization. Only the flags you provide are changed.
-
-### close-optimization
-
-```bash
-coolhand close-optimization <id> <reason>
-```
-
-Closes an optimization. The reason is a free-text positional argument (quote it if it contains spaces).
+See [docs/commands.md](./docs/commands.md) for full flag reference and usage notes.
 
 ## Security
 
@@ -237,6 +134,7 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
 
 ## Documentation
 
+- [Commands](./docs/commands.md) — full flag reference and usage notes for all commands
 - [Auth Flow](./docs/auth-flow.md) — browser-callback sequence, state machine, timeout and error paths
 - [Configuration File](./docs/config-file.md) — full config schema, multi-client model, `COOLHAND_CONFIG_DIR` override
 - [Session Capture](./docs/session-capture.md) — session scanning, envelope format, deduplication, scope and limitations
