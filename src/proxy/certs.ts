@@ -20,11 +20,13 @@ export async function getOrCreateCA(
   const keyPath = path.join(certDir, "ca-key.pem");
   const certPath = path.join(certDir, "ca-cert.pem");
 
-  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+  try {
     return {
       key: fs.readFileSync(keyPath, "utf8"),
       cert: fs.readFileSync(certPath, "utf8"),
     };
+  } catch {
+    // Files absent or incomplete — fall through to generate a fresh CA pair.
   }
 
   const ca = await mockttp.generateCACertificate();

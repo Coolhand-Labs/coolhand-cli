@@ -40,6 +40,7 @@ export async function sendToCoolhand(
   const payload = {
     llm_request_log: {
       raw_request: {
+        id: 0,
         method: captured.request.method,
         url: captured.request.url,
         headers: captured.request.headers,
@@ -47,7 +48,6 @@ export async function sendToCoolhand(
         response_body: parseBody(captured.response.body),
         response_headers: captured.response.headers,
         status_code: captured.response.statusCode,
-        duration_ms: captured.durationMs,
         timestamp: captured.timestamp,
         protocol: "https",
       },

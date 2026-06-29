@@ -121,6 +121,8 @@ coolhand claude --resume  # any args after `claude` go straight to the Claude CL
 
 Captured sessions flow into your Coolhand account, where they can be analyzed for optimization opportunities — reduced token usage, tighter prompts, better context management.
 
+On first run, `coolhand claude` generates a local CA certificate at `~/.coolhand/proxy/ca-cert.pem`. The Claude process trusts it automatically; for other tools see [docs/proxy.md](docs/proxy.md).
+
 ## Optimization commands
 
 Coolhand stores LLM-generated optimization suggestions as structured records. These commands let you query, update, and comment on them from the terminal or from agent workflows.

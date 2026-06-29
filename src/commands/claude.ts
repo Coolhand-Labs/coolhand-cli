@@ -36,7 +36,7 @@ function resolveSpawn(args: string[]): { cmd: string; spawnArgs: string[]; windo
   });
   return {
     cmd: process.env['ComSpec'] ?? 'cmd.exe',
-    spawnArgs: ['/d', '/s', '/c', ['claude', ...escaped].join(' ')],
+    spawnArgs: ['/d', '/s', '/c', ['"claude"', ...escaped].join(' ')],
     windowsVerbatimArguments: true,
   };
 }
