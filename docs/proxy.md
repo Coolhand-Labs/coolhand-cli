@@ -40,7 +40,7 @@ Delete the cert directory and re-run `coolhand claude`:
 
 ```bash
 rm -rf ~/.coolhand/proxy
-coolhand claude --help   # triggers cert regeneration
+coolhand claude          # starts the proxy; cert is regenerated on first run
 ```
 
 If you previously installed the old cert system-wide, remove it first.

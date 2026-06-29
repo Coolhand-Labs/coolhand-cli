@@ -91,20 +91,28 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
         return proxy.stop();
       };
 
-      const { cmd, spawnArgs, windowsVerbatimArguments } = resolveSpawn(opts.args);
-      const child = spawnFn(cmd, spawnArgs, {
-        stdio: 'inherit',
-        windowsVerbatimArguments,
-        env: {
-          ...process.env,
-          COOLHAND_API_KEY: entry.api_key,
-          HTTP_PROXY: `http://127.0.0.1:${proxy.port}`,
-          HTTPS_PROXY: `http://127.0.0.1:${proxy.port}`,
-          SSL_CERT_FILE: certPath,
-          NODE_EXTRA_CA_CERTS: certPath,
-          REQUESTS_CA_BUNDLE: certPath,
-        },
-      });
+      let child;
+      try {
+        const { cmd, spawnArgs, windowsVerbatimArguments } = resolveSpawn(opts.args);
+        child = spawnFn(cmd, spawnArgs, {
+          stdio: 'inherit',
+          windowsVerbatimArguments,
+          env: {
+            ...process.env,
+            COOLHAND_API_KEY: entry.api_key,
+            HTTP_PROXY: `http://127.0.0.1:${proxy.port}`,
+            HTTPS_PROXY: `http://127.0.0.1:${proxy.port}`,
+            SSL_CERT_FILE: certPath,
+            NODE_EXTRA_CA_CERTS: certPath,
+            REQUESTS_CA_BUNDLE: certPath,
+          },
+        });
+      } catch (spawnErr) {
+        if (spawnErr instanceof Error) { logger.info(`Error: ${redact(spawnErr.message)}`); }
+        void stopOnce();
+        resolve(ExitCode.INTERNAL);
+        return;
+      }
       child.on('error', async (err: Error) => {
         try {
           await stopOnce();

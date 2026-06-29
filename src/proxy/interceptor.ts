@@ -25,6 +25,7 @@ export function sanitizeHeaders(
 ): Record<string, string> {
   const sensitiveKeys = new Set([
     "authorization",
+    "proxy-authorization",
     "x-goog-api-key",
     "x-api-key",
     "api-key",

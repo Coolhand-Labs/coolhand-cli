@@ -49,7 +49,7 @@ export async function sendToCoolhand(
         response_headers: captured.response.headers,
         status_code: captured.response.statusCode,
         timestamp: captured.timestamp,
-        protocol: "https",
+        protocol: new URL(captured.request.url).protocol.replace(":", ""),
       },
       collector: `${PACKAGE_IDENTIFIER}/claude`,
     },
