@@ -64,7 +64,7 @@ coolhand claude  [claude args...]
 
 coolhand list-workloads                          [--search TEXT] [--page N] [--per-page N]
                                                  [--include-archived] [--include-system]
-                                                 [--client-id ID] [--json]
+                                                 [--include-templates] [--client-id ID] [--json]
 coolhand search-optimizations [--status V] [--type V] [--category V] [--query V]
                                [--from DATE] [--to DATE] [--days-back N]
                                [--template-id ID] [--workload-id ID]
