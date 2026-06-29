@@ -13,6 +13,7 @@ import { run as runUpdateOptimization } from './commands/update-optimization.js'
 import { run as runWildcard } from './commands/wildcard.js';
 import { run as runClaude } from './commands/claude.js';
 import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
+import { run as runListWorkloads } from './commands/list-workloads.js';
 import type {
   ClientsOptions,
   LoginOptions,
@@ -25,6 +26,7 @@ import type {
   UpdateOptimizationOptions,
   ComplaintBoxOptions,
   AnalyzeClaudeSessionsOptions,
+  ListWorkloadsOptions,
 } from './types.js';
 
 interface ParsedArgs {
@@ -41,7 +43,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system']);
 
 const COMMANDS: CommandMeta[] = [
   {
@@ -171,6 +173,20 @@ const COMMANDS: CommandMeta[] = [
     usage: 'coolhand claude [claude args...]',
     options: [
       { flag: '[claude args...]', description: 'Everything after `claude` is passed straight to the Claude CLI' },
+    ],
+  },
+  {
+    name: 'list-workloads',
+    oneLiner: 'List workloads with optional name search and pagination',
+    usage: 'coolhand list-workloads [options]',
+    options: [
+      { flag: '--search TEXT', description: 'Filter by name substring (case-insensitive)' },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--include-archived', description: 'Include archived workloads' },
+      { flag: '--include-system', description: 'Include system workloads (Unmatched, etc.)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
   },
   {
@@ -451,6 +467,42 @@ function analyzeClaudeSessionsOptions(parsed: ParsedArgs): AnalyzeClaudeSessions
   return opts;
 }
 
+function listWorkloadsOptions(parsed: ParsedArgs): ListWorkloadsOptions {
+  const opts: ListWorkloadsOptions = {};
+  if (typeof parsed.flags.search === 'string') {
+    opts.search = parsed.flags.search;
+  }
+  if (typeof parsed.flags['page'] === 'string') {
+    const raw = parsed.flags['page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--page must be a positive integer');
+    }
+    opts.page = n;
+  }
+  if (typeof parsed.flags['per-page'] === 'string') {
+    const raw = parsed.flags['per-page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 100) {
+      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
+    }
+    opts.perPage = n;
+  }
+  if (parsed.flags['include-archived'] === true) {
+    opts.includeArchived = true;
+  }
+  if (parsed.flags['include-system'] === true) {
+    opts.includeSystem = true;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 function wildcardOptions(parsed: ParsedArgs): ComplaintBoxOptions {
   const complaint = typeof parsed.flags.complaint === 'string' ? parsed.flags.complaint.trim() : '';
   if (!complaint) {
@@ -549,6 +601,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runWildcard(wildcardOptions(parsed));
       case 'analyze-claude-sessions':
         return await runAnalyzeClaudeSessions(analyzeClaudeSessionsOptions(parsed));
+      case 'list-workloads':
+        return await runListWorkloads(listWorkloadsOptions(parsed));
       default:
         logger.info(`Unknown command: ${parsed.command}`);
         logger.info(buildSummaryHelp());
