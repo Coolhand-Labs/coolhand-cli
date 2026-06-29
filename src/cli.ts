@@ -185,6 +185,7 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
       { flag: '--include-archived', description: 'Include archived workloads' },
       { flag: '--include-system', description: 'Include system workloads (Unmatched, etc.)' },
+      { flag: '--include-templates', description: 'Include templates (with routing patterns) for each workload' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -493,6 +494,9 @@ function listWorkloadsOptions(parsed: ParsedArgs): ListWorkloadsOptions {
   }
   if (parsed.flags['include-system'] === true) {
     opts.includeSystem = true;
+  }
+  if (parsed.flags['include-templates'] === true) {
+    opts.includeTemplates = true;
   }
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];

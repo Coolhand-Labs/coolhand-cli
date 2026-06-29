@@ -21,6 +21,9 @@ export async function run(opts: ListWorkloadsOptions): Promise<number> {
     if (opts.includeSystem === true) {
       args.include_system = true;
     }
+    if (opts.includeTemplates === true) {
+      args.include_templates = true;
+    }
 
     const result = await mcpCall('list_workloads', args, { clientId: opts.clientId });
 

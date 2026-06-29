@@ -65,6 +65,7 @@ export interface ListWorkloadsOptions {
   perPage?: number;
   includeArchived?: boolean;
   includeSystem?: boolean;
+  includeTemplates?: boolean;
   json?: boolean;
   clientId?: string;
 }

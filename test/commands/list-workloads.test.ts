@@ -93,6 +93,29 @@ describe('list-workloads command', () => {
     expect(code).not.toBe(0);
   });
 
+  test('passes include_templates when flag set', async () => {
+    await run({ includeTemplates: true });
+    const [, args] = (mcpCall as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+    expect(args).toEqual({ include_templates: true });
+  });
+
+  test('omits include_templates when flag not set', async () => {
+    await run({});
+    const [, args] = (mcpCall as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+    expect(Object.keys(args)).not.toContain('include_templates');
+  });
+
+  test('renders templates array in workload output', async () => {
+    const template = { id: 'tpl-1', name: 'My Template', status: 'active', user_prompt_pattern: 'optimize.*cost', system_prompt_pattern: null };
+    (mcpCall as jest.Mock).mockResolvedValue({ workloads: [{ id: 'wl-1', name: 'My Workload', templates: [template] }], total: 1, page: 1, per_page: 25 });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ includeTemplates: true });
+    const output = spy.mock.calls.map(([msg]) => String(msg)).join('\n');
+    expect(output).toContain('user_prompt_pattern');
+    spy.mockRestore();
+  });
+
   test('returns non-zero exit and emits JSON error when json flag set on CliError', async () => {
     const { CliError } = await import('../../src/errors.js');
     (mcpCall as jest.Mock).mockRejectedValue(new CliError('MCP_ERROR', 'something failed'));
