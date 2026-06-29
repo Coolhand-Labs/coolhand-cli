@@ -1,5 +1,23 @@
+jest.mock('../src/commands/flush-pending.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+  spawnBackgroundFlush: jest.fn(),
+}));
+jest.mock('../src/prompt.js', () => ({ confirm: jest.fn().mockResolvedValue(false) }));
+
 import { parseArgs, run } from '../src/cli.js';
+import { run as runFlushPending, spawnBackgroundFlush } from '../src/commands/flush-pending.js';
+import { confirm } from '../src/prompt.js';
+import { markFlushFailed, savePendingRecord } from '../src/pending-store.js';
 import { createTmpHome, TmpHome } from './helpers/tmp-home.js';
+
+function makePending() {
+  return savePendingRecord({
+    command: 'report-blocker',
+    kind: 'feedback' as const,
+    payload: { explanation: 'x', creator_type: 'agent' as const },
+    savedAt: '2026-06-29T12:00:00.000Z',
+  });
+}
 
 describe('parseArgs', () => {
   test('extracts subcommand and flags', () => {
@@ -43,6 +61,9 @@ describe('run', () => {
   let home: TmpHome;
   beforeEach(async () => {
     home = await createTmpHome();
+    (runFlushPending as jest.Mock).mockClear().mockResolvedValue(0);
+    (spawnBackgroundFlush as jest.Mock).mockClear();
+    (confirm as jest.Mock).mockReset().mockResolvedValue(false);
   });
   afterEach(async () => {
     await home.cleanup();
@@ -91,6 +112,55 @@ describe('run', () => {
   test('update-optimization without id returns exit 1', async () => {
     const code = await run(['update-optimization']);
     expect(code).toBe(1);
+  });
+
+  test('hidden __flush-pending command dispatches to the flush worker', async () => {
+    const code = await run(['__flush-pending']);
+    expect(code).toBe(0);
+    expect(runFlushPending).toHaveBeenCalled();
+  });
+
+  test('failed-flush reminder offers retry and launches background flush on yes', async () => {
+    await makePending();
+    await markFlushFailed();
+    (confirm as jest.Mock).mockResolvedValue(true);
+
+    await run(['status']);
+
+    expect(confirm).toHaveBeenCalled();
+    expect(spawnBackgroundFlush).toHaveBeenCalled();
+  });
+
+  test('failed-flush reminder does not launch flush when the user declines', async () => {
+    await makePending();
+    await markFlushFailed();
+    (confirm as jest.Mock).mockResolvedValue(false);
+
+    await run(['status']);
+
+    expect(confirm).toHaveBeenCalled();
+    expect(spawnBackgroundFlush).not.toHaveBeenCalled();
+  });
+
+  test('no failed-flush reminder when there was no prior failure', async () => {
+    await makePending(); // records exist, but no failed marker
+    (confirm as jest.Mock).mockResolvedValue(true);
+
+    await run(['status']);
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(spawnBackgroundFlush).not.toHaveBeenCalled();
+  });
+
+  test('failed-flush reminder is skipped in --json mode', async () => {
+    await makePending();
+    await markFlushFailed();
+    (confirm as jest.Mock).mockResolvedValue(true);
+
+    await run(['status', '--json']);
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(spawnBackgroundFlush).not.toHaveBeenCalled();
   });
 
 });
