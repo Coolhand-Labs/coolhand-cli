@@ -29,6 +29,10 @@ This runs the same steps as the `prepublishOnly` CI gate. Run this as the single
 
 See [RELEASING.md](./RELEASING.md) for the full release checklist.
 
+## Docs
+
+When adding, removing, or changing any CLI command or its flags, update `docs/commands.md` to match. This is the canonical flag reference — the README only has a short command table that links to it.
+
 ## README and docs philosophy
 
 The README is a landing page — install, quick start, commands, where to go next. Keep it scannable. When in doubt, link rather than expand.
