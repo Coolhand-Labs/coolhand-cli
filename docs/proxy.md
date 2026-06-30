@@ -53,7 +53,8 @@ The proxy sets these environment variables in the spawned Claude process:
 |----------|---------|
 | `HTTP_PROXY` | Route HTTP traffic through the local proxy (respected by curl, Python, Go, and many CLIs; Node.js `https` ignores it without a proxy agent) |
 | `HTTPS_PROXY` | Route HTTPS traffic through the local proxy (same caveat as `HTTP_PROXY`) |
+| `NO_PROXY` | Bypass the proxy for loopback addresses (`localhost,127.0.0.1,::1`) so local MCP servers and tools are not routed through the MITM proxy |
 | `SSL_CERT_FILE` | Trust the Coolhand CA cert (used by curl, Python, etc.) |
 | `NODE_EXTRA_CA_CERTS` | Trust the CA cert in Node.js subprocesses |
 | `REQUESTS_CA_BUNDLE` | Trust the CA cert in Python's `requests` library |
-| `COOLHAND_API_KEY` | Forward the configured API key to subprocesses |
+| `COOLHAND_API_KEY` | Expose the Coolhand public API key to the spawned Claude process and its subprocesses |

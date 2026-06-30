@@ -2,10 +2,7 @@ import { PatternMatchingService } from "coolhand-node";
 
 // Eagerly constructed at module load so patterns are loaded once and reused
 // across all requests rather than on first call.
-const _patternService = new PatternMatchingService({ silent: true });
-function getPatternService(): PatternMatchingService {
-  return _patternService;
-}
+const patternService = new PatternMatchingService({ silent: true });
 
 /**
  * Check if a URL matches a known AI API pattern.
@@ -13,8 +10,22 @@ function getPatternService(): PatternMatchingService {
  * OpenAI, Anthropic, Google AI, Cohere, Hugging Face, etc.
  */
 export function shouldCapture(url: string): boolean {
-  const match = getPatternService().matchesAPIPatternFromURL(url);
-  return match !== null;
+  return patternService.matchesAPIPatternFromURL(url) !== null;
+}
+
+/**
+ * Flatten a raw header map (values may be string[], string, or undefined)
+ * into Record<string, string>, joining multi-value headers with ", ".
+ */
+export function flattenHeaders(
+  headers: Record<string, string | string[] | undefined>
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (value === undefined) { continue; }
+    result[key] = Array.isArray(value) ? value.join(", ") : value;
+  }
+  return result;
 }
 
 /**

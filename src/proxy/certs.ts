@@ -21,12 +21,18 @@ export async function getOrCreateCA(
   const certPath = path.join(certDir, "ca-cert.pem");
 
   try {
+    // Known limitation: if both files exist but are from different generations
+    // (e.g. a partial write left mismatched files), the stale pair is loaded
+    // silently. The temp+rename write strategy below prevents this for new
+    // writes, but does not detect pre-existing mismatches.
     return {
       key: fs.readFileSync(keyPath, "utf8"),
       cert: fs.readFileSync(certPath, "utf8"),
     };
-  } catch {
-    // Files absent or incomplete — fall through to generate a fresh CA pair.
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT" && code !== "ENOTDIR") { throw err; }
+    // One or both files absent — fall through to generate a fresh CA pair.
   }
 
   const ca = await mockttp.generateCACertificate();
@@ -57,9 +63,3 @@ export function getCertPath(certDir: string = DEFAULT_CERT_DIR): string {
   return path.join(certDir, "ca-cert.pem");
 }
 
-/**
- * Returns the default cert directory path.
- */
-export function getDefaultCertDir(): string {
-  return DEFAULT_CERT_DIR;
-}

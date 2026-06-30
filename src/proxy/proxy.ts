@@ -1,6 +1,6 @@
 import * as mockttp from "mockttp";
 import type { CompletedRequest, CompletedResponse, AbortedRequest } from "mockttp";
-import { shouldCapture, sanitizeHeaders } from "./interceptor.js";
+import { shouldCapture, sanitizeHeaders, flattenHeaders } from "./interceptor.js";
 import { sendToCoolhand, type CapturedInteraction } from "./sender.js";
 import type { CACredentials } from "./certs.js";
 
@@ -9,7 +9,6 @@ export interface ProxyOptions {
   apiKey: string;
   apiEndpoint?: string;
   silent?: boolean;
-  debug?: boolean;
 }
 
 export interface ProxyInstance {
@@ -48,7 +47,7 @@ export async function startProxy(
     pendingRequests.set(req.id, {
       method: req.method,
       url: req.url,
-      headers: req.headers as Record<string, string>,
+      headers: flattenHeaders(req.headers as Record<string, string | string[] | undefined>),
       bodyPromise: req.body.getText(),
       startTimestamp: req.timingEvents?.startTimestamp ?? performance.now(),
       timestamp: new Date().toISOString(),
@@ -79,7 +78,7 @@ export async function startProxy(
           },
           response: {
             statusCode: res.statusCode,
-            headers: sanitizeHeaders(res.headers as Record<string, string>),
+            headers: sanitizeHeaders(flattenHeaders(res.headers as Record<string, string | string[] | undefined>)),
             body: responseBodyText,
           },
           timestamp: req.timestamp,
@@ -95,7 +94,6 @@ export async function startProxy(
           apiKey: options.apiKey,
           apiEndpoint: options.apiEndpoint,
           silent: options.silent,
-          debug: options.debug,
         });
       });
     }).catch((err) => {
@@ -105,7 +103,7 @@ export async function startProxy(
     });
 
     inFlightSends.add(send);
-    send.finally(() => inFlightSends.delete(send));
+    send.then(() => inFlightSends.delete(send), () => inFlightSends.delete(send));
   });
 
   // Pass all requests through to their real destinations
@@ -120,8 +118,14 @@ export async function startProxy(
   return {
     port,
     stop: async () => {
-      await Promise.allSettled(inFlightSends);
+      // Stop the server first so no new response events can fire and add to
+      // inFlightSends after we snapshot it for draining.
       await server.stop();
+      // Each in-flight send has a 10 s AbortController timeout, so this loop
+      // waits at most 10 s per batch before all promises settle.
+      while (inFlightSends.size > 0) {
+        await Promise.allSettled([...inFlightSends]);
+      }
       if (!options.silent) {
         console.error("[coolhand-proxy] Proxy stopped");
       }

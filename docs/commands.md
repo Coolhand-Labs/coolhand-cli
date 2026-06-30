@@ -73,12 +73,14 @@ Lists all stored clients. `coolhand clients use <id>` switches the default. Each
 coolhand claude [claude args...]
 ```
 
-Runs the Claude CLI through the Coolhand proxy, capturing the session for later analysis. Any arguments after `claude` are passed straight to the Claude CLI:
+Runs the Claude CLI through an in-process HTTPS MITM proxy (powered by `mockttp`), capturing outbound LLM API calls and forwarding them to Coolhand. Any arguments after `claude` are passed straight to the Claude CLI:
 
 ```bash
 coolhand claude           # starts Claude with capture on
 coolhand claude --resume  # resume last session, captured
 ```
+
+On first run a self-signed CA certificate is generated at `~/.coolhand/proxy/ca-cert.pem`; the Claude process trusts it automatically via `NODE_EXTRA_CA_CERTS`. For other tools or system-wide trust, see [docs/proxy.md](./proxy.md).
 
 ## Workloads
 

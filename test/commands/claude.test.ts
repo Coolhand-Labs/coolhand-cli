@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { run } from '../../src/commands/claude.js';
+import { run, resolveSpawn } from '../../src/commands/claude.js';
 
 jest.mock('../../src/config.js', () => ({
   loadConfig: jest.fn(),
@@ -32,6 +32,45 @@ function spawnClosingWith(code: number): jest.Mock {
   });
 }
 
+describe('resolveSpawn', () => {
+  test('returns claude directly on non-windows', () => {
+    const result = resolveSpawn(['--resume', 'foo'], 'linux');
+    expect(result).toEqual({ cmd: 'claude', spawnArgs: ['--resume', 'foo'] });
+  });
+
+  test('returns cmd.exe invocation on win32', () => {
+    const result = resolveSpawn(['--resume', 'foo'], 'win32');
+    expect(result.cmd).toMatch(/cmd\.exe/i);
+    expect(result.windowsVerbatimArguments).toBe(true);
+    expect(result.spawnArgs[0]).toBe('/d');
+    expect(result.spawnArgs[1]).toBe('/s');
+    expect(result.spawnArgs[2]).toBe('/c');
+    const cmdStr = result.spawnArgs[3];
+    expect(cmdStr).toContain('"claude"');
+    expect(cmdStr).toContain('"--resume"');
+    expect(cmdStr).toContain('"foo"');
+  });
+
+  test('doubles trailing backslashes to prevent escaping closing quote', () => {
+    const result = resolveSpawn(['C:\\path\\'], 'win32');
+    const cmdStr = result.spawnArgs[3];
+    // "C:\path\\" — trailing \ doubled, then wrapped in quotes
+    expect(cmdStr).toContain('"C:\\path\\\\"');
+  });
+
+  test('escapes embedded double quotes as ""', () => {
+    const result = resolveSpawn(['say "hello"'], 'win32');
+    const cmdStr = result.spawnArgs[3];
+    expect(cmdStr).toContain('"say ""hello"""');
+  });
+
+  test('escapes percent signs to prevent env-var expansion', () => {
+    const result = resolveSpawn(['%PATH%'], 'win32');
+    const cmdStr = result.spawnArgs[3];
+    expect(cmdStr).toContain('"%%PATH%%"');
+  });
+});
+
 describe('claude command', () => {
   beforeEach(() => {
     (loadConfig as jest.Mock).mockReset().mockResolvedValue({
@@ -63,6 +102,8 @@ describe('claude command', () => {
     expect(options.env.SSL_CERT_FILE).toBe('/fake/.coolhand/proxy/ca-cert.pem');
     expect(options.env.NODE_EXTRA_CA_CERTS).toBe('/fake/.coolhand/proxy/ca-cert.pem');
     expect(options.env.REQUESTS_CA_BUNDLE).toBe('/fake/.coolhand/proxy/ca-cert.pem');
+    expect(options.env.COOLHAND_API_KEY).toBe('pubkey123');
+    expect(options.env.NO_PROXY).toBe('localhost,127.0.0.1,::1');
     expect(stopFn).toHaveBeenCalledTimes(1);
   });
 
@@ -121,6 +162,20 @@ describe('claude command', () => {
     );
     expect(code).toBe(2);
     expect(stopFn).toHaveBeenCalledTimes(1);
+  });
+
+  test('errors when client has no public api_key', async () => {
+    (getClient as jest.Mock).mockReturnValue({ ...ENTRY, api_key: undefined });
+    const startProxyFn = jest.fn();
+    const spawnFn = jest.fn();
+
+    const code = await run(
+      { args: [] },
+      { spawnFn: spawnFn as unknown as Spawn, startProxyFn }
+    );
+    expect(code).toBe(1);
+    expect(startProxyFn).not.toHaveBeenCalled();
+    expect(spawnFn).not.toHaveBeenCalled();
   });
 
   test('returns INTERNAL if startProxyFn throws', async () => {

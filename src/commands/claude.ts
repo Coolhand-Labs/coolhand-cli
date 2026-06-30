@@ -23,8 +23,8 @@ interface ClaudeDeps {
  *   3. Escape % as %% to prevent cmd.exe environment-variable expansion
  *   4. Wrap in double quotes unconditionally
  */
-function resolveSpawn(args: string[]): { cmd: string; spawnArgs: string[]; windowsVerbatimArguments?: true } {
-  if (process.platform !== 'win32') {
+export function resolveSpawn(args: string[], platform = process.platform): { cmd: string; spawnArgs: string[]; windowsVerbatimArguments?: true } {
+  if (platform !== 'win32') {
     return { cmd: 'claude', spawnArgs: args };
   }
   const escaped = args.map((a) => {
@@ -104,6 +104,7 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
             COOLHAND_API_KEY: entry.api_key,
             HTTP_PROXY: `http://127.0.0.1:${proxy.port}`,
             HTTPS_PROXY: `http://127.0.0.1:${proxy.port}`,
+            NO_PROXY: 'localhost,127.0.0.1,::1',
             SSL_CERT_FILE: certPath,
             NODE_EXTRA_CA_CERTS: certPath,
             REQUESTS_CA_BUNDLE: certPath,
