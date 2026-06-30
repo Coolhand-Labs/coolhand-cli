@@ -142,5 +142,23 @@ describe('wildcard command', () => {
   test('exits 0 on a confirmed write with --json', async () => {
     const code = await run({ complaint: 'x', agentName: 'a', json: true });
     expect(code).toBe(0);
+    expect(jsonSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ ok: true, recorded: true, saved: null, message: expect.any(String) })
+    );
+  });
+
+  test('JSON output includes saved path when no api key is configured', async () => {
+    (getClient as jest.Mock).mockReturnValueOnce(undefined);
+    const previous = process.env.COOLHAND_API_KEY;
+    delete process.env.COOLHAND_API_KEY;
+    try {
+      const code = await run({ complaint: 'x', agentName: 'a', json: true });
+      expect(code).toBe(0);
+      expect(jsonSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ ok: true, recorded: false, saved: expect.any(String) })
+      );
+    } finally {
+      if (previous !== undefined) process.env.COOLHAND_API_KEY = previous;
+    }
   });
 });

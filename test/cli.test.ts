@@ -163,4 +163,15 @@ describe('run', () => {
     expect(spawnBackgroundFlush).not.toHaveBeenCalled();
   });
 
+  test('failed-flush reminder is skipped for --version', async () => {
+    await makePending();
+    await markFlushFailed();
+    (confirm as jest.Mock).mockResolvedValue(true);
+
+    await run(['--version']);
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(spawnBackgroundFlush).not.toHaveBeenCalled();
+  });
+
 });
