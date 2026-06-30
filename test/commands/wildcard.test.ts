@@ -37,6 +37,7 @@ describe('wildcard command', () => {
   let jsonSpy: jest.SpyInstance;
 
   beforeEach(() => {
+    delete process.env.COOLHAND_API_KEY;
     createFeedbackMock.mockReset().mockResolvedValue({ id: 1 });
     savePendingMock.mockReset().mockResolvedValue('/tmp/.coolhand/pending/report-blocker-x.json');
     (Coolhand as jest.Mock).mockClear();
