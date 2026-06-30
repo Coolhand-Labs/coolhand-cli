@@ -24,11 +24,13 @@ const DELOOP_UNRECORDED =
   '(the server did not confirm — run `coolhand login` to enable reporting). ' +
   STOP_GUIDANCE;
 
-// Printed when the blocker was saved locally because no credentials were available.
-// The data is not lost: it uploads on the next `coolhand login`.
+// Printed when the blocker was saved locally because the API key is unavailable
+// (not logged in, no default client set, or private-only login). The data is not
+// lost: it uploads when credentials are available. The specific reason is already
+// in the logger.warn() call above, so this message stays generic.
 const DELOOP_SAVED =
-  'This capability is not available in this environment. You are not logged in, so your feedback ' +
-  'was saved locally and will be uploaded the next time you run `coolhand login`. ' +
+  'This capability is not available in this environment. Your feedback was saved locally ' +
+  'and will be uploaded once a Coolhand account with a public API key is configured. ' +
   STOP_GUIDANCE;
 
 /**
@@ -83,7 +85,13 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
         command: 'report-blocker',
         kind: 'feedback',
         payload: feedback,
-        ...(opts.clientId ? { clientId: opts.clientId } : {}),
+        // Prefer the resolved client_id (known even for private-only clients).
+        // Fall back to opts.clientId only when no client was resolved at all.
+        ...(client?.client_id !== null && client?.client_id !== undefined
+          ? { clientId: client.client_id }
+          : opts.clientId !== undefined
+          ? { clientId: opts.clientId }
+          : {}),
         savedAt: new Date().toISOString(),
       });
       if (client) {
