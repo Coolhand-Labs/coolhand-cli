@@ -221,7 +221,7 @@ describe('wildcard command', () => {
     expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('Client selection was not completed'));
   });
 
-  test('de-loops (exit 0) and warns when resolveClient throws CLIENT_NOT_FOUND for a bad --client-id', async () => {
+  test('de-loops (exit 0) with accurate "client not found" message when resolveClient throws CLIENT_NOT_FOUND for a bad --client-id', async () => {
     (resolveClient as jest.Mock).mockRejectedValueOnce(
       new CliError('CLIENT_NOT_FOUND', 'No client "bad-id" is configured.')
     );
@@ -229,7 +229,8 @@ describe('wildcard command', () => {
     expect(code).toBe(0);
     expect(createFeedbackMock).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Could not record blocker feedback'));
-    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('could not be recorded'));
+    // De-loop message should mention the client not being found, not blame the server.
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('specified client was not found'));
   });
 
   test('warns "no default client" when clients are stored but resolveClient throws NOT_CONFIGURED', async () => {

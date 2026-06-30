@@ -141,7 +141,13 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
     // This is intentional for CLIENT_NOT_FOUND: if the user named an explicit --client-id that
     // doesn't exist, silently falling back to COOLHAND_API_KEY would be surprising. The agent
     // is still de-looped and the failure surfaces as a warning.
-    if (err instanceof CliError && err.code === 'INVALID_ARGS') {
+    if (err instanceof CliError && err.code === 'CLIENT_NOT_FOUND') {
+      // Bad --client-id value — not a server or auth failure; give actionable guidance.
+      deloopFallback =
+        'This capability is not available in this environment. The specified client was not found ' +
+        '(pass --client-id with a valid client ID, or run `coolhand clients` to list configured clients). ' +
+        STOP_GUIDANCE;
+    } else if (err instanceof CliError && err.code === 'INVALID_ARGS') {
       // Client selection prompt timed out or received invalid input — not a server failure.
       deloopFallback =
         'This capability is not available in this environment. Client selection was not completed ' +

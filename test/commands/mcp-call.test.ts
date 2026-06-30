@@ -47,6 +47,11 @@ describe('mcpCall', () => {
     mockFetch.mockResolvedValue(okResponse({ ok: true }));
   });
 
+  afterEach(() => {
+    delete process.env.COOLHAND_PRIVATE_KEY;
+    delete process.env.COOLHAND_CLIENT_ID;
+  });
+
   test('returns result on success', async () => {
     const result = await mcpCall('test_tool', { foo: 'bar' });
     expect(result).toEqual({ ok: true });
