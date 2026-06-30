@@ -214,6 +214,10 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
   }
 
   // 2. COOLHAND_CLIENT_ID env var
+  // An empty string env var (COOLHAND_CLIENT_ID="") is treated as unset and falls
+  // through to the default/auto-pick path. This differs from an explicit empty
+  // --client-id "" argument (caught above as INVALID_ARGS) because an empty env var
+  // is most likely an accidental mis-set in a script, not a deliberate selection.
   const envClientId = process.env.COOLHAND_CLIENT_ID;
   if (envClientId) {
     const entry = cfg.clients[envClientId];

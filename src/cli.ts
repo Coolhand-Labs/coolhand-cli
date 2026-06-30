@@ -258,9 +258,12 @@ export function peelClientId(argv: string[]): { clientId: string | undefined; re
       rest.push(...argv.slice(i));
       break;
     }
-    // `--` (bare separator) starts with `-` so it falls through to the `else` below
-    // and is passed through to rest[], where parseArgs treats it as the end-of-flags
-    // marker — that is the correct behaviour for `coolhand -- list-workloads`.
+    if (arg === '--') {
+      // End-of-flags marker: everything from here on is positional and must not be
+      // peeled, even if it looks like --client-id. Push the remaining args as-is.
+      rest.push(...argv.slice(i));
+      break;
+    }
     if (arg === '--client-id') {
       if (i + 1 >= argv.length) {
         throw new CliError('INVALID_ARGS', '--client-id requires a value');
