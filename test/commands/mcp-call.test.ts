@@ -118,6 +118,7 @@ describe('mcpCall', () => {
   });
 
   test('propagates NOT_CONFIGURED when hasStoredClients but resolveClient throws NOT_CONFIGURED with no env var', async () => {
+    (loadConfig as jest.Mock).mockResolvedValue(cfgWithClient); // hasStoredClients = true
     delete process.env.COOLHAND_PRIVATE_KEY;
     (resolveClient as jest.Mock).mockRejectedValue(
       new CliError('NOT_CONFIGURED', 'Multiple clients configured but no default is set.')
@@ -126,6 +127,7 @@ describe('mcpCall', () => {
   });
 
   test('propagates CLIENT_NOT_FOUND when resolveClient throws for bad COOLHAND_CLIENT_ID in hasStoredClients branch', async () => {
+    (loadConfig as jest.Mock).mockResolvedValue(cfgWithClient); // hasStoredClients = true
     (resolveClient as jest.Mock).mockRejectedValue(
       new CliError('CLIENT_NOT_FOUND', 'COOLHAND_CLIENT_ID="nope" does not match any configured client.')
     );
@@ -135,6 +137,7 @@ describe('mcpCall', () => {
   });
 
   test('propagates NOT_CONFIGURED when stored clients exist but resolveClient throws NOT_CONFIGURED (even with COOLHAND_PRIVATE_KEY set)', async () => {
+    (loadConfig as jest.Mock).mockResolvedValue(cfgWithClient); // hasStoredClients = true
     process.env.COOLHAND_PRIVATE_KEY = 'env_priv_key';
     (resolveClient as jest.Mock).mockRejectedValue(
       new CliError('NOT_CONFIGURED', 'Multiple clients configured but no default is set.')

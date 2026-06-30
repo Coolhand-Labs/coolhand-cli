@@ -266,6 +266,7 @@ describe('resolveClient', () => {
 
   describe('interactive prompt (TTY)', () => {
     let mockRl: EventEmitter & { close: jest.Mock };
+    let pauseSpy: jest.SpyInstance;
     const origIsTTY = process.stdin.isTTY;
 
     beforeEach(() => {
@@ -276,11 +277,13 @@ describe('resolveClient', () => {
         return mockRl;
       });
       Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+      pauseSpy = jest.spyOn(process.stdin, 'pause').mockImplementation(() => process.stdin);
     });
 
     afterEach(() => {
       (readline.createInterface as jest.Mock).mockReset();
       Object.defineProperty(process.stdin, 'isTTY', { value: origIsTTY, configurable: true });
+      pauseSpy.mockRestore();
     });
 
     test('resolves with chosen client on valid numeric input', async () => {
@@ -289,6 +292,7 @@ describe('resolveClient', () => {
       const promise = resolveClient(cfg({ a, b }));
       setImmediate(() => mockRl.emit('line', '1'));
       expect(await promise).toEqual(a);
+      expect(pauseSpy).toHaveBeenCalled();
     });
 
     test('rejects INVALID_ARGS on out-of-range selection', async () => {
@@ -297,6 +301,7 @@ describe('resolveClient', () => {
       const promise = resolveClient(cfg({ a, b }));
       setImmediate(() => mockRl.emit('line', '5'));
       await expect(promise).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+      expect(pauseSpy).toHaveBeenCalled();
     });
 
     test('rejects INVALID_ARGS when stdin closes before selection', async () => {
@@ -305,6 +310,7 @@ describe('resolveClient', () => {
       const promise = resolveClient(cfg({ a, b }));
       setImmediate(() => mockRl.emit('close'));
       await expect(promise).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+      expect(pauseSpy).toHaveBeenCalled();
     });
   });
 });

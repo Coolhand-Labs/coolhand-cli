@@ -12,7 +12,7 @@ coolhand list-workloads --client-id acme   # per-command position
 coolhand --client-id acme claude ...       # must be before for claude
 ```
 
-`COOLHAND_CLIENT_ID=acme coolhand list-workloads` is the environment-variable equivalent and is useful in scripts or CI where passing flags is inconvenient. Note: `analyze-claude-sessions` does not honour `COOLHAND_CLIENT_ID` — use `--client-id` (before or after the subcommand) or set a default with `coolhand clients use <id>` to control which account it targets.
+`COOLHAND_CLIENT_ID=acme coolhand list-workloads` is the environment-variable equivalent and is useful in scripts or CI where passing flags is inconvenient.
 
 **Client selection priority** (highest to lowest):
 
@@ -22,7 +22,7 @@ coolhand --client-id acme claude ...       # must be before for claude
 4. Auto-pick when exactly one client is stored
 5. Interactive prompt (TTY) or descriptive error listing all clients (non-TTY)
 
-Any command that calls `resolveClient` prints `Client: <name> (<id>)` to stderr when a client is successfully resolved, so you always know which account's data you are looking at. `wildcard` prints the label when a client is resolved but proceeds silently without one (it works even when not logged in). `analyze-claude-sessions` resolves the client internally per-submission and does not print the label at the top level.
+Any command that calls `resolveClient` prints `Client: <name> (<id>)` to stderr when a client is successfully resolved, so you always know which account's data you are looking at. `wildcard` and `analyze-claude-sessions` print the label when a client is resolved but proceed silently without one — both work without a stored client (`wildcard` is designed for logged-out sandbox agents; `analyze-claude-sessions` allows `--dry-run` without credentials).
 
 ## Authentication
 
@@ -218,7 +218,7 @@ Submits historical Claude Code sessions to Coolhand for pattern and cost analysi
 | Flag | Description |
 |------|-------------|
 | `--dry-run` | Scan and report without submitting anything |
-| `--client-id ID` | Use a specific stored client. Note: `COOLHAND_CLIENT_ID` is not honoured by this command — use `--client-id` or set a default with `coolhand clients use <id>` |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
 See [session-capture.md](./session-capture.md) for scan logic, duplicate-avoidance details, and envelope format.

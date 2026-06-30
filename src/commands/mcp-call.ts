@@ -26,10 +26,16 @@ export async function mcpCall(
     privateKey = client.private_key;
     baseUrl = client.base_url;
   } catch (err) {
-    // Zero-config fallback: when there are no stored clients and the resolution
-    // chain returns NOT_CONFIGURED, fall back to COOLHAND_PRIVATE_KEY (raw env key).
-    // This lets users who have never run `coolhand login` authenticate via env var.
-    if (err instanceof CliError && err.code === 'NOT_CONFIGURED' && !hasStoredClients && envPrivateKey) {
+    // Zero-config fallback: when there are no stored clients, fall back to
+    // COOLHAND_PRIVATE_KEY (raw env key). Catches both NOT_CONFIGURED (no clients at
+    // all) and CLIENT_NOT_FOUND (COOLHAND_CLIENT_ID set to a name that doesn't exist
+    // in an otherwise empty config) so that a stale env var doesn't defeat the fallback.
+    if (
+      err instanceof CliError &&
+      (err.code === 'NOT_CONFIGURED' || err.code === 'CLIENT_NOT_FOUND') &&
+      !hasStoredClients &&
+      envPrivateKey
+    ) {
       privateKey = envPrivateKey;
       baseUrl = DEFAULT_BASE_URL;
     } else {

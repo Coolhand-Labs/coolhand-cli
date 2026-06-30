@@ -163,6 +163,7 @@ async function promptClientSelection(clients: ClientEntry[]): Promise<ClientEntr
       if (settled) { return; }
       settled = true;
       rl.close();
+      process.stdin.pause();
       reject(new CliError('INVALID_ARGS', 'No selection made within 30 seconds — pass --client-id to skip this prompt.'));
     }, PROMPT_TIMEOUT_MS);
     timer.unref();
@@ -171,6 +172,7 @@ async function promptClientSelection(clients: ClientEntry[]): Promise<ClientEntr
       if (settled) { return; }
       settled = true;
       rl.close();
+      process.stdin.pause();
       clearTimeout(timer);
       const n = parseInt(answer.trim(), 10);
       if (isNaN(n) || n < 1 || n > clients.length) {
@@ -183,6 +185,7 @@ async function promptClientSelection(clients: ClientEntry[]): Promise<ClientEntr
       if (settled) { return; }
       settled = true;
       clearTimeout(timer);
+      process.stdin.pause();
       reject(new CliError('INVALID_ARGS', 'No client selected.'));
     });
   });

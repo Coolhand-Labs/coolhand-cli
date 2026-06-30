@@ -47,9 +47,22 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
     // COOLHAND_CLIENT_ID env, default, auto-pick, TTY prompt) and emits "Client: name (id)" to
     // stderr. Using the resolved client_id as the state key ensures consistent tracking regardless
     // of which selection path was used.
+    //
+    // NOT_CONFIGURED is caught and treated as "unauthenticated" so that --dry-run still works
+    // without a stored client (same behaviour as before this branch). Any other error (e.g.
+    // CLIENT_NOT_FOUND for a bad --client-id) propagates to the outer catch.
     const cfg = await loadConfig();
-    const client = await resolveClient(cfg, opts.clientId);
-    const stateClientId = client.client_id;
+    let stateClientId = '_default';
+    let resolvedClientId: string | undefined;
+    try {
+      const client = await resolveClient(cfg, opts.clientId);
+      stateClientId = client.client_id;
+      resolvedClientId = client.client_id;
+    } catch (err) {
+      if (!(err instanceof CliError) || err.code !== 'NOT_CONFIGURED') {
+        throw err;
+      }
+    }
     const state = await loadCaptureState();
 
     // (2) Work out the reference timestamp. serverTime is only used when local state is absent or
@@ -57,7 +70,6 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
     const localSyncAt = state.lastSyncAt ? new Date(state.lastSyncAt) : null;
     const needsServerTime = !localSyncAt || Number.isNaN(localSyncAt.getTime());
     // Pass the resolved client_id so fetchLastSync and logRequest skip re-resolution.
-    const resolvedClientId = client.client_id;
     const serverTime = needsServerTime ? await fetchLastSync({ clientId: resolvedClientId }) : null;
     const referenceTime = resolveReferenceTime(serverTime, state);
 
