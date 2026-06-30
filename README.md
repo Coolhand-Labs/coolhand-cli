@@ -25,15 +25,15 @@ Requires Node 20 or newer.
 coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json]
 ```
 
-Submit your historical Claude sessions to Coolhand for analysis. Coolhand scans the uploaded sessions to surface:
+Upload your historical Claude Code session transcripts to your Coolhand account for analysis. Coolhand analyzes the uploaded conversations to surface:
 
 - **Repeatable patterns** — tasks you do by hand on repeat that could be scripted or automated
 - **Efficiency gaps** — workflows with unnecessary back-and-forth or redundant steps
 - **Cost insights** — sessions with high token usage relative to their outcome
 
-Use `--dry-run` to preview what would be sent without submitting anything.
+> **What gets uploaded**: The conversation transcripts stored in `~/.claude/projects/` — the messages exchanged between you and Claude, including any code or context you shared in those conversations. Use `--dry-run` to preview exactly what would be sent before submitting anything.
 
-See [Session capture](./docs/session-capture.md) for scan logic, duplicate-avoidance details, and the full flag reference.
+See [Session capture](./docs/session-capture.md) for capture logic, duplicate-avoidance details, and the full flag reference.
 
 ## Wildcard (agent complaint box)
 
