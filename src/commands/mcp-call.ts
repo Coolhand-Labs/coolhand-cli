@@ -27,8 +27,10 @@ export async function mcpCall(
     //    intentional selection we should not silently override.
     //  - !hasStoredClients: if clients ARE stored, resolution failure (e.g. no default,
     //    non-TTY) should surface, not fall back to env key.
-    // With all three guards true, resolveClient can only throw NOT_CONFIGURED (no stored
-    // clients → no client to find), never CLIENT_NOT_FOUND.
+    // With all three guards true (no explicit clientId, no COOLHAND_CLIENT_ID, no stored
+    // clients), the priority chain skips steps 1–3 and falls to step 4 (no clients), so
+    // resolveClient throws NOT_CONFIGURED. CLIENT_NOT_FOUND is not reachable here because
+    // that requires an explicit selection (step 1 or 2) which the guards above rule out.
     if (
       err instanceof CliError &&
       err.code === 'NOT_CONFIGURED' &&

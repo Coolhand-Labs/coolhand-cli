@@ -235,9 +235,10 @@ describe('resolveClient', () => {
     // default_client_id points to a client that no longer exists
     const result = await resolveClient(cfg({ solo }, 'deleted'));
     expect(result).toEqual(solo);
-    // stderr should have received the stale-default warning
+    // stderr should have received both the stale-default warning and the resolution label
     const calls = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(calls).toMatch(/no longer exists/);
+    expect(calls).toMatch(/Client: Client solo \(solo\)/);
   });
 
   test('throws NOT_CONFIGURED with client list when multiple clients exist and stdin is not a TTY', async () => {

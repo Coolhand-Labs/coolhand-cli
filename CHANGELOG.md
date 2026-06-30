@@ -15,6 +15,7 @@ All notable changes to `coolhand-cli` will be documented in this file.
 ### Changed
 - `mcp-call` now uses the shared client-resolution chain (`resolveClient`) instead of calling `getClient` directly, gaining `COOLHAND_CLIENT_ID` support, interactive client selection on TTY, and the `Client:` label on stderr.
 - `analyze-claude-sessions` now surfaces resolution errors when clients are stored but none can be auto-selected (e.g. multiple clients, no default, non-TTY). Previously this was silently treated as "unauthenticated", which produced a confusing no-op. Dry-run without any stored clients still works unauthenticated.
+- `analyze-claude-sessions` now aborts the entire run (rather than counting it as a per-session failure) when `logRequest` throws `INVALID_ARGS`. A malformed session envelope would fail identically on every retry, so aborting fast avoids burning through all remaining sessions.
 - When `default_client_id` points to a client that no longer exists, a warning is emitted before falling through to auto-pick or the interactive prompt (previously this fell through silently).
 - `coolhand login --scope private` no longer errors (`INVALID_CALLBACK`) when the user declines the private key on the consent page. It now succeeds, stores only the public key, and prints a note that MCP access was not granted.
 - Login can now succeed with only a private (MCP) key — `api_key` is omitted from the stored config entry when the public key was not granted.

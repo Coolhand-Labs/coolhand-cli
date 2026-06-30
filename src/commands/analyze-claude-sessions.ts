@@ -80,7 +80,11 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
     const localSyncAt = state.lastSyncAt ? new Date(state.lastSyncAt) : null;
     const needsServerTime = !localSyncAt || Number.isNaN(localSyncAt.getTime());
     // Pass the resolved client_id so fetchLastSync and logRequest skip re-resolution.
-    const serverTime = needsServerTime ? await fetchLastSync({ clientId: resolvedClientId }) : null;
+    // Skip fetchLastSync on the unauthenticated path (no clients stored, resolvedClientId
+    // undefined): it would call getClient with no id, get undefined, and return null anyway.
+    const serverTime = needsServerTime && resolvedClientId !== undefined
+      ? await fetchLastSync({ clientId: resolvedClientId })
+      : null;
     const referenceTime = resolveReferenceTime(serverTime, state);
 
     // (3) Stamp the cutoff before scanning. Any transcript written after this point will have an
