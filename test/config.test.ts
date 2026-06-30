@@ -267,7 +267,8 @@ describe('resolveClient', () => {
   describe('interactive prompt (TTY)', () => {
     let mockRl: EventEmitter & { close: jest.Mock };
     let pauseSpy: jest.SpyInstance;
-    const origIsTTY = process.stdin.isTTY;
+    const origStdinIsTTY = process.stdin.isTTY;
+    const origStdoutIsTTY = process.stdout.isTTY;
 
     beforeEach(() => {
       (readline.createInterface as jest.Mock).mockImplementation(() => {
@@ -277,12 +278,14 @@ describe('resolveClient', () => {
         return mockRl;
       });
       Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+      Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
       pauseSpy = jest.spyOn(process.stdin, 'pause').mockImplementation(() => process.stdin);
     });
 
     afterEach(() => {
       (readline.createInterface as jest.Mock).mockReset();
-      Object.defineProperty(process.stdin, 'isTTY', { value: origIsTTY, configurable: true });
+      Object.defineProperty(process.stdin, 'isTTY', { value: origStdinIsTTY, configurable: true });
+      Object.defineProperty(process.stdout, 'isTTY', { value: origStdoutIsTTY, configurable: true });
       pauseSpy.mockRestore();
     });
 

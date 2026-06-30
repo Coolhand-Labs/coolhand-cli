@@ -66,11 +66,13 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
     try {
       client = await resolveClient(cfg, opts.clientId);
     } catch (err) {
-      // NOT_CONFIGURED means no client is reachable (not logged in, no default,
-      // non-TTY with multiple clients): proceed silently as "unauthenticated".
-      // Any other error (CLIENT_NOT_FOUND for a bad --client-id, INVALID_ARGS for
-      // a prompt timeout, etc.) propagates to the outer catch, which logs a warning
-      // and still de-loops — the recording failure is surfaced but the agent is freed.
+      // NOT_CONFIGURED is swallowed in both sub-cases:
+      //   (a) no clients stored at all → proceed unauthenticated (no accounts configured)
+      //   (b) clients stored but non-TTY with no default → also proceed, but the
+      //       warning block below (lines 96-109) distinguishes and warns accordingly.
+      // Any other error (CLIENT_NOT_FOUND for a bad --client-id, INVALID_ARGS for a
+      // prompt timeout, etc.) propagates to the outer catch, which logs a warning and
+      // still de-loops — the recording failure surfaces but the agent is freed.
       if (!(err instanceof CliError) || err.code !== 'NOT_CONFIGURED') {
         throw err;
       }

@@ -16,6 +16,10 @@ import { logRequest } from '../log-request.js';
 import type { AnalyzeClaudeSessionsOptions } from '../types.js';
 
 /** Errors that apply to every session (auth/config), so the run should abort, not keep retrying. */
+// Errors that apply to every session (auth/config) — abort the whole run instead of
+// counting as a per-session failure and retrying. INVALID_ARGS is included because
+// logRequest validates its inputs and would throw INVALID_ARGS on a malformed envelope
+// that would fail every session identically.
 const FATAL_CODES = new Set(['NOT_CONFIGURED', 'CLIENT_NOT_FOUND', 'INVALID_BASE_URL', 'INVALID_ARGS']);
 
 /**
