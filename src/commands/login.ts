@@ -6,7 +6,36 @@ import { writeEnvKey } from '../env-file.js';
 import { startCallbackServer } from '../auth/callback-server.js';
 import { openBrowser } from '../auth/open-browser.js';
 import { generateState } from '../auth/state.js';
+import { countPending } from '../pending-store.js';
+import { confirm } from '../prompt.js';
+import { spawnBackgroundFlush } from './flush-pending.js';
 import { DEFAULT_BASE_URL, DEFAULT_TIMEOUT_MS, type ClientEntry, type LoginOptions } from '../types.js';
+
+/**
+ * After a successful login, offer to upload any blocker feedback saved while logged out.
+ * On yes, the upload runs in a detached background process so the user is not blocked.
+ * Skipped entirely when not interactive (`confirm` returns false with no TTY).
+ */
+async function offerPendingFlush(): Promise<void> {
+  let count: number;
+  try {
+    count = await countPending();
+  } catch {
+    return;
+  }
+  if (count === 0) {
+    return;
+  }
+  const send = await confirm(
+    `You have ${count} locally-saved record(s) from while you were logged out. Send them now?`
+  );
+  if (send) {
+    spawnBackgroundFlush();
+    logger.info(`Uploading ${count} saved record(s) in the background.`);
+  } else {
+    logger.info(`Keeping ${count} saved record(s) locally; you'll be offered again next time.`);
+  }
+}
 
 function parseBaseUrl(input: string | undefined): URL {
   const raw = input ?? DEFAULT_BASE_URL;
@@ -136,6 +165,8 @@ export async function run(opts: LoginOptions): Promise<number> {
         const action = privateEnvResult.created ? 'created' : privateEnvResult.replaced ? 'updated' : 'appended to';
         logger.info(`COOLHAND_PRIVATE_KEY ${action} ${privateEnvResult.path}.`);
       }
+      // Only prompt in human (non-JSON) mode; JSON output is for machine consumption.
+      await offerPendingFlush();
     }
     return ExitCode.OK;
   } catch (err) {
