@@ -22,7 +22,7 @@ coolhand --client-id acme claude ...       # must be before for claude
 4. Auto-pick when exactly one client is stored
 5. Interactive prompt (TTY) or descriptive error listing all clients (non-TTY)
 
-Any command that calls `resolveClient` prints `Client: <name> (<id>)` to stderr when a client is successfully resolved, so you always know which account's data you are looking at. `wildcard` and `analyze-claude-sessions` print the label when a client is resolved but proceed silently without one — both work without a stored client (`wildcard` is designed for logged-out sandbox agents; `analyze-claude-sessions` allows `--dry-run` without credentials).
+Any command that calls `resolveClient` prints `Client: <name> (<id>)` to stderr when a client is successfully resolved, so you always know which account's data you are looking at. `wildcard` and `analyze-claude-sessions` print the label when a client is resolved but proceed silently without one when **no clients are configured at all** (`wildcard` is designed for logged-out sandbox agents; `analyze-claude-sessions` allows `--dry-run` without credentials). If clients are stored but resolution fails (e.g. no default is set on a non-TTY), both commands surface the error rather than proceeding silently.
 
 ## Authentication
 

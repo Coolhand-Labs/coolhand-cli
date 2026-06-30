@@ -48,9 +48,11 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
     // stderr. Using the resolved client_id as the state key ensures consistent tracking regardless
     // of which selection path was used.
     //
-    // NOT_CONFIGURED is caught and treated as "unauthenticated" so that --dry-run still works
-    // without a stored client (same behaviour as before this branch). Any other error (e.g.
-    // CLIENT_NOT_FOUND for a bad --client-id) propagates to the outer catch.
+    // NOT_CONFIGURED is caught and treated as "unauthenticated" only when no clients are stored
+    // at all, so that --dry-run still works without credentials (same behaviour as before this
+    // branch). If clients exist but resolution failed (e.g. no default on a non-TTY), the error
+    // propagates so the user sees a clear message rather than a silent no-op.
+    // Any other error (e.g. CLIENT_NOT_FOUND for a bad --client-id) also propagates.
     const cfg = await loadConfig();
     let stateClientId = '_default';
     let resolvedClientId: string | undefined;
@@ -59,7 +61,11 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
       stateClientId = client.client_id;
       resolvedClientId = client.client_id;
     } catch (err) {
-      if (!(err instanceof CliError) || err.code !== 'NOT_CONFIGURED') {
+      if (
+        !(err instanceof CliError) ||
+        err.code !== 'NOT_CONFIGURED' ||
+        Object.keys(cfg.clients).length > 0
+      ) {
         throw err;
       }
     }

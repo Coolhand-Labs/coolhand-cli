@@ -25,7 +25,7 @@ jest.mock('../../src/pending-store.js', () => ({
 }));
 
 import { Coolhand } from 'coolhand-node';
-import { resolveClient } from '../../src/config.js';
+import { loadConfig, resolveClient } from '../../src/config.js';
 import { savePendingRecord } from '../../src/pending-store.js';
 import { logger } from '../../src/logger.js';
 
@@ -206,5 +206,26 @@ describe('wildcard command', () => {
     expect(createFeedbackMock).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Could not record blocker feedback'));
     expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('could not be recorded'));
+  });
+
+  test('warns "no default client" when clients are stored but resolveClient throws NOT_CONFIGURED', async () => {
+    // Simulate: two clients stored, no default set, non-TTY → resolveClient throws NOT_CONFIGURED
+    (loadConfig as jest.Mock).mockResolvedValueOnce({
+      version: 1 as const,
+      default_client_id: null,
+      clients: {
+        acme: { client_id: 'acme', client_name: 'Acme', api_key: 'k', base_url: 'https://coolhandlabs.com', saved_at: 'now' },
+        beta: { client_id: 'beta', client_name: 'Beta', api_key: 'k2', base_url: 'https://coolhandlabs.com', saved_at: 'now' },
+      },
+    });
+    (resolveClient as jest.Mock).mockRejectedValueOnce(
+      new CliError('NOT_CONFIGURED', 'Multiple clients configured; no default is set.')
+    );
+    delete process.env.COOLHAND_API_KEY;
+    const code = await run({ complaint: 'x', agentName: 'a' });
+    expect(code).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('No default client'));
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('Not logged in'));
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('saved locally'));
   });
 });
