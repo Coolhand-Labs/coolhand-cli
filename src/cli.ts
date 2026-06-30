@@ -269,6 +269,12 @@ export function peelClientId(argv: string[]): { clientId: string | undefined; re
         throw new CliError('INVALID_ARGS', '--client-id requires a value');
       }
       const next = argv[i + 1];
+      if (next === '--') {
+        throw new CliError(
+          'INVALID_ARGS',
+          `--client-id requires a value — '${next}' is an end-of-options marker, not a client ID. Try: coolhand --client-id <ID> -- ...`
+        );
+      }
       if (next.startsWith('-')) {
         throw new CliError('INVALID_ARGS', `--client-id requires a value but got "${next}"`);
       }
@@ -295,6 +301,11 @@ export function peelClientId(argv: string[]): { clientId: string | undefined; re
       clientId = val;
       i += 1;
     } else {
+      // Any other leading flag (e.g. --json, --version) is passed through to the command
+      // parser. IMPORTANT: this branch assumes all other leading flags are boolean (no value
+      // argument). If a future value-taking global flag is added here, this loop must be
+      // updated to consume its value token too, or the value will be misidentified as the
+      // command name and silently dropped.
       rest.push(arg);
       i += 1;
     }

@@ -33,7 +33,7 @@ jest.mock('../../src/log-request.js', () => ({
 jest.mock('../../src/api/last-sync.js', () => ({
   fetchLastSync: jest.fn(),
 }));
-import { resolveClient } from '../../src/config.js';
+import { loadConfig, resolveClient } from '../../src/config.js';
 import { scanSessions } from '../../src/sessions/claude-scanner.js';
 import { scanCoworkSessions } from '../../src/sessions/cowork-scanner.js';
 import { logRequest } from '../../src/log-request.js';
@@ -217,6 +217,41 @@ describe('analyze-claude-sessions command', () => {
     );
     // The outer catch converts CliError to an exit code rather than re-throwing.
     const code = await run({ clientId: 'bad-id' });
+    expect(code).not.toBe(0);
+    expect(logRequest).not.toHaveBeenCalled();
+  });
+
+  test('proceeds unauthenticated when NOT_CONFIGURED and no clients are stored (dry-run without credentials)', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    // No clients stored — the unauthenticated path should be taken silently.
+    (loadConfig as jest.Mock).mockResolvedValueOnce({
+      version: 1,
+      clients: {},
+      default_client_id: null,
+    });
+    (resolveClient as jest.Mock).mockRejectedValueOnce(
+      new CliError('NOT_CONFIGURED', 'Not logged in.')
+    );
+    const code = await run({ dryRun: true });
+    expect(code).toBe(0);
+    expect(logRequest).not.toHaveBeenCalled();
+  });
+
+  test('surfaces NOT_CONFIGURED when clients are stored but resolution fails (non-TTY, no default)', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    // Clients are stored but none could be auto-selected — error must propagate.
+    (loadConfig as jest.Mock).mockResolvedValueOnce({
+      version: 1,
+      clients: {
+        acme: { client_id: 'acme', client_name: 'Acme', api_key: 'k', base_url: 'https://coolhandlabs.com', saved_at: 'now' },
+        beta: { client_id: 'beta', client_name: 'Beta', api_key: 'k2', base_url: 'https://coolhandlabs.com', saved_at: 'now' },
+      },
+      default_client_id: null,
+    });
+    (resolveClient as jest.Mock).mockRejectedValueOnce(
+      new CliError('NOT_CONFIGURED', 'Multiple clients configured but no default is set.')
+    );
+    const code = await run({});
     expect(code).not.toBe(0);
     expect(logRequest).not.toHaveBeenCalled();
   });
