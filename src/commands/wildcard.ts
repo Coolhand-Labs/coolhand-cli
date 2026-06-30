@@ -92,7 +92,7 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
         payload: feedback,
         // Prefer the resolved client_id (known even for private-only clients).
         // Fall back to opts.clientId only when no client was resolved at all.
-        ...(client?.client_id !== null && client?.client_id !== undefined
+        ...(client !== undefined
           ? { clientId: client.client_id }
           : opts.clientId !== undefined
           ? { clientId: opts.clientId }

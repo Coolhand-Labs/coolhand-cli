@@ -257,10 +257,11 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
     return entry;
   }
 
-  // 6. Multiple clients, no default — prompt interactively when both stdin and stdout
-  //    are a TTY (the canonical "fully interactive" check). If only stdin is a TTY but
-  //    stdout is piped, prompting mid-pipe is disruptive and the error path is cleaner.
-  if (process.stdin.isTTY && process.stdout.isTTY) {
+  // 6. Multiple clients, no default — prompt interactively when both stdin and stderr are a
+  //    TTY. The prompt writes to stderr, so checking stderr.isTTY (not stdout.isTTY) is the
+  //    right signal that the user can see and respond to it. When stdin is not a TTY the user
+  //    cannot type a selection, so the descriptive error path is cleaner.
+  if (process.stdin.isTTY && process.stderr.isTTY) {
     const entry = await promptClientSelection(clients);
     process.stderr.write(`Client: ${entry.client_name} (${entry.client_id})\n`);
     return entry;
