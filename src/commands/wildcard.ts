@@ -3,6 +3,7 @@ import { ExitCode, CliError } from '../errors.js';
 import { PACKAGE_IDENTIFIER } from '../version.js';
 import { logger, redact } from '../logger.js';
 import { loadConfig, resolveClient } from '../config.js';
+import { savePendingRecord } from '../pending-store.js';
 import { DEFAULT_BASE_URL, type ComplaintBoxOptions } from '../types.js';
 
 // Terminal guidance that breaks the agent out of its retry loop. The missing
@@ -15,12 +16,19 @@ const STOP_GUIDANCE =
 const DELOOP_RECORDED =
   'This capability is not available in this environment. Your feedback has been recorded. ' + STOP_GUIDANCE;
 
-// Printed when the blocker could NOT be recorded (e.g. not logged in, or the server
-// did not confirm). We still de-loop the agent, but stay honest: we never claim a
-// recording happened, and a warning is logged separately so the failure surfaces.
+// Printed when the blocker could NOT be recorded (e.g. the server did not confirm).
+// We still de-loop the agent, but stay honest: we never claim a recording happened,
+// and a warning is logged separately so the failure surfaces.
 const DELOOP_UNRECORDED =
   'This capability is not available in this environment. Your feedback could not be recorded ' +
-  '(not logged in, or the server did not confirm — run `coolhand login` to enable reporting). ' +
+  '(the server did not confirm — run `coolhand login` to enable reporting). ' +
+  STOP_GUIDANCE;
+
+// Printed when the blocker was saved locally because no credentials were available.
+// The data is not lost: it uploads on the next `coolhand login`.
+const DELOOP_SAVED =
+  'This capability is not available in this environment. You are not logged in, so your feedback ' +
+  'was saved locally and will be uploaded the next time you run `coolhand login`. ' +
   STOP_GUIDANCE;
 
 /**
@@ -35,6 +43,18 @@ const DELOOP_UNRECORDED =
  */
 export async function run(opts: ComplaintBoxOptions): Promise<number> {
   let recorded = false;
+  let savedPath: string | undefined;
+
+  // The SDK resolves to null (it does not throw) when the write fails, so a truthy
+  // response is the only proof the blocker was actually recorded.
+  const feedback: LLMRequestLogFeedback = {
+    explanation: opts.complaint,
+    creator_unique_id: opts.agentName,
+    creator_type: 'agent',
+    collector: `${PACKAGE_IDENTIFIER}/wildcard`,
+    ...(opts.thinking ? { original_output: opts.thinking } : {}),
+    ...(opts.logId !== undefined ? { llm_request_log_id: opts.logId } : {}),
+  };
 
   try {
     const cfg = await loadConfig();
@@ -57,19 +77,22 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
     const baseUrl = client?.base_url ?? DEFAULT_BASE_URL;
 
     if (!apiKey) {
-      logger.warn('Not logged in; blocker feedback was not recorded. Run `coolhand login` to enable reporting.');
+      // Not logged in: save the blocker locally instead of dropping it. It uploads on
+      // the next `coolhand login`. This is the primary path — report-blocker is built
+      // for logged-out agents in sandboxes.
+      savedPath = await savePendingRecord({
+        command: 'report-blocker',
+        kind: 'feedback',
+        payload: feedback,
+        ...(opts.clientId ? { clientId: opts.clientId } : {}),
+        savedAt: new Date().toISOString(),
+      });
+      logger.warn(
+        `Not logged in; blocker feedback saved locally to ${savedPath}. ` +
+          'It will upload on your next `coolhand login`.'
+      );
     } else {
       const coolhand = new Coolhand({ apiKey, baseUrl, silent: true });
-      // The SDK resolves to null (it does not throw) when the write fails, so a
-      // truthy response is the only proof the blocker was actually recorded.
-      const feedback: LLMRequestLogFeedback = {
-        explanation: opts.complaint,
-        creator_unique_id: opts.agentName,
-        creator_type: 'agent',
-        collector: `${PACKAGE_IDENTIFIER}/wildcard`,
-        ...(opts.thinking ? { original_output: opts.thinking } : {}),
-        ...(opts.logId !== undefined ? { llm_request_log_id: opts.logId } : {}),
-      };
       const result = await coolhand.createFeedback(feedback);
       recorded = result !== null && result !== undefined;
       if (!recorded) {
@@ -84,9 +107,16 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
   // whether or not we could notify the server. Stay honest about the recording status
   // (warnings above already surfaced any failure) rather than gating the stop-signal
   // on a confirmed write and leaving a logged-out agent stuck.
-  const message = recorded ? DELOOP_RECORDED : DELOOP_UNRECORDED;
+  let message: string;
+  if (recorded) {
+    message = DELOOP_RECORDED;
+  } else if (savedPath) {
+    message = DELOOP_SAVED;
+  } else {
+    message = DELOOP_UNRECORDED;
+  }
   if (opts.json === true) {
-    logger.json({ ok: true, recorded, message });
+    logger.json({ ok: true, recorded, saved: savedPath ?? null, message });
   } else {
     logger.info(message);
   }

@@ -63,18 +63,24 @@ async function ensureDir(dir: string): Promise<void> {
   }
 }
 
-export async function saveConfig(cfg: ConfigFile): Promise<void> {
-  const filePath = configPath();
+/**
+ * Write a file atomically with restrictive permissions: write to a temp file in the
+ * same directory, then rename it into place (rename is atomic on POSIX), so a reader
+ * never sees a half-written file. The caller is responsible for ensuring the parent
+ * directory exists. Shared by `saveConfig` and the pending-record store.
+ */
+export async function atomicWriteFile(
+  filePath: string,
+  data: string,
+  mode: number = FILE_MODE
+): Promise<void> {
   const dir = path.dirname(filePath);
-  await ensureDir(dir);
-
   const tmpPath = path.join(dir, `.${path.basename(filePath)}.${randomBytes(6).toString('hex')}.tmp`);
-  const data = `${JSON.stringify(cfg, null, 2)}\n`;
   try {
-    await fs.writeFile(tmpPath, data, { mode: FILE_MODE });
+    await fs.writeFile(tmpPath, data, { mode });
     await fs.rename(tmpPath, filePath);
     try {
-      await fs.chmod(filePath, FILE_MODE);
+      await fs.chmod(filePath, mode);
     } catch {
       // ignore on Windows
     }
@@ -82,6 +88,12 @@ export async function saveConfig(cfg: ConfigFile): Promise<void> {
     await fs.rm(tmpPath, { force: true }).catch(() => undefined);
     throw new CliError('CONFIG_WRITE_FAILED', `Failed to write ${filePath}: ${(err as Error).message}`);
   }
+}
+
+export async function saveConfig(cfg: ConfigFile): Promise<void> {
+  const filePath = configPath();
+  await ensureDir(path.dirname(filePath));
+  await atomicWriteFile(filePath, `${JSON.stringify(cfg, null, 2)}\n`, FILE_MODE);
 }
 
 export async function deleteConfig(): Promise<void> {

@@ -14,6 +14,9 @@ import { run as runWildcard } from './commands/wildcard.js';
 import { run as runClaude } from './commands/claude.js';
 import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
 import { run as runListWorkloads } from './commands/list-workloads.js';
+import { run as runFlushPending, spawnBackgroundFlush } from './commands/flush-pending.js';
+import { countPending, flushFailed } from './pending-store.js';
+import { confirm } from './prompt.js';
 import type {
   ClientsOptions,
   LoginOptions,
@@ -590,6 +593,37 @@ function wildcardOptions(parsed: ParsedArgs): ComplaintBoxOptions {
   return opts;
 }
 
+// Commands that must never trigger the failed-flush reminder: the flush itself, and
+// login (which runs its own pending-flush prompt).
+const NO_FLUSH_REMINDER = new Set(['__flush-pending', 'login', 'help', 'version']);
+
+/**
+ * Option B retry: if a previous background flush failed, remind the user on their next
+ * command and offer to retry. Interactive-only (`confirm` returns false with no TTY), so
+ * sandboxed agents are never prompted. Best-effort — never blocks the actual command.
+ */
+async function maybeRemindFailedFlush(command: string, json: boolean): Promise<void> {
+  if (json || NO_FLUSH_REMINDER.has(command)) {
+    return;
+  }
+  try {
+    if (!(await flushFailed())) {
+      return;
+    }
+    const count = await countPending();
+    if (count === 0) {
+      return;
+    }
+    const retry = await confirm(`A previous upload of ${count} saved record(s) failed. Retry now?`);
+    if (retry) {
+      spawnBackgroundFlush();
+      logger.info(`Retrying upload of ${count} saved record(s) in the background.`);
+    }
+  } catch {
+    // Never let the reminder break the command the user actually asked for.
+  }
+}
+
 export async function run(argv: string[]): Promise<number> {
   if (argv.length === 0) {
     logger.info(buildSummaryHelp());
@@ -653,7 +687,12 @@ export async function run(argv: string[]): Promise<number> {
       return ExitCode.OK;
     }
 
-    switch (findCommand(parsed.command)?.name ?? parsed.command) {
+    const resolvedCommand = findCommand(parsed.command)?.name ?? parsed.command;
+    await maybeRemindFailedFlush(resolvedCommand, parsed.flags.json === true);
+
+    switch (resolvedCommand) {
+      case '__flush-pending':
+        return await runFlushPending();
       case 'login':
         return await runLogin(loginOptions(parsed));
       case 'logout':

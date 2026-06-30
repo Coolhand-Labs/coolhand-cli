@@ -10,6 +10,12 @@ jest.mock('../../src/auth/open-browser.js', () => ({
 }));
 import { openBrowser } from '../../src/auth/open-browser.js';
 
+jest.mock('../../src/prompt.js', () => ({ confirm: jest.fn() }));
+jest.mock('../../src/commands/flush-pending.js', () => ({ spawnBackgroundFlush: jest.fn() }));
+import { confirm } from '../../src/prompt.js';
+import { spawnBackgroundFlush } from '../../src/commands/flush-pending.js';
+import { savePendingRecord } from '../../src/pending-store.js';
+
 describe('login command', () => {
   let home: TmpHome;
   let rails: FakeRails | undefined;
@@ -17,7 +23,19 @@ describe('login command', () => {
   beforeEach(async () => {
     home = await createTmpHome();
     (openBrowser as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (confirm as jest.Mock).mockReset().mockResolvedValue(false);
+    (spawnBackgroundFlush as jest.Mock).mockReset();
   });
+
+  function wireRedirect(): void {
+    (openBrowser as jest.Mock).mockImplementation(async (url: string) => {
+      const res = await fetch(url, { redirect: 'manual' });
+      const location = res.headers.get('location');
+      if (location) {
+        await fetch(location).catch(() => undefined);
+      }
+    });
+  }
 
   afterEach(async () => {
     await rails?.close();
@@ -219,6 +237,67 @@ describe('login command', () => {
     const contents = await fs.readFile(envPath, 'utf8');
     expect(contents).toContain('COOLHAND_API_KEY=ch_pub_ENVPUBTOKEN12345678901');
     expect(contents).toContain('COOLHAND_PRIVATE_KEY=ch_priv_ENVPRIVTOKEN1234567890');
+  });
+
+  test('after login, offers to flush pending records and launches background flush on yes', async () => {
+    await savePendingRecord({
+      command: 'report-blocker',
+      kind: 'feedback',
+      payload: { explanation: 'saved while logged out', creator_type: 'agent' },
+      savedAt: '2026-06-29T12:00:00.000Z',
+    });
+    (confirm as jest.Mock).mockResolvedValue(true);
+
+    rails = await startFakeRails(({ state }) => ({
+      token: 'ch_pub_FLUSHYESTOKEN123456789',
+      state,
+      clientName: 'Flush',
+      clientId: 'flush',
+    }));
+    wireRedirect();
+
+    const code = await runLogin({ baseUrl: rails.url });
+    expect(code).toBe(0);
+    expect(confirm).toHaveBeenCalled();
+    expect(spawnBackgroundFlush).toHaveBeenCalled();
+  });
+
+  test('after login with pending records but user declines, does not launch flush', async () => {
+    await savePendingRecord({
+      command: 'report-blocker',
+      kind: 'feedback',
+      payload: { explanation: 'x', creator_type: 'agent' },
+      savedAt: '2026-06-29T12:00:00.000Z',
+    });
+    (confirm as jest.Mock).mockResolvedValue(false);
+
+    rails = await startFakeRails(({ state }) => ({
+      token: 'ch_pub_FLUSHNOTOKEN1234567890',
+      state,
+      clientName: 'Flush',
+      clientId: 'flushno',
+    }));
+    wireRedirect();
+
+    const code = await runLogin({ baseUrl: rails.url });
+    expect(code).toBe(0);
+    expect(confirm).toHaveBeenCalled();
+    expect(spawnBackgroundFlush).not.toHaveBeenCalled();
+  });
+
+  test('after login with no pending records, never prompts', async () => {
+    rails = await startFakeRails(({ state }) => ({
+      token: 'ch_pub_NOPENDINGTOKEN1234567',
+      state,
+      clientName: 'Clean',
+      clientId: 'clean',
+    }));
+    wireRedirect();
+
+    const code = await runLogin({ baseUrl: rails.url });
+    expect(code).toBe(0);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(spawnBackgroundFlush).not.toHaveBeenCalled();
   });
 
   // Use deliverCallback directly to avoid the fake-rails dance.

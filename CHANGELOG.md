@@ -10,6 +10,7 @@ All notable changes to `coolhand-cli` will be documented in this file.
 - `COOLHAND_CLIENT_ID` environment variable: set it to a stored client ID to select that client without passing `--client-id` on every invocation. Priority: `--client-id` flag > `COOLHAND_CLIENT_ID` env > configured default > auto-pick (single client) > interactive prompt.
 - When multiple clients are stored and no default is configured, API commands now **prompt interactively** (TTY) or emit a descriptive error listing all clients (non-TTY) instead of failing with NOT_CONFIGURED.
 - `claude`, `wildcard`, `mcp-call`, `list-workloads`, `search-optimizations`, `get-optimization`, `close-optimization`, and `update-optimization` now print `Client: <name> (<id>)` to stderr when a stored client is used, so the active account is always visible.
+- `wildcard` now saves feedback locally to `~/.coolhand/pending/` when no API key is configured, instead of silently dropping it. Pending feedback is automatically uploaded on the next `coolhand login`. A background flush retry runs after each login; if it fails, a reminder prompt appears on the next interactive command.
 
 ### Changed
 - `mcp-call` now uses the shared client-resolution chain (`resolveClient`) instead of calling `getClient` directly, gaining `COOLHAND_CLIENT_ID` support, interactive client selection on TTY, and the `Client:` label on stderr.

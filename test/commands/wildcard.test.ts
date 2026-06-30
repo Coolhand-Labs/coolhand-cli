@@ -20,9 +20,16 @@ jest.mock('../../src/config.js', () => ({
   }),
 }));
 
+jest.mock('../../src/pending-store.js', () => ({
+  savePendingRecord: jest.fn(),
+}));
+
 import { Coolhand } from 'coolhand-node';
 import { resolveClient } from '../../src/config.js';
+import { savePendingRecord } from '../../src/pending-store.js';
 import { logger } from '../../src/logger.js';
+
+const savePendingMock = savePendingRecord as jest.Mock;
 
 describe('wildcard command', () => {
   let infoSpy: jest.SpyInstance;
@@ -31,6 +38,7 @@ describe('wildcard command', () => {
 
   beforeEach(() => {
     createFeedbackMock.mockReset().mockResolvedValue({ id: 1 });
+    savePendingMock.mockReset().mockResolvedValue('/tmp/.coolhand/pending/report-blocker-x.json');
     (Coolhand as jest.Mock).mockClear();
     (resolveClient as jest.Mock).mockResolvedValue({
       client_id: 'acme',
@@ -102,18 +110,31 @@ describe('wildcard command', () => {
     expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('could not be recorded'));
   });
 
-  test('de-loops (exit 0) and skips submission when no client and no api key env var', async () => {
+  test('saves feedback locally (does not drop) and de-loops when no api key is configured', async () => {
     (resolveClient as jest.Mock).mockRejectedValueOnce(
       new CliError('NOT_CONFIGURED', 'Not logged in.')
     );
     const previous = process.env.COOLHAND_API_KEY;
     delete process.env.COOLHAND_API_KEY;
     try {
-      const code = await run({ complaint: 'x', agentName: 'a' });
+      const code = await run({ complaint: 'x', agentName: 'a', thinking: 'tried curl' });
       expect(code).toBe(0);
+      // The blocker is saved to the pending store instead of sent or dropped.
+      expect(savePendingMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: 'report-blocker',
+          kind: 'feedback',
+          payload: expect.objectContaining({
+            explanation: 'x',
+            creator_unique_id: 'a',
+            creator_type: 'agent',
+            original_output: 'tried curl',
+          }),
+        })
+      );
       expect(createFeedbackMock).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalled();
-      expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('could not be recorded'));
+      // De-loop message is honest: saved locally, will upload on next login.
+      expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('saved locally'));
     } finally {
       if (previous !== undefined) {
         process.env.COOLHAND_API_KEY = previous;
@@ -124,6 +145,26 @@ describe('wildcard command', () => {
   test('exits 0 on a confirmed write with --json', async () => {
     const code = await run({ complaint: 'x', agentName: 'a', json: true });
     expect(code).toBe(0);
+    expect(jsonSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ ok: true, recorded: true, saved: null, message: expect.any(String) })
+    );
+  });
+
+  test('JSON output includes saved path when no api key is configured', async () => {
+    (resolveClient as jest.Mock).mockRejectedValueOnce(
+      new CliError('NOT_CONFIGURED', 'Not logged in.')
+    );
+    const previous = process.env.COOLHAND_API_KEY;
+    delete process.env.COOLHAND_API_KEY;
+    try {
+      const code = await run({ complaint: 'x', agentName: 'a', json: true });
+      expect(code).toBe(0);
+      expect(jsonSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ ok: true, recorded: false, saved: expect.any(String) })
+      );
+    } finally {
+      if (previous !== undefined) { process.env.COOLHAND_API_KEY = previous; }
+    }
   });
 
   test('forwards clientId to resolveClient when provided', async () => {
