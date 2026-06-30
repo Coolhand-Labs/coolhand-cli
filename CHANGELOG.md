@@ -5,7 +5,7 @@ All notable changes to `coolhand-cli` will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- `list-workloads` command: browse and search workloads by name with pagination (`--search`, `--page`, `--per-page`, `--include-archived`, `--include-system`, `--include-templates`). Requires a private API key.
+- `list-workloads` command: browse and search workloads by name with pagination (`--search`, `--page`, `--per-page`, `--include-archived`, `--include-system`, `--include-templates`). Requires a public API key (standard `coolhand login`).
 - `--client-id ID` now works as a **global flag** placed before the subcommand (e.g. `coolhand --client-id acme list-workloads`) in addition to the existing per-command position. This also applies to `coolhand claude`.
 - `COOLHAND_CLIENT_ID` environment variable: set it to a stored client ID to select that client without passing `--client-id` on every invocation. Priority: `--client-id` flag > `COOLHAND_CLIENT_ID` env > configured default > auto-pick (single client) > interactive prompt.
 - When multiple clients are stored and no default is configured, API commands now **prompt interactively** (TTY) or emit a descriptive error listing all clients (non-TTY) instead of failing with NOT_CONFIGURED.
@@ -18,6 +18,7 @@ All notable changes to `coolhand-cli` will be documented in this file.
 - `coolhand login --scope private` no longer errors (`INVALID_CALLBACK`) when the user declines the private key on the consent page. It now succeeds, stores only the public key, and prints a note that MCP access was not granted.
 - Login can now succeed with only a private (MCP) key — `api_key` is omitted from the stored config entry when the public key was not granted.
 - `coolhand claude` now exits with a clear error if the configured client has no public API key, rather than spawning the proxy silently without a logging key.
+- `coolhand claude` (and all other API commands) now prompt interactively when multiple clients are stored and no default is set. In non-TTY environments (CI, scripts) this produces a descriptive error listing available clients instead of a generic NOT_CONFIGURED. Use `--client-id` or `COOLHAND_CLIENT_ID` to select a client non-interactively.
 - `status`, `whoami`, and `clients` display `(no public key)` instead of `***` for clients that have only a private key.
 
 ## [0.5.2] - 2026-06-27

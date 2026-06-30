@@ -22,7 +22,7 @@ coolhand --client-id acme claude ...       # must be before for claude
 4. Auto-pick when exactly one client is stored
 5. Interactive prompt (TTY) or descriptive error listing all clients (non-TTY)
 
-Any command that calls `resolveClient` prints `Client: <name> (<id>)` to stderr when a client is successfully resolved, so you always know which account's data you are looking at. `wildcard` and `analyze-claude-sessions` print the label when a client is resolved but proceed silently without one when **no clients are configured at all** (`wildcard` is designed for logged-out sandbox agents; `analyze-claude-sessions` allows `--dry-run` without credentials). If clients are stored but resolution fails (e.g. no default is set on a non-TTY), both commands surface the error rather than proceeding silently.
+Any command that calls `resolveClient` prints `Client: <name> (<id>)` to stderr when a client is successfully resolved, so you always know which account's data you are looking at. `wildcard` and `analyze-claude-sessions` print the label when a client is resolved but proceed without one when **no clients are configured at all** (`wildcard` is designed for logged-out sandbox agents; `analyze-claude-sessions` allows `--dry-run` without credentials). The two commands differ when clients are stored but resolution fails (e.g. no default is set on a non-TTY): `wildcard` saves the complaint locally and warns rather than blocking the agent; `analyze-claude-sessions` surfaces the error so the misconfiguration is visible.
 
 ## Authentication
 
@@ -194,6 +194,11 @@ coolhand get-optimization <id> [--client-id ID] [--json]
 
 Fetches a single optimization by ID. When present, output includes PR information (`PR: #N <url>`) and a `--- Coding Prompt ---` block with the full coding prompt text.
 
+| Flag | Description |
+|------|-------------|
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
 ### update-optimization
 
 ```bash
@@ -202,6 +207,14 @@ coolhand update-optimization <id> [--title V] [--analysis V] [--plan V] [--clien
 
 Updates an existing optimization. Only the flags you provide are changed.
 
+| Flag | Description |
+|------|-------------|
+| `--title V` | New title |
+| `--analysis V` | New analysis text |
+| `--plan V` | New plan text |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
 ### close-optimization
 
 ```bash
@@ -209,6 +222,11 @@ coolhand close-optimization <id> <reason> [--client-id ID] [--json]
 ```
 
 Closes an optimization. The reason is a free-text positional argument (quote it if it contains spaces).
+
+| Flag | Description |
+|------|-------------|
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
 
 ## Session Analysis
 

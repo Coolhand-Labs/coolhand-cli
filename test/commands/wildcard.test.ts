@@ -224,6 +224,7 @@ describe('wildcard command', () => {
     delete process.env.COOLHAND_API_KEY;
     const code = await run({ complaint: 'x', agentName: 'a' });
     expect(code).toBe(0);
+    expect(savePendingMock).toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('No default client'));
     expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('Not logged in'));
     expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('saved locally'));

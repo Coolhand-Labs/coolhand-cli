@@ -16,7 +16,7 @@ import { logRequest } from '../log-request.js';
 import type { AnalyzeClaudeSessionsOptions } from '../types.js';
 
 /** Errors that apply to every session (auth/config), so the run should abort, not keep retrying. */
-const FATAL_CODES = new Set(['NOT_CONFIGURED', 'CLIENT_NOT_FOUND', 'INVALID_BASE_URL']);
+const FATAL_CODES = new Set(['NOT_CONFIGURED', 'CLIENT_NOT_FOUND', 'INVALID_BASE_URL', 'INVALID_ARGS']);
 
 /**
  * Reference cutoff for the mtime pre-filter: local `lastSyncAt` → server `last_sync` → epoch.
