@@ -107,7 +107,7 @@ Any arguments after `claude` are forwarded verbatim to the Claude CLI.
 
 | Flag | Description |
 |------|-------------|
-| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var). Must come **before** `claude`. |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var). Must come **before** `claude` — anything after `claude` is forwarded to the Claude CLI verbatim, so `coolhand claude --client-id acme` passes `--client-id acme` to Claude itself (which does not recognize it). |
 
 ## Workloads
 
