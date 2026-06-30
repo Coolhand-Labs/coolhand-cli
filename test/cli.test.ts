@@ -295,4 +295,18 @@ describe('peelClientId', () => {
     expect(() => peelClientId(['--client-id', 'foo', '--client-id', 'bar', 'status'])).toThrow(CliError);
     expect(() => peelClientId(['--client-id', 'foo', '--client-id', 'bar', 'status'])).toThrow('more than once');
   });
+
+  test('passes -- bare separator through to rest; loop continues past it', () => {
+    expect(peelClientId(['--', 'list-workloads'])).toEqual({
+      clientId: undefined,
+      rest: ['--', 'list-workloads'],
+    });
+  });
+
+  test('passes -- through to rest when following --client-id', () => {
+    expect(peelClientId(['--client-id', 'acme', '--'])).toEqual({
+      clientId: 'acme',
+      rest: ['--'],
+    });
+  });
 });

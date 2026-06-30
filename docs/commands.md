@@ -256,7 +256,7 @@ coolhand wildcard --complaint "..." --agent-name "..." [--thinking "..."] [--log
 
 `complaint-box` and `report-blocker` are aliases for `wildcard`.
 
-When an agent is blocked because a capability does not exist in its environment, it can record the blocker and receive an unambiguous "stop and move on" response. The de-loop message always fires — even if recording fails — because the missing capability is real regardless of whether the server is reachable.
+When an agent is blocked because a capability does not exist in its environment, it can record the blocker and receive an unambiguous "stop and move on" response. The de-loop message always fires — even if recording fails — because the missing capability is real regardless of whether the server is reachable. Recording is best-effort: if no client is configured, the complaint is saved locally and uploaded on the next login.
 
 | Flag | Description |
 |------|-------------|
@@ -264,5 +264,5 @@ When an agent is blocked because a capability does not exist in its environment,
 | `--agent-name` | Required (or set `COOLHAND_AGENT_NAME`). Name of the calling agent |
 | `--thinking` | Optional. Reasoning that led to the blocker |
 | `--log-id ID` | Optional. Ties the complaint to a specific LLM request log |
-| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var). Recording is best-effort — `wildcard` always de-loops even if no client is configured. |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |

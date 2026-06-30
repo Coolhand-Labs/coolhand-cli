@@ -1,6 +1,6 @@
 import { CliError } from '../errors.js';
 import { loadConfig, resolveClient } from '../config.js';
-import { DEFAULT_BASE_URL } from '../types.js';
+import { type ClientEntry, DEFAULT_BASE_URL } from '../types.js';
 
 export async function mcpCall(
   toolName: string,
@@ -12,19 +12,12 @@ export async function mcpCall(
   const hasStoredClients = Object.keys(cfg.clients).length > 0;
   const envPrivateKey = process.env.COOLHAND_PRIVATE_KEY;
 
-  let privateKey: string;
-  let baseUrl: string;
-
+  // Resolve the client. The catch only handles resolveClient failures — the
+  // NO_PRIVATE_KEY check is intentionally outside this try so unrelated throws
+  // don't accidentally pass through the fallback guard.
+  let resolvedClient: ClientEntry | undefined;
   try {
-    const client = await resolveClient(cfg, opts.clientId);
-    if (!client.private_key) {
-      throw new CliError(
-        'NO_PRIVATE_KEY',
-        "No private key configured. Run 'coolhand login --scope private' first."
-      );
-    }
-    privateKey = client.private_key;
-    baseUrl = client.base_url;
+    resolvedClient = await resolveClient(cfg, opts.clientId);
   } catch (err) {
     // Zero-config fallback: when there are no stored clients, fall back to
     // COOLHAND_PRIVATE_KEY (raw env key). Guards:
@@ -44,11 +37,29 @@ export async function mcpCall(
       !hasStoredClients &&
       envPrivateKey
     ) {
-      privateKey = envPrivateKey;
-      baseUrl = DEFAULT_BASE_URL;
+      // resolvedClient stays undefined — handled in the branch below
     } else {
       throw err;
     }
+  }
+
+  let privateKey: string;
+  let baseUrl: string;
+
+  if (resolvedClient !== undefined) {
+    if (!resolvedClient.private_key) {
+      throw new CliError(
+        'NO_PRIVATE_KEY',
+        "No private key configured. Run 'coolhand login --scope private' first."
+      );
+    }
+    privateKey = resolvedClient.private_key;
+    baseUrl = resolvedClient.base_url;
+  } else {
+    // Zero-config fallback path: envPrivateKey is guaranteed non-null here because
+    // the catch condition above requires it (the catch would have re-thrown otherwise).
+    privateKey = envPrivateKey as string;
+    baseUrl = DEFAULT_BASE_URL;
   }
   let parsedBaseUrl: URL;
   try {

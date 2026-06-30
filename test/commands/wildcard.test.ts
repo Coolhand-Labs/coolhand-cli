@@ -221,12 +221,17 @@ describe('wildcard command', () => {
     (resolveClient as jest.Mock).mockRejectedValueOnce(
       new CliError('NOT_CONFIGURED', 'Multiple clients configured; no default is set.')
     );
+    const previous = process.env.COOLHAND_API_KEY;
     delete process.env.COOLHAND_API_KEY;
-    const code = await run({ complaint: 'x', agentName: 'a' });
-    expect(code).toBe(0);
-    expect(savePendingMock).toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('No default client'));
-    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('Not logged in'));
-    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('saved locally'));
+    try {
+      const code = await run({ complaint: 'x', agentName: 'a' });
+      expect(code).toBe(0);
+      expect(savePendingMock).toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('No default client'));
+      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('Not logged in'));
+      expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('saved locally'));
+    } finally {
+      if (previous !== undefined) { process.env.COOLHAND_API_KEY = previous; }
+    }
   });
 });
