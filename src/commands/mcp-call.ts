@@ -27,12 +27,15 @@ export async function mcpCall(
     baseUrl = client.base_url;
   } catch (err) {
     // Zero-config fallback: when there are no stored clients, fall back to
-    // COOLHAND_PRIVATE_KEY (raw env key). Catches both NOT_CONFIGURED (no clients at
-    // all) and CLIENT_NOT_FOUND (COOLHAND_CLIENT_ID set to a name that doesn't exist
-    // in an otherwise empty config) so that a stale env var doesn't defeat the fallback.
+    // COOLHAND_PRIVATE_KEY (raw env key). Only applies when opts.clientId is not set
+    // explicitly — an explicit --client-id flag means the user named a specific account,
+    // and silently ignoring it would be confusing. Catches both NOT_CONFIGURED (no
+    // clients at all) and CLIENT_NOT_FOUND (COOLHAND_CLIENT_ID env var set to a name
+    // that doesn't exist in an otherwise empty config).
     if (
       err instanceof CliError &&
       (err.code === 'NOT_CONFIGURED' || err.code === 'CLIENT_NOT_FOUND') &&
+      opts.clientId === undefined &&
       !hasStoredClients &&
       envPrivateKey
     ) {

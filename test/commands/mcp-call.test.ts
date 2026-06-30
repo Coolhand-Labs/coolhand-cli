@@ -99,6 +99,18 @@ describe('mcpCall', () => {
     });
   });
 
+  test('throws CLIENT_NOT_FOUND when explicit clientId given on empty config even with COOLHAND_PRIVATE_KEY', async () => {
+    (loadConfig as jest.Mock).mockResolvedValue(cfgEmpty);
+    process.env.COOLHAND_PRIVATE_KEY = 'env_priv_key';
+    (resolveClient as jest.Mock).mockRejectedValue(
+      new CliError('CLIENT_NOT_FOUND', 'No client "explicit" is configured.')
+    );
+    // An explicit --client-id should never silently fall back to COOLHAND_PRIVATE_KEY.
+    await expect(mcpCall('tool', {}, { clientId: 'explicit' })).rejects.toMatchObject({
+      code: 'CLIENT_NOT_FOUND',
+    });
+  });
+
   test('throws NOT_CONFIGURED when no clients and no env var', async () => {
     (loadConfig as jest.Mock).mockResolvedValue(cfgEmpty);
     (resolveClient as jest.Mock).mockRejectedValue(

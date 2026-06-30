@@ -77,9 +77,8 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
     const baseUrl = client?.base_url ?? DEFAULT_BASE_URL;
 
     if (!apiKey) {
-      // Not logged in: save the blocker locally instead of dropping it. It uploads on
-      // the next `coolhand login`. This is the primary path — report-blocker is built
-      // for logged-out agents in sandboxes.
+      // No usable API key: save the blocker locally so it isn't lost. Uploads on
+      // the next `coolhand login` (or when credentials are otherwise supplied).
       savedPath = await savePendingRecord({
         command: 'report-blocker',
         kind: 'feedback',
@@ -87,10 +86,19 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
         ...(opts.clientId ? { clientId: opts.clientId } : {}),
         savedAt: new Date().toISOString(),
       });
-      logger.warn(
-        `Not logged in; blocker feedback saved locally to ${savedPath}. ` +
-          'It will upload on your next `coolhand login`.'
-      );
+      const hasStoredClients = Object.keys(cfg.clients).length > 0;
+      if (hasStoredClients) {
+        logger.warn(
+          `No default client is set and auto-selection is unavailable in non-interactive mode. ` +
+            `Blocker feedback saved locally to ${savedPath}. ` +
+            `Pass --client-id or run 'coolhand clients use <id>' to enable direct posting.`
+        );
+      } else {
+        logger.warn(
+          `Not logged in; blocker feedback saved locally to ${savedPath}. ` +
+            'It will upload on your next `coolhand login`.'
+        );
+      }
     } else {
       const coolhand = new Coolhand({ apiKey, baseUrl, silent: true });
       const result = await coolhand.createFeedback(feedback);

@@ -171,9 +171,9 @@ async function promptClientSelection(clients: ClientEntry[]): Promise<ClientEntr
     rl.once('line', (answer: string) => {
       if (settled) { return; }
       settled = true;
+      clearTimeout(timer);
       rl.close();
       process.stdin.pause();
-      clearTimeout(timer);
       const n = parseInt(answer.trim(), 10);
       if (isNaN(n) || n < 1 || n > clients.length) {
         reject(new CliError('INVALID_ARGS', `Invalid selection "${answer.trim()}" — enter a number between 1 and ${clients.length}.`));
