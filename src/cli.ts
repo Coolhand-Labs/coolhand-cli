@@ -670,9 +670,9 @@ export async function run(argv: string[]): Promise<number> {
     if (globalClientId !== undefined) {
       if (parsed.flags['client-id'] === undefined) {
         parsed.flags['client-id'] = globalClientId;
-      } else if (parsed.flags.json !== true) {
-        // Suppressed in JSON mode: plain-text warnings break machine consumers that
-        // merge stderr+stdout. The per-command flag still wins either way.
+      } else if (parsed.flags['client-id'] !== globalClientId && parsed.flags.json !== true) {
+        // Suppressed in JSON mode (plain-text warnings break machine consumers) and when
+        // both flags agree on the same value (no actual conflict to warn about).
         logger.warn(
           `Global --client-id "${globalClientId}" ignored — per-command --client-id "${parsed.flags['client-id']}" takes precedence.`
         );

@@ -129,6 +129,12 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
       }
     }
   } catch (err) {
+    // Note: errors that reach here (CLIENT_NOT_FOUND for a bad --client-id, INVALID_ARGS for a
+    // prompt timeout, SDK network errors, etc.) bypass the !apiKey branch above, so neither the
+    // env-key fallback nor the local-save path is attempted. The feedback is not persisted.
+    // This is intentional for CLIENT_NOT_FOUND: if the user named an explicit --client-id that
+    // doesn't exist, silently falling back to COOLHAND_API_KEY would be surprising. The agent
+    // is still de-looped and the failure surfaces as a warning.
     if (err instanceof CliError && err.code === 'INVALID_ARGS') {
       // Client selection prompt timed out or received invalid input — not a server failure.
       deloopFallback =

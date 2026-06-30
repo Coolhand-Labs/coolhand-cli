@@ -256,6 +256,23 @@ describe('resolveClient', () => {
     }
   });
 
+  test('throws NOT_CONFIGURED with client list when multiple clients exist and stderr is not a TTY (stdin is a TTY)', async () => {
+    const origStdinIsTTY = process.stdin.isTTY;
+    const origStderrIsTTY = process.stderr.isTTY;
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+    Object.defineProperty(process.stderr, 'isTTY', { value: false, configurable: true });
+    try {
+      const a = entry('a');
+      const b = entry('b');
+      const err = await resolveClient(cfg({ a, b })).catch((e) => e);
+      expect(err).toBeInstanceOf(CliError);
+      expect((err as CliError).code).toBe('NOT_CONFIGURED');
+    } finally {
+      Object.defineProperty(process.stdin, 'isTTY', { value: origStdinIsTTY, configurable: true });
+      Object.defineProperty(process.stderr, 'isTTY', { value: origStderrIsTTY, configurable: true });
+    }
+  });
+
   test('explicit clientId takes priority over COOLHAND_CLIENT_ID env var', async () => {
     process.env.COOLHAND_CLIENT_ID = 'b';
     const a = entry('a');

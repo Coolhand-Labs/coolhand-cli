@@ -173,6 +173,15 @@ describe('run', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  test('suppresses duplicate --client-id warning when both flags carry the same value', async () => {
+    const code = await run(['--client-id', 'acme', 'search-optimizations', '--client-id', 'acme']);
+    expect(code).toBe(0);
+    expect(runSearchOptimizationsCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'acme' })
+    );
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   test('hidden __flush-pending command dispatches to the flush worker', async () => {
     const code = await run(['__flush-pending']);
     expect(code).toBe(0);
