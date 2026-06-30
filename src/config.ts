@@ -156,7 +156,7 @@ async function promptClientSelection(clients: ClientEntry[]): Promise<ClientEntr
   return new Promise<ClientEntry>((resolve, reject) => {
     const lines = clients.map((c, i) => `  ${i + 1}. ${c.client_name} (${c.client_id})`).join('\n');
     process.stderr.write(`Multiple clients configured — which one?\n${lines}\nEnter number: `);
-    const rl = createInterface({ input: process.stdin });
+    const rl = createInterface({ input: process.stdin, output: process.stderr });
     let settled = false;
 
     const timer = setTimeout(() => {

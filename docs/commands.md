@@ -252,7 +252,7 @@ See [session-capture.md](./session-capture.md) for scan logic, duplicate-avoidan
 ### wildcard / complaint-box / report-blocker
 
 ```bash
-coolhand wildcard --complaint "..." --agent-name "..." [--thinking "..."] [--log-id ID] [--json]
+coolhand wildcard --complaint "..." --agent-name "..." [--thinking "..."] [--log-id ID] [--client-id ID] [--json]
 ```
 
 `complaint-box` and `report-blocker` are aliases for `wildcard`.
