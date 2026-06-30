@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import {
+  atomicWriteFile,
   configDir,
   configPath,
   deleteConfig,
@@ -113,5 +114,40 @@ describe('config', () => {
     await fs.mkdir(configDir(), { recursive: true });
     await fs.writeFile(path.join(configDir(), 'config.json'), '{not json');
     await expect(loadConfig()).rejects.toMatchObject({ code: 'CONFIG_READ_FAILED' });
+  });
+
+  describe('atomicWriteFile', () => {
+    test('writes the exact contents to the target path', async () => {
+      await fs.mkdir(configDir(), { recursive: true });
+      const target = path.join(configDir(), 'note.txt');
+      await atomicWriteFile(target, 'hello world');
+      expect(await fs.readFile(target, 'utf8')).toBe('hello world');
+    });
+
+    test('leaves no temp files behind on success', async () => {
+      await fs.mkdir(configDir(), { recursive: true });
+      const target = path.join(configDir(), 'note.txt');
+      await atomicWriteFile(target, 'data');
+      const leftovers = (await fs.readdir(configDir())).filter((n) => n.endsWith('.tmp'));
+      expect(leftovers).toEqual([]);
+    });
+
+    test('applies the requested mode on POSIX', async () => {
+      if (process.platform === 'win32') {
+        return;
+      }
+      await fs.mkdir(configDir(), { recursive: true });
+      const target = path.join(configDir(), 'secret.txt');
+      await atomicWriteFile(target, 'shh', 0o600);
+      const stat = await fs.stat(target);
+      expect(stat.mode & 0o777).toBe(0o600);
+    });
+
+    test('rejects with CONFIG_WRITE_FAILED when the directory does not exist', async () => {
+      const target = path.join(configDir(), 'no-such-dir', 'file.txt');
+      await expect(atomicWriteFile(target, 'data')).rejects.toMatchObject({
+        code: 'CONFIG_WRITE_FAILED',
+      });
+    });
   });
 });

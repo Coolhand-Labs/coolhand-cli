@@ -6,6 +6,7 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ### Added
 - `list-workloads` command: browse and search workloads by name with pagination (`--search`, `--page`, `--per-page`, `--include-archived`, `--include-system`). Requires a private API key.
+- `wildcard` now saves feedback locally to `~/.coolhand/pending/` when no API key is configured, instead of silently dropping it. Pending feedback is automatically uploaded on the next `coolhand login`. A background flush retry runs after each login; if it fails, a reminder prompt appears on the next interactive command.
 
 ### Changed
 - `coolhand claude` now starts an in-process HTTPS MITM proxy (powered by `mockttp`) instead of shelling out to the `coolhand-proxy` binary; the `coolhand-proxy` dependency has been removed. A CA certificate is generated on first run and persisted to `~/.coolhand/proxy/ca-cert.pem`; see `docs/proxy.md` for system trust store installation instructions.

@@ -25,15 +25,15 @@ Requires Node 20 or newer.
 coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json]
 ```
 
-Submit your historical Claude sessions to Coolhand for analysis. Coolhand scans the uploaded sessions to surface:
+Upload your historical Claude Code session transcripts to your Coolhand account for analysis. Coolhand analyzes the uploaded conversations to surface:
 
 - **Repeatable patterns** — tasks you do by hand on repeat that could be scripted or automated
 - **Efficiency gaps** — workflows with unnecessary back-and-forth or redundant steps
 - **Cost insights** — sessions with high token usage relative to their outcome
 
-Use `--dry-run` to preview what would be sent without submitting anything.
+> **What gets uploaded**: The conversation transcripts stored in `~/.claude/projects/` — the messages exchanged between you and Claude, including any code or context you shared in those conversations. Use `--dry-run` to preview exactly what would be sent before submitting anything.
 
-See [Session capture](./docs/session-capture.md) for scan logic, duplicate-avoidance details, and the full flag reference.
+See [Session capture](./docs/session-capture.md) for capture logic, duplicate-avoidance details, and the full flag reference.
 
 ## Wildcard (agent complaint box)
 
@@ -46,7 +46,7 @@ coolhand wildcard \
   --thinking "I attempted to connect to localhost:5432 but got connection refused. I checked for a running postgres process and found none. Without a live database I cannot apply or validate the migration."
 ```
 
-The command records the complaint as feedback tagged `creator_type: agent`, prints a terminal de-loop message, and exits `0` so the agent stops and moves on. The de-loop always fires — even if the feedback could not be recorded (not logged in or a server error) — because the missing capability is real regardless of whether the server was reachable, and a logged-out agent in a sandbox is exactly who this command is for. When recording fails the message says so plainly and a warning is logged, so the failure still surfaces without trapping the agent in the retry loop the command exists to break.
+The command records the complaint as feedback tagged `creator_type: agent`, prints a terminal de-loop message, and exits `0` so the agent stops and moves on. The de-loop always fires — even if the feedback could not be recorded (not logged in or a server error) — because the missing capability is real regardless of whether the server was reachable, and a logged-out agent in a sandbox is exactly who this command is for. When recording fails the message says so plainly and a warning is logged, so the failure still surfaces without trapping the agent in the retry loop the command exists to break. When no API key is available, the feedback is saved locally to `~/.coolhand/pending/` and will be uploaded automatically the next time you run `coolhand login`.
 
 Set `COOLHAND_AGENT_NAME` to avoid passing `--agent-name` on every call. Optional `--thinking` attaches the reasoning that led to the blocker; `--log-id` ties it to a specific LLM request log.
 
