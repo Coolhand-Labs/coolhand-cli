@@ -168,6 +168,18 @@ describe('wildcard command', () => {
   });
 
   test('saves locally and warns with accurate message when resolved client has no public api_key', async () => {
+    (loadConfig as jest.Mock).mockResolvedValueOnce({
+      version: 1 as const,
+      default_client_id: 'priv-only',
+      clients: {
+        'priv-only': {
+          client_id: 'priv-only',
+          client_name: 'Priv Only',
+          base_url: 'https://coolhandlabs.com',
+          saved_at: 'now',
+        },
+      },
+    });
     (resolveClient as jest.Mock).mockResolvedValueOnce({
       client_id: 'priv-only',
       client_name: 'Priv Only',

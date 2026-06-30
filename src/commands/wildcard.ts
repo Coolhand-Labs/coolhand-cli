@@ -46,6 +46,9 @@ const DELOOP_SAVED =
 export async function run(opts: ComplaintBoxOptions): Promise<number> {
   let recorded = false;
   let savedPath: string | undefined;
+  // Set when client selection itself fails (prompt timeout / invalid input), so the de-loop
+  // message accurately reflects "selection not completed" rather than "server did not confirm".
+  let deloopFallback: string | undefined;
 
   // The SDK resolves to null (it does not throw) when the write fails, so a truthy
   // response is the only proof the blocker was actually recorded.
@@ -126,6 +129,13 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
       }
     }
   } catch (err) {
+    if (err instanceof CliError && err.code === 'INVALID_ARGS') {
+      // Client selection prompt timed out or received invalid input — not a server failure.
+      deloopFallback =
+        'This capability is not available in this environment. Client selection was not completed ' +
+        '(prompt timed out or received invalid input — pass --client-id to select a client directly). ' +
+        STOP_GUIDANCE;
+    }
     logger.warn(`Could not record blocker feedback: ${redact((err as Error).message)}`);
   }
 
@@ -138,6 +148,8 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
     message = DELOOP_RECORDED;
   } else if (savedPath) {
     message = DELOOP_SAVED;
+  } else if (deloopFallback) {
+    message = deloopFallback;
   } else {
     message = DELOOP_UNRECORDED;
   }
