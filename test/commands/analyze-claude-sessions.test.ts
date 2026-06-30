@@ -4,6 +4,22 @@ import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { run } from '../../src/commands/analyze-claude-sessions.js';
 
+jest.mock('../../src/config.js', () => {
+  const actual = jest.requireActual('../../src/config.js');
+  return {
+    ...actual,
+    loadConfig: jest.fn().mockResolvedValue({ version: 1, clients: {}, default_client_id: null }),
+    resolveClient: jest.fn().mockImplementation((_cfg: unknown, clientId?: string) =>
+      Promise.resolve({
+        client_id: clientId ?? 'default-client',
+        client_name: 'Test Client',
+        api_key: 'key',
+        base_url: 'https://coolhandlabs.com',
+        saved_at: 'now',
+      })
+    ),
+  };
+});
 jest.mock('../../src/sessions/claude-scanner.js', () => {
   const actual = jest.requireActual('../../src/sessions/claude-scanner.js');
   return { ...actual, scanSessions: jest.fn() };
@@ -17,6 +33,7 @@ jest.mock('../../src/log-request.js', () => ({
 jest.mock('../../src/api/last-sync.js', () => ({
   fetchLastSync: jest.fn(),
 }));
+import { resolveClient } from '../../src/config.js';
 import { scanSessions } from '../../src/sessions/claude-scanner.js';
 import { scanCoworkSessions } from '../../src/sessions/cowork-scanner.js';
 import { logRequest } from '../../src/log-request.js';
@@ -40,6 +57,15 @@ describe('analyze-claude-sessions command', () => {
     dir = path.join(os.tmpdir(), `chs-cmd-${randomBytes(6).toString('hex')}`);
     prev = process.env.COOLHAND_CONFIG_DIR;
     process.env.COOLHAND_CONFIG_DIR = dir;
+    (resolveClient as jest.Mock).mockReset().mockImplementation((_cfg: unknown, clientId?: string) =>
+      Promise.resolve({
+        client_id: clientId ?? 'default-client',
+        client_name: 'Test Client',
+        api_key: 'key',
+        base_url: 'https://coolhandlabs.com',
+        saved_at: 'now',
+      })
+    );
     (scanSessions as jest.Mock).mockReset().mockResolvedValue({ envelopes: [envelope], sessionCount: 1 });
     (scanCoworkSessions as jest.Mock).mockReset().mockResolvedValue({ envelopes: [], sessionCount: 0, ok: true });
     (logRequest as jest.Mock).mockReset().mockResolvedValue({ id: 1 });
@@ -59,7 +85,7 @@ describe('analyze-claude-sessions command', () => {
     const code = await run({});
     expect(code).toBe(0);
     expect(logRequest).toHaveBeenCalledTimes(1);
-    expect(logRequest).toHaveBeenCalledWith(envelope, { clientId: undefined });
+    expect(logRequest).toHaveBeenCalledWith(envelope, { clientId: 'default-client' });
   });
 
   test('dry-run sends nothing and returns 0', async () => {

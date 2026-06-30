@@ -11,7 +11,7 @@ import {
   type CaptureState,
 } from '../sessions/capture-state.js';
 import { fetchLastSync } from '../api/last-sync.js';
-import { loadConfig, getClient } from '../config.js';
+import { loadConfig, resolveClient } from '../config.js';
 import { logRequest } from '../log-request.js';
 import type { AnalyzeClaudeSessionsOptions } from '../types.js';
 
@@ -43,16 +43,22 @@ function resolveReferenceTime(serverTime: Date | null, state: CaptureState): Dat
 export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
   try {
     // (1) Resolve the client and load local state up front — both feed the reference time and the
-    // per-session turn-count comparison.
+    // per-session turn-count comparison. resolveClient runs the full priority chain (--client-id,
+    // COOLHAND_CLIENT_ID env, default, auto-pick, TTY prompt) and emits "Client: name (id)" to
+    // stderr. Using the resolved client_id as the state key ensures consistent tracking regardless
+    // of which selection path was used.
     const cfg = await loadConfig();
-    const stateClientId = getClient(cfg, opts.clientId)?.client_id ?? opts.clientId ?? '_default';
+    const client = await resolveClient(cfg, opts.clientId);
+    const stateClientId = client.client_id;
     const state = await loadCaptureState();
 
     // (2) Work out the reference timestamp. serverTime is only used when local state is absent or
     // invalid (resolveReferenceTime prefers lastSyncAt), so skip the round-trip when unneeded.
     const localSyncAt = state.lastSyncAt ? new Date(state.lastSyncAt) : null;
     const needsServerTime = !localSyncAt || Number.isNaN(localSyncAt.getTime());
-    const serverTime = needsServerTime ? await fetchLastSync({ clientId: opts.clientId }) : null;
+    // Pass the resolved client_id so fetchLastSync and logRequest skip re-resolution.
+    const resolvedClientId = client.client_id;
+    const serverTime = needsServerTime ? await fetchLastSync({ clientId: resolvedClientId }) : null;
     const referenceTime = resolveReferenceTime(serverTime, state);
 
     // (3) Stamp the cutoff before scanning. Any transcript written after this point will have an
@@ -130,7 +136,7 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
         const sessionId = sessionIdOf(envelope);
         const prior = getTurnsSubmitted(state, stateClientId, sessionId);
         try {
-          await logRequest(envelope, { clientId: opts.clientId });
+          await logRequest(envelope, { clientId: resolvedClientId });
           recordSubmission(state, stateClientId, sessionId, envelope.turnCount);
           if (prior === 0) {
             submittedNew += 1;
