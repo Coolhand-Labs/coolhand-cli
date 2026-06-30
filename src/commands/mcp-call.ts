@@ -28,16 +28,17 @@ export async function mcpCall(
   } catch (err) {
     // Zero-config fallback: when there are no stored clients, fall back to
     // COOLHAND_PRIVATE_KEY (raw env key). Guards:
-    //  - opts.clientId must be undefined: an explicit --client-id flag named a specific
-    //    account, so silently ignoring CLIENT_NOT_FOUND would be confusing.
-    //  - COOLHAND_CLIENT_ID must not be set: if the user set the env var and it points
-    //    to a nonexistent client, that is also an intentional selection we should not
-    //    silently override.
-    //  - !hasStoredClients: if clients ARE stored, the user is logged in and resolution
-    //    failure (e.g. no default, non-TTY) should surface, not fall back to env key.
+    //  - opts.clientId must be undefined: an explicit --client-id flag names a specific
+    //    account, so silently falling back would be confusing.
+    //  - COOLHAND_CLIENT_ID must not be set: if the user set the env var, that is an
+    //    intentional selection we should not silently override.
+    //  - !hasStoredClients: if clients ARE stored, resolution failure (e.g. no default,
+    //    non-TTY) should surface, not fall back to env key.
+    // With all three guards true, resolveClient can only throw NOT_CONFIGURED (no stored
+    // clients → no client to find), never CLIENT_NOT_FOUND.
     if (
       err instanceof CliError &&
-      (err.code === 'NOT_CONFIGURED' || err.code === 'CLIENT_NOT_FOUND') &&
+      err.code === 'NOT_CONFIGURED' &&
       opts.clientId === undefined &&
       !process.env.COOLHAND_CLIENT_ID &&
       !hasStoredClients &&

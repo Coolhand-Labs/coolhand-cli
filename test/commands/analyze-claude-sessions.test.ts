@@ -209,4 +209,15 @@ describe('analyze-claude-sessions command', () => {
     expect(code).toBe(0);
     expect(logRequest).not.toHaveBeenCalled();
   });
+
+  test('returns non-zero when an explicit --client-id does not match any stored client', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    (resolveClient as jest.Mock).mockRejectedValueOnce(
+      new CliError('CLIENT_NOT_FOUND', 'No client "bad-id" is configured.')
+    );
+    // The outer catch converts CliError to an exit code rather than re-throwing.
+    const code = await run({ clientId: 'bad-id' });
+    expect(code).not.toBe(0);
+    expect(logRequest).not.toHaveBeenCalled();
+  });
 });

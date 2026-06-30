@@ -103,6 +103,11 @@ coolhand claude --resume                 # resume last session, captured
 coolhand --client-id acme claude         # capture under the "acme" account
 ```
 
+| Flag | Description |
+|------|-------------|
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var). Must come **before** `claude`. |
+| `[claude args...]` | Forwarded verbatim to the Claude CLI |
+
 `--client-id` must come **before** `claude` — anything after `claude` is forwarded verbatim to the Claude CLI.
 
 ## Workloads
