@@ -209,6 +209,17 @@ describe('wildcard command', () => {
     expect(resolveClient).toHaveBeenCalledWith(expect.anything(), 'acme');
   });
 
+  test('de-loops (exit 0) with accurate "client selection" message when resolveClient throws INVALID_ARGS (prompt timeout)', async () => {
+    (resolveClient as jest.Mock).mockRejectedValueOnce(
+      new CliError('INVALID_ARGS', 'No selection made within 30 seconds — pass --client-id to skip this prompt.')
+    );
+    const code = await run({ complaint: 'x', agentName: 'a' });
+    expect(code).toBe(0);
+    expect(createFeedbackMock).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Could not record blocker feedback'));
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('Client selection was not completed'));
+  });
+
   test('de-loops (exit 0) and warns when resolveClient throws CLIENT_NOT_FOUND for a bad --client-id', async () => {
     (resolveClient as jest.Mock).mockRejectedValueOnce(
       new CliError('CLIENT_NOT_FOUND', 'No client "bad-id" is configured.')

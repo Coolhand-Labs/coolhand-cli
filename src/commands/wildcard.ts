@@ -80,6 +80,12 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
         throw err;
       }
     }
+    // If COOLHAND_API_KEY is set in the environment it acts as a raw API key fallback for both
+    // sub-cases of NOT_CONFIGURED: (a) no clients stored at all — the intended zero-config agent
+    // path, and (b) clients stored but none auto-selected (non-TTY, no default). Sub-case (b)
+    // bypasses the three-way warning discriminator below and the "Client: ..." stderr label; this
+    // is intentional — wildcard is best-effort and using the env key is better than dropping the
+    // record. mcp-call explicitly does NOT allow this fallback (it surfaces the resolution error).
     const apiKey = client?.api_key ?? process.env.COOLHAND_API_KEY;
     const baseUrl = client?.base_url ?? DEFAULT_BASE_URL;
 
