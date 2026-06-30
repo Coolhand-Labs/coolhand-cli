@@ -158,7 +158,7 @@ describe('wildcard command', () => {
         expect.objectContaining({ ok: true, recorded: false, saved: expect.any(String) })
       );
     } finally {
-      if (previous !== undefined) process.env.COOLHAND_API_KEY = previous;
+      if (previous !== undefined) { process.env.COOLHAND_API_KEY = previous; }
     }
   });
 });
