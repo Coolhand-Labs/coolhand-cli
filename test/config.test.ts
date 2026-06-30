@@ -312,5 +312,20 @@ describe('resolveClient', () => {
       await expect(promise).rejects.toMatchObject({ code: 'INVALID_ARGS' });
       expect(pauseSpy).toHaveBeenCalled();
     });
+
+    test('rejects INVALID_ARGS and pauses stdin when the 30-second timeout fires', async () => {
+      jest.useFakeTimers();
+      try {
+        const a = entry('a');
+        const b = entry('b');
+        const promise = resolveClient(cfg({ a, b }));
+        // Advance past the 30s prompt timeout.
+        jest.advanceTimersByTime(31_000);
+        await expect(promise).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+        expect(pauseSpy).toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 });

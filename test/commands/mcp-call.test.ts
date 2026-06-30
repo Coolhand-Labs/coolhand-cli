@@ -41,6 +41,7 @@ describe('mcpCall', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     delete process.env.COOLHAND_PRIVATE_KEY;
+    delete process.env.COOLHAND_CLIENT_ID;
     (loadConfig as jest.Mock).mockResolvedValue(cfgWithClient);
     (resolveClient as jest.Mock).mockResolvedValue(fakeClient);
     mockFetch.mockResolvedValue(okResponse({ ok: true }));
@@ -109,6 +110,17 @@ describe('mcpCall', () => {
     await expect(mcpCall('tool', {}, { clientId: 'explicit' })).rejects.toMatchObject({
       code: 'CLIENT_NOT_FOUND',
     });
+  });
+
+  test('throws CLIENT_NOT_FOUND when COOLHAND_CLIENT_ID env var is set to unknown client on empty config', async () => {
+    (loadConfig as jest.Mock).mockResolvedValue(cfgEmpty);
+    process.env.COOLHAND_PRIVATE_KEY = 'env_priv_key';
+    process.env.COOLHAND_CLIENT_ID = 'nonexistent';
+    (resolveClient as jest.Mock).mockRejectedValue(
+      new CliError('CLIENT_NOT_FOUND', 'COOLHAND_CLIENT_ID="nonexistent" does not match any configured client.')
+    );
+    // COOLHAND_CLIENT_ID is an intentional selection — should not silently fall through.
+    await expect(mcpCall('tool', {})).rejects.toMatchObject({ code: 'CLIENT_NOT_FOUND' });
   });
 
   test('throws NOT_CONFIGURED when no clients and no env var', async () => {

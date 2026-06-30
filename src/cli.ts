@@ -254,10 +254,13 @@ export function peelClientId(argv: string[]): { clientId: string | undefined; re
   while (i < argv.length) {
     const arg = argv[i];
     if (!arg.startsWith('-')) {
-      // First positional — stop peeling, keep the rest as-is
+      // First positional (command name) — stop peeling, keep the rest as-is.
       rest.push(...argv.slice(i));
       break;
     }
+    // `--` (bare separator) starts with `-` so it falls through to the `else` below
+    // and is passed through to rest[], where parseArgs treats it as the end-of-flags
+    // marker — that is the correct behaviour for `coolhand -- list-workloads`.
     if (arg === '--client-id') {
       if (i + 1 >= argv.length) {
         throw new CliError('INVALID_ARGS', '--client-id requires a value');
@@ -266,6 +269,10 @@ export function peelClientId(argv: string[]): { clientId: string | undefined; re
       if (next.startsWith('-')) {
         throw new CliError('INVALID_ARGS', `--client-id requires a value but got "${next}"`);
       }
+      // Note: `next` could be a command name (e.g. `coolhand --client-id list-workloads`
+      // where the user forgot the value). We cannot reliably distinguish that case from a
+      // valid client-id that happens to look like a command name, so we accept it and let
+      // the downstream CLIENT_NOT_FOUND error give the user feedback.
       if (clientId !== undefined) {
         throw new CliError('INVALID_ARGS', `--client-id specified more than once before the command`);
       }

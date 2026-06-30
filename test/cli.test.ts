@@ -12,6 +12,7 @@ jest.mock('../src/prompt.js', () => ({ confirm: jest.fn().mockResolvedValue(fals
 
 import { parseArgs, peelClientId, run } from '../src/cli.js';
 import { CliError } from '../src/errors.js';
+import { logger } from '../src/logger.js';
 import { run as runFlushPending, spawnBackgroundFlush } from '../src/commands/flush-pending.js';
 import { confirm } from '../src/prompt.js';
 import { markFlushFailed, savePendingRecord } from '../src/pending-store.js';
@@ -68,6 +69,7 @@ describe('parseArgs', () => {
 
 describe('run', () => {
   let home: TmpHome;
+  let warnSpy: jest.SpyInstance;
   beforeEach(async () => {
     home = await createTmpHome();
     (runClaudeCommand as jest.Mock).mockResolvedValue(0);
@@ -75,11 +77,13 @@ describe('run', () => {
     (runFlushPending as jest.Mock).mockClear().mockResolvedValue(0);
     (spawnBackgroundFlush as jest.Mock).mockClear();
     (confirm as jest.Mock).mockReset().mockResolvedValue(false);
+    warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
   });
   afterEach(async () => {
     await home.cleanup();
     (runClaudeCommand as jest.Mock).mockReset();
     (runSearchOptimizationsCommand as jest.Mock).mockReset();
+    warnSpy.mockRestore();
   });
 
   test('--version exits 0', async () => {
@@ -149,6 +153,24 @@ describe('run', () => {
     const code = await run(['--client-id', 'acme', 'claude', '--resume']);
     expect(code).toBe(0);
     expect(runClaudeCommand).toHaveBeenCalledWith({ args: ['--resume'], clientId: 'acme' });
+  });
+
+  test('warns when both global and per-command --client-id are supplied (per-command wins)', async () => {
+    const code = await run(['--client-id', 'global', 'search-optimizations', '--client-id', 'per']);
+    expect(code).toBe(0);
+    expect(runSearchOptimizationsCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'per' })
+    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ignored'));
+  });
+
+  test('suppresses duplicate --client-id warning in JSON mode to protect machine consumers', async () => {
+    const code = await run(['--client-id', 'global', 'search-optimizations', '--client-id', 'per', '--json']);
+    expect(code).toBe(0);
+    expect(runSearchOptimizationsCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'per' })
+    );
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   test('hidden __flush-pending command dispatches to the flush worker', async () => {

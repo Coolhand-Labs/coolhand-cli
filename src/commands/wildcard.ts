@@ -86,14 +86,22 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
         ...(opts.clientId ? { clientId: opts.clientId } : {}),
         savedAt: new Date().toISOString(),
       });
-      const hasStoredClients = Object.keys(cfg.clients).length > 0;
-      if (hasStoredClients) {
+      if (client) {
+        // Client resolved but has no public API key (private-only login).
+        logger.warn(
+          `No public API key configured for "${client.client_name}". ` +
+            `Blocker feedback saved locally to ${savedPath}. ` +
+            `Re-authenticate with 'coolhand login' to grant the public key.`
+        );
+      } else if (Object.keys(cfg.clients).length > 0) {
+        // Clients are stored but none could be auto-selected (non-TTY, no default set).
         logger.warn(
           `No default client is set and auto-selection is unavailable in non-interactive mode. ` +
             `Blocker feedback saved locally to ${savedPath}. ` +
             `Pass --client-id or run 'coolhand clients use <id>' to enable direct posting.`
         );
       } else {
+        // No clients configured at all.
         logger.warn(
           `Not logged in; blocker feedback saved locally to ${savedPath}. ` +
             'It will upload on your next `coolhand login`.'

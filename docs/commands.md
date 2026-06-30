@@ -125,7 +125,7 @@ Lists workloads with optional filtering and pagination.
 | `--include-archived` | Include archived workloads |
 | `--include-system` | Include system workloads (e.g. Unmatched) |
 | `--include-templates` | Expand each workload with its templates and routing regex patterns |
-| `--client-id ID` | Use a specific stored client |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
 When `--include-templates` is set, each workload entry includes a `templates` array:
@@ -178,7 +178,7 @@ coolhand search-optimizations [--status V] [--type V] [--category V] [--query V]
 | `--sort-by V` | Sort order: `impact_desc`, `complexity_asc`, or `created_at_desc` |
 | `--page N` | Page number (default: 1) |
 | `--per-page N` | Results per page (default: 20, max: 50) |
-| `--client-id ID` | Use a specific stored client |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
 ### get-optimization

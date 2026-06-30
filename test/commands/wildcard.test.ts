@@ -167,6 +167,31 @@ describe('wildcard command', () => {
     }
   });
 
+  test('saves locally and warns with accurate message when resolved client has no public api_key', async () => {
+    (resolveClient as jest.Mock).mockResolvedValueOnce({
+      client_id: 'priv-only',
+      client_name: 'Priv Only',
+      api_key: undefined,
+      private_key: 'ch_priv_xxx',
+      base_url: 'https://coolhandlabs.com',
+      saved_at: 'now',
+    });
+    const previous = process.env.COOLHAND_API_KEY;
+    delete process.env.COOLHAND_API_KEY;
+    try {
+      const code = await run({ complaint: 'x', agentName: 'a' });
+      expect(code).toBe(0);
+      expect(createFeedbackMock).not.toHaveBeenCalled();
+      expect(savePendingMock).toHaveBeenCalled();
+      // Should mention the resolved client name, not "Not logged in"
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Priv Only'));
+      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('Not logged in'));
+      expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('saved locally'));
+    } finally {
+      if (previous !== undefined) { process.env.COOLHAND_API_KEY = previous; }
+    }
+  });
+
   test('forwards clientId to resolveClient when provided', async () => {
     await run({ complaint: 'x', agentName: 'a', clientId: 'acme' });
     expect(resolveClient).toHaveBeenCalledWith(expect.anything(), 'acme');
