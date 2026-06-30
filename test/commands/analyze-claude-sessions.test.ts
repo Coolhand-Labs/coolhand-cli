@@ -4,6 +4,22 @@ import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { run } from '../../src/commands/analyze-claude-sessions.js';
 
+jest.mock('../../src/config.js', () => {
+  const actual = jest.requireActual('../../src/config.js');
+  return {
+    ...actual,
+    loadConfig: jest.fn().mockResolvedValue({ version: 1, clients: {}, default_client_id: null }),
+    resolveClient: jest.fn().mockImplementation((_cfg: unknown, clientId?: string) =>
+      Promise.resolve({
+        client_id: clientId ?? 'default-client',
+        client_name: 'Test Client',
+        api_key: 'key',
+        base_url: 'https://coolhandlabs.com',
+        saved_at: 'now',
+      })
+    ),
+  };
+});
 jest.mock('../../src/sessions/claude-scanner.js', () => {
   const actual = jest.requireActual('../../src/sessions/claude-scanner.js');
   return { ...actual, scanSessions: jest.fn() };
@@ -17,6 +33,7 @@ jest.mock('../../src/log-request.js', () => ({
 jest.mock('../../src/api/last-sync.js', () => ({
   fetchLastSync: jest.fn(),
 }));
+import { loadConfig, resolveClient } from '../../src/config.js';
 import { scanSessions } from '../../src/sessions/claude-scanner.js';
 import { scanCoworkSessions } from '../../src/sessions/cowork-scanner.js';
 import { logRequest } from '../../src/log-request.js';
@@ -40,6 +57,15 @@ describe('analyze-claude-sessions command', () => {
     dir = path.join(os.tmpdir(), `chs-cmd-${randomBytes(6).toString('hex')}`);
     prev = process.env.COOLHAND_CONFIG_DIR;
     process.env.COOLHAND_CONFIG_DIR = dir;
+    (resolveClient as jest.Mock).mockReset().mockImplementation((_cfg: unknown, clientId?: string) =>
+      Promise.resolve({
+        client_id: clientId ?? 'default-client',
+        client_name: 'Test Client',
+        api_key: 'key',
+        base_url: 'https://coolhandlabs.com',
+        saved_at: 'now',
+      })
+    );
     (scanSessions as jest.Mock).mockReset().mockResolvedValue({ envelopes: [envelope], sessionCount: 1 });
     (scanCoworkSessions as jest.Mock).mockReset().mockResolvedValue({ envelopes: [], sessionCount: 0, ok: true });
     (logRequest as jest.Mock).mockReset().mockResolvedValue({ id: 1 });
@@ -59,7 +85,7 @@ describe('analyze-claude-sessions command', () => {
     const code = await run({});
     expect(code).toBe(0);
     expect(logRequest).toHaveBeenCalledTimes(1);
-    expect(logRequest).toHaveBeenCalledWith(envelope, { clientId: undefined });
+    expect(logRequest).toHaveBeenCalledWith(envelope, { clientId: 'default-client' });
   });
 
   test('dry-run sends nothing and returns 0', async () => {
@@ -181,6 +207,52 @@ describe('analyze-claude-sessions command', () => {
     (scanSessions as jest.Mock).mockResolvedValue({ envelopes: [], sessionCount: 0 });
     const code = await run({});
     expect(code).toBe(0);
+    expect(logRequest).not.toHaveBeenCalled();
+  });
+
+  test('returns non-zero when an explicit --client-id does not match any stored client', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    (resolveClient as jest.Mock).mockRejectedValueOnce(
+      new CliError('CLIENT_NOT_FOUND', 'No client "bad-id" is configured.')
+    );
+    // The outer catch converts CliError to an exit code rather than re-throwing.
+    const code = await run({ clientId: 'bad-id' });
+    expect(code).not.toBe(0);
+    expect(logRequest).not.toHaveBeenCalled();
+  });
+
+  test('proceeds unauthenticated when NOT_CONFIGURED and no clients are stored (dry-run without credentials)', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    // No clients stored — the unauthenticated path should be taken silently.
+    (loadConfig as jest.Mock).mockResolvedValueOnce({
+      version: 1,
+      clients: {},
+      default_client_id: null,
+    });
+    (resolveClient as jest.Mock).mockRejectedValueOnce(
+      new CliError('NOT_CONFIGURED', 'Not logged in.')
+    );
+    const code = await run({ dryRun: true });
+    expect(code).toBe(0);
+    expect(logRequest).not.toHaveBeenCalled();
+  });
+
+  test('surfaces NOT_CONFIGURED when clients are stored but resolution fails (non-TTY, no default)', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    // Clients are stored but none could be auto-selected — error must propagate.
+    (loadConfig as jest.Mock).mockResolvedValueOnce({
+      version: 1,
+      clients: {
+        acme: { client_id: 'acme', client_name: 'Acme', api_key: 'k', base_url: 'https://coolhandlabs.com', saved_at: 'now' },
+        beta: { client_id: 'beta', client_name: 'Beta', api_key: 'k2', base_url: 'https://coolhandlabs.com', saved_at: 'now' },
+      },
+      default_client_id: null,
+    });
+    (resolveClient as jest.Mock).mockRejectedValueOnce(
+      new CliError('NOT_CONFIGURED', 'Multiple clients configured but no default is set.')
+    );
+    const code = await run({});
+    expect(code).not.toBe(0);
     expect(logRequest).not.toHaveBeenCalled();
   });
 });

@@ -11,12 +11,16 @@ import {
   type CaptureState,
 } from '../sessions/capture-state.js';
 import { fetchLastSync } from '../api/last-sync.js';
-import { loadConfig, getClient } from '../config.js';
+import { loadConfig, resolveClient } from '../config.js';
 import { logRequest } from '../log-request.js';
 import type { AnalyzeClaudeSessionsOptions } from '../types.js';
 
 /** Errors that apply to every session (auth/config), so the run should abort, not keep retrying. */
-const FATAL_CODES = new Set(['NOT_CONFIGURED', 'CLIENT_NOT_FOUND', 'INVALID_BASE_URL']);
+// Errors that apply to every session (auth/config) — abort the whole run instead of
+// counting as a per-session failure and retrying. INVALID_ARGS is included because
+// logRequest validates its inputs and would throw INVALID_ARGS on a malformed envelope
+// that would fail every session identically.
+const FATAL_CODES = new Set(['NOT_CONFIGURED', 'CLIENT_NOT_FOUND', 'INVALID_BASE_URL', 'INVALID_ARGS']);
 
 /**
  * Reference cutoff for the mtime pre-filter: local `lastSyncAt` → server `last_sync` → epoch.
@@ -43,16 +47,44 @@ function resolveReferenceTime(serverTime: Date | null, state: CaptureState): Dat
 export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
   try {
     // (1) Resolve the client and load local state up front — both feed the reference time and the
-    // per-session turn-count comparison.
+    // per-session turn-count comparison. resolveClient runs the full priority chain (--client-id,
+    // COOLHAND_CLIENT_ID env, default, auto-pick, TTY prompt) and emits "Client: name (id)" to
+    // stderr. Using the resolved client_id as the state key ensures consistent tracking regardless
+    // of which selection path was used.
+    //
+    // NOT_CONFIGURED is caught and treated as "unauthenticated" only when no clients are stored
+    // at all, so that --dry-run still works without credentials (same behaviour as before this
+    // branch). If clients exist but resolution failed (e.g. no default on a non-TTY), the error
+    // propagates so the user sees a clear message rather than a silent no-op.
+    // Any other error (e.g. CLIENT_NOT_FOUND for a bad --client-id) also propagates.
     const cfg = await loadConfig();
-    const stateClientId = getClient(cfg, opts.clientId)?.client_id ?? opts.clientId ?? '_default';
+    let stateClientId = '_default';
+    let resolvedClientId: string | undefined;
+    try {
+      const client = await resolveClient(cfg, opts.clientId);
+      stateClientId = client.client_id;
+      resolvedClientId = client.client_id;
+    } catch (err) {
+      if (
+        !(err instanceof CliError) ||
+        err.code !== 'NOT_CONFIGURED' ||
+        Object.keys(cfg.clients).length > 0
+      ) {
+        throw err;
+      }
+    }
     const state = await loadCaptureState();
 
     // (2) Work out the reference timestamp. serverTime is only used when local state is absent or
     // invalid (resolveReferenceTime prefers lastSyncAt), so skip the round-trip when unneeded.
     const localSyncAt = state.lastSyncAt ? new Date(state.lastSyncAt) : null;
     const needsServerTime = !localSyncAt || Number.isNaN(localSyncAt.getTime());
-    const serverTime = needsServerTime ? await fetchLastSync({ clientId: opts.clientId }) : null;
+    // Pass the resolved client_id so fetchLastSync and logRequest skip re-resolution.
+    // Skip fetchLastSync on the unauthenticated path (no clients stored, resolvedClientId
+    // undefined): it would call getClient with no id, get undefined, and return null anyway.
+    const serverTime = needsServerTime && resolvedClientId !== undefined
+      ? await fetchLastSync({ clientId: resolvedClientId })
+      : null;
     const referenceTime = resolveReferenceTime(serverTime, state);
 
     // (3) Stamp the cutoff before scanning. Any transcript written after this point will have an
@@ -130,7 +162,7 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
         const sessionId = sessionIdOf(envelope);
         const prior = getTurnsSubmitted(state, stateClientId, sessionId);
         try {
-          await logRequest(envelope, { clientId: opts.clientId });
+          await logRequest(envelope, { clientId: resolvedClientId });
           recordSubmission(state, stateClientId, sessionId, envelope.turnCount);
           if (prior === 0) {
             submittedNew += 1;

@@ -46,7 +46,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates']);
 
 const COMMANDS: CommandMeta[] = [
   {
@@ -173,8 +173,9 @@ const COMMANDS: CommandMeta[] = [
   {
     name: 'claude',
     oneLiner: 'Run the Claude CLI through the Coolhand proxy (captures LLM calls)',
-    usage: 'coolhand claude [claude args...]',
+    usage: 'coolhand [--client-id ID] claude [claude args...]',
     options: [
+      { flag: '--client-id ID', description: 'Use a specific stored client (must come before `claude`, not after)' },
       { flag: '[claude args...]', description: 'Everything after `claude` is passed straight to the Claude CLI' },
     ],
   },
@@ -212,7 +213,7 @@ function buildSummaryHelp(): string {
   return `coolhand-cli — authenticate with Coolhand from your terminal
 
 Usage:
-  coolhand <command> [options]
+  coolhand [--client-id ID] <command> [options]
 
 Commands:
 ${commandLines}
@@ -220,6 +221,8 @@ ${commandLines}
 Global options:
   --version, -v          Print version and exit
   --help, -h             Show command help
+  --client-id ID         Use a specific stored client for this command
+                         (also settable via COOLHAND_CLIENT_ID env var)
 
 Run "coolhand help <command>" for per-command details.
 `;
@@ -236,6 +239,78 @@ function buildCommandHelp(meta: CommandMeta): string {
 Usage:
   ${meta.usage}
 ${optLines}`;
+}
+
+/**
+ * Strips a leading `--client-id VALUE` or `--client-id=VALUE` from argv,
+ * stopping at the first positional arg (the command name). Used to support
+ * `coolhand --client-id acme claude ...` where the `claude` passthrough would
+ * otherwise bypass parseArgs and never see the flag.
+ */
+export function peelClientId(argv: string[]): { clientId: string | undefined; rest: string[] } {
+  const rest: string[] = [];
+  let clientId: string | undefined;
+  let i = 0;
+  while (i < argv.length) {
+    const arg = argv[i];
+    if (!arg.startsWith('-')) {
+      // First positional (command name) — stop peeling, keep the rest as-is.
+      rest.push(...argv.slice(i));
+      break;
+    }
+    if (arg === '--') {
+      // End-of-flags marker: everything from here on is positional and must not be
+      // peeled, even if it looks like --client-id. Push the remaining args as-is.
+      rest.push(...argv.slice(i));
+      break;
+    }
+    if (arg === '--client-id') {
+      if (i + 1 >= argv.length) {
+        throw new CliError('INVALID_ARGS', '--client-id requires a value');
+      }
+      const next = argv[i + 1];
+      if (next === '--') {
+        throw new CliError(
+          'INVALID_ARGS',
+          `--client-id requires a value — '${next}' is an end-of-options marker, not a client ID. Try: coolhand --client-id <ID> -- ...`
+        );
+      }
+      if (next.startsWith('-')) {
+        throw new CliError('INVALID_ARGS', `--client-id requires a value but got "${next}"`);
+      }
+      // Note: `next` could be a command name (e.g. `coolhand --client-id list-workloads`
+      // where the user forgot the value). We cannot reliably distinguish that case from a
+      // valid client-id that happens to look like a command name, so we accept it and let
+      // the downstream CLIENT_NOT_FOUND error give the user feedback.
+      if (clientId !== undefined) {
+        throw new CliError('INVALID_ARGS', `--client-id specified more than once before the command`);
+      }
+      clientId = next;
+      i += 2;
+    } else if (arg.startsWith('--client-id=')) {
+      const val = arg.slice('--client-id='.length);
+      if (!val) {
+        throw new CliError('INVALID_ARGS', '--client-id requires a non-empty value');
+      }
+      if (val.startsWith('-')) {
+        throw new CliError('INVALID_ARGS', `--client-id requires a value but got "${val}"`);
+      }
+      if (clientId !== undefined) {
+        throw new CliError('INVALID_ARGS', `--client-id specified more than once before the command`);
+      }
+      clientId = val;
+      i += 1;
+    } else {
+      // Any other leading flag (e.g. --json, --version) is passed through to the command
+      // parser. IMPORTANT: this branch assumes all other leading flags are boolean (no value
+      // argument). If a future value-taking global flag is added here, this loop must be
+      // updated to consume its value token too, or the value will be misidentified as the
+      // command name and silently dropped.
+      rest.push(arg);
+      i += 1;
+    }
+  }
+  return { clientId, rest };
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -576,49 +651,68 @@ export async function run(argv: string[]): Promise<number> {
     return ExitCode.OK;
   }
 
-  // `claude` is a passthrough wrapper: everything after it goes to the Claude CLI
-  // verbatim (e.g. `coolhand claude --resume`), so it must skip the flag parser.
-  if (argv[0] === 'claude') {
-    return await runClaude({ args: argv.slice(1) });
-  }
-
-  const parsed = parseArgs(argv);
-
-  if (parsed.flags.version === true || parsed.flags.v === true || parsed.command === 'version') {
-    process.stdout.write(`${PACKAGE_VERSION}\n`);
-    return ExitCode.OK;
-  }
-
-  if (parsed.command === 'help' || parsed.command === '') {
-    const target = parsed.positional[0];
-    if (target) {
-      const meta = findCommand(target);
-      if (!meta) {
-        logger.info(`Unknown command: ${target}`);
-        logger.info(buildSummaryHelp());
-        return ExitCode.USER_ERROR;
-      }
-      logger.info(buildCommandHelp(meta));
-    } else {
-      logger.info(buildSummaryHelp());
-    }
-    return ExitCode.OK;
-  }
-
-  if (parsed.flags.help === true || parsed.flags.h === true) {
-    const meta = findCommand(parsed.command);
-    if (meta) {
-      logger.info(buildCommandHelp(meta));
-    } else {
-      logger.info(buildSummaryHelp());
-    }
-    return ExitCode.OK;
-  }
-
-  const resolvedCommand = findCommand(parsed.command)?.name ?? parsed.command;
-  await maybeRemindFailedFlush(resolvedCommand, parsed.flags.json === true);
-
+  // `parsed` is set inside the try so the catch can check --json even when
+  // peelClientId or parseArgs throws before the assignment completes.
+  let parsed: ReturnType<typeof parseArgs> | undefined;
   try {
+    // Peel a leading --client-id before command dispatch. The `claude` passthrough
+    // skips parseArgs entirely, so we extract any global --client-id here first.
+    const { clientId: globalClientId, rest: argv2 } = peelClientId(argv);
+
+    // `claude` is a passthrough wrapper: everything after it goes to the Claude CLI
+    // verbatim (e.g. `coolhand claude --resume`), so it must skip the flag parser.
+    if (argv2[0] === 'claude') {
+      return await runClaude({ args: argv2.slice(1), clientId: globalClientId });
+    }
+
+    parsed = parseArgs(argv2);
+    // Merge a peeled global --client-id if the per-command flag wasn't also supplied.
+    if (globalClientId !== undefined) {
+      if (parsed.flags['client-id'] === undefined) {
+        parsed.flags['client-id'] = globalClientId;
+      } else if (parsed.flags['client-id'] !== globalClientId && parsed.flags.json !== true) {
+        // Suppressed in JSON mode (plain-text warnings break machine consumers) and when
+        // both flags agree on the same value (no actual conflict to warn about).
+        logger.warn(
+          `Global --client-id "${globalClientId}" ignored — per-command --client-id "${parsed.flags['client-id']}" takes precedence.`
+        );
+      }
+    }
+
+    if (parsed.flags.version === true || parsed.flags.v === true || parsed.command === 'version') {
+      process.stdout.write(`${PACKAGE_VERSION}\n`);
+      return ExitCode.OK;
+    }
+
+    if (parsed.command === 'help' || parsed.command === '') {
+      const target = parsed.positional[0];
+      if (target) {
+        const meta = findCommand(target);
+        if (!meta) {
+          logger.info(`Unknown command: ${target}`);
+          logger.info(buildSummaryHelp());
+          return ExitCode.USER_ERROR;
+        }
+        logger.info(buildCommandHelp(meta));
+      } else {
+        logger.info(buildSummaryHelp());
+      }
+      return ExitCode.OK;
+    }
+
+    if (parsed.flags.help === true || parsed.flags.h === true) {
+      const meta = findCommand(parsed.command);
+      if (meta) {
+        logger.info(buildCommandHelp(meta));
+      } else {
+        logger.info(buildSummaryHelp());
+      }
+      return ExitCode.OK;
+    }
+
+    const resolvedCommand = findCommand(parsed.command)?.name ?? parsed.command;
+    await maybeRemindFailedFlush(resolvedCommand, parsed.flags.json === true);
+
     switch (resolvedCommand) {
       case '__flush-pending':
         return await runFlushPending();
@@ -653,7 +747,7 @@ export async function run(argv: string[]): Promise<number> {
     }
   } catch (err) {
     if (err instanceof CliError) {
-      if (parsed.flags.json === true) {
+      if (parsed?.flags.json === true) {
         logger.json({ ok: false, error: err.code, message: redact(err.message) });
       } else {
         logger.info(`Error: ${redact(err.message)} [${err.code}]`);

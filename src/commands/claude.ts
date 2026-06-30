@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import { ExitCode, CliError } from '../errors.js';
 import { logger, redact } from '../logger.js';
-import { loadConfig, getClient } from '../config.js';
+import { loadConfig, resolveClient } from '../config.js';
 import { DEFAULT_BASE_URL, type ClaudeOptions } from '../types.js';
 import { startProxy, type ProxyInstance } from '../proxy/proxy.js';
 import { getOrCreateCA, getCertPath } from '../proxy/certs.js';
@@ -63,10 +63,7 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
 
   try {
     const cfg = await loadConfig();
-    const entry = getClient(cfg, opts.clientId);
-    if (!entry) {
-      throw new CliError('NOT_CONFIGURED', 'No Coolhand account configured. Run `coolhand login` first.');
-    }
+    const entry = await resolveClient(cfg, opts.clientId);
     if (!entry.api_key) {
       throw new CliError(
         'NOT_CONFIGURED',

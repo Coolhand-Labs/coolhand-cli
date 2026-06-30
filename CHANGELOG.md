@@ -5,14 +5,23 @@ All notable changes to `coolhand-cli` will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- `list-workloads` command: browse and search workloads by name with pagination (`--search`, `--page`, `--per-page`, `--include-archived`, `--include-system`). Requires a private API key.
+- `list-workloads` command: browse and search workloads by name with pagination (`--search`, `--page`, `--per-page`, `--include-archived`, `--include-system`, `--include-templates`). Requires a private API key (`coolhand login --scope private`).
+- `--client-id ID` now works as a **global flag** placed before the subcommand (e.g. `coolhand --client-id acme list-workloads`) in addition to the existing per-command position. This also applies to `coolhand claude`.
+- `COOLHAND_CLIENT_ID` environment variable: set it to a stored client ID to select that client without passing `--client-id` on every invocation. Priority: `--client-id` flag > `COOLHAND_CLIENT_ID` env > configured default > auto-pick (single client) > interactive prompt.
+- When multiple clients are stored and no default is configured, API commands now **prompt interactively** (TTY) or emit a descriptive error listing all clients (non-TTY) instead of failing with NOT_CONFIGURED.
+- `claude`, `wildcard`, `mcp-call`, `analyze-claude-sessions`, `list-workloads`, `search-optimizations`, `get-optimization`, `close-optimization`, and `update-optimization` now print `Client: <name> (<id>)` to stderr when a stored client is used, so the active account is always visible.
 - `wildcard` now saves feedback locally to `~/.coolhand/pending/` when no API key is configured, instead of silently dropping it. Pending feedback is automatically uploaded on the next `coolhand login`. A background flush retry runs after each login; if it fails, a reminder prompt appears on the next interactive command.
 
 ### Changed
 - `coolhand claude` now starts an in-process HTTPS MITM proxy (powered by `mockttp`) instead of shelling out to the `coolhand-proxy` binary; the `coolhand-proxy` dependency has been removed. A CA certificate is generated on first run and persisted to `~/.coolhand/proxy/ca-cert.pem`; see `docs/proxy.md` for system trust store installation instructions.
+- `mcp-call` now uses the shared client-resolution chain (`resolveClient`) instead of calling `getClient` directly, gaining `COOLHAND_CLIENT_ID` support, interactive client selection on TTY, and the `Client:` label on stderr.
+- `analyze-claude-sessions` now surfaces resolution errors when clients are stored but none can be auto-selected (e.g. multiple clients, no default, non-TTY). Previously this was silently treated as "unauthenticated", which produced a confusing no-op. Dry-run without any stored clients still works unauthenticated.
+- `analyze-claude-sessions` now aborts the entire run (rather than counting it as a per-session failure) when `logRequest` throws `INVALID_ARGS`. A malformed session envelope would fail identically on every retry, so aborting fast avoids burning through all remaining sessions.
+- When `default_client_id` points to a client that no longer exists, a warning is emitted before falling through to auto-pick or the interactive prompt (previously this fell through silently).
 - `coolhand login --scope private` no longer errors (`INVALID_CALLBACK`) when the user declines the private key on the consent page. It now succeeds, stores only the public key, and prints a note that MCP access was not granted.
 - Login can now succeed with only a private (MCP) key — `api_key` is omitted from the stored config entry when the public key was not granted.
 - `coolhand claude` now exits with a clear error if the configured client has no public API key, rather than spawning the proxy silently without a logging key.
+- `coolhand claude` (and all other API commands) now prompt interactively when multiple clients are stored and no default is set. In non-TTY environments (CI, scripts) this produces a descriptive error listing available clients instead of a generic NOT_CONFIGURED. Use `--client-id` or `COOLHAND_CLIENT_ID` to select a client non-interactively.
 - `status`, `whoami`, and `clients` display `(no public key)` instead of `***` for clients that have only a private key.
 
 ## [0.5.2] - 2026-06-27

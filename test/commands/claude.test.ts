@@ -1,9 +1,10 @@
 import { EventEmitter } from 'events';
 import { run, resolveSpawn } from '../../src/commands/claude.js';
+import { CliError } from '../../src/errors.js';
 
 jest.mock('../../src/config.js', () => ({
   loadConfig: jest.fn(),
-  getClient: jest.fn(),
+  resolveClient: jest.fn(),
 }));
 jest.mock('../../src/proxy/certs.js', () => ({
   getOrCreateCA: jest.fn().mockResolvedValue({ key: 'fake-key', cert: 'fake-cert' }),
@@ -12,7 +13,7 @@ jest.mock('../../src/proxy/certs.js', () => ({
 jest.mock('../../src/proxy/proxy.js', () => ({
   startProxy: jest.fn(),
 }));
-import { loadConfig, getClient } from '../../src/config.js';
+import { loadConfig, resolveClient } from '../../src/config.js';
 
 type Spawn = typeof import('child_process').spawn;
 
@@ -78,7 +79,7 @@ describe('claude command', () => {
       default_client_id: 'c1',
       clients: { c1: ENTRY },
     });
-    (getClient as jest.Mock).mockReset().mockReturnValue(ENTRY);
+    (resolveClient as jest.Mock).mockReset().mockResolvedValue(ENTRY);
   });
 
   test('spawns claude directly with proxy env vars', async () => {
@@ -118,8 +119,10 @@ describe('claude command', () => {
     expect(code).toBe(3);
   });
 
-  test('errors when no client configured', async () => {
-    (getClient as jest.Mock).mockReturnValue(undefined);
+  test('errors (exit 1) and does not spawn when no client is configured', async () => {
+    (resolveClient as jest.Mock).mockRejectedValue(
+      new CliError('NOT_CONFIGURED', 'No Coolhand account configured.')
+    );
     const startProxyFn = jest.fn();
     const spawnFn = jest.fn();
 
@@ -132,8 +135,8 @@ describe('claude command', () => {
     expect(spawnFn).not.toHaveBeenCalled();
   });
 
-  test('passes apiEndpoint to startProxyFn for non-default base_url', async () => {
-    (getClient as jest.Mock).mockReturnValue({ ...ENTRY, base_url: 'https://staging.coolhandlabs.com' });
+  test('adds apiEndpoint only for a non-default base_url, with the ingest path', async () => {
+    (resolveClient as jest.Mock).mockResolvedValue({ ...ENTRY, base_url: 'https://staging.coolhandlabs.com' });
     const startProxyFn = jest.fn().mockResolvedValue({ port: 9999, stop: jest.fn().mockResolvedValue(undefined) });
     const spawnFn = spawnClosingWith(0);
 
@@ -165,7 +168,7 @@ describe('claude command', () => {
   });
 
   test('errors when client has no public api_key', async () => {
-    (getClient as jest.Mock).mockReturnValue({ ...ENTRY, api_key: undefined });
+    (resolveClient as jest.Mock).mockResolvedValue({ ...ENTRY, api_key: undefined });
     const startProxyFn = jest.fn();
     const spawnFn = jest.fn();
 
@@ -178,7 +181,17 @@ describe('claude command', () => {
     expect(spawnFn).not.toHaveBeenCalled();
   });
 
-  test('returns INTERNAL if startProxyFn throws', async () => {
+  test('forwards clientId to resolveClient when provided', async () => {
+    const startProxyFn = jest.fn().mockResolvedValue({ port: 9999, stop: jest.fn().mockResolvedValue(undefined) });
+    const spawnFn = spawnClosingWith(0);
+    await run(
+      { args: [], clientId: 'acme' },
+      { spawnFn: spawnFn as unknown as Spawn, startProxyFn }
+    );
+    expect(resolveClient).toHaveBeenCalledWith(expect.anything(), 'acme');
+  });
+
+  test('returns INTERNAL (exit 2) when the proxy cannot be started', async () => {
     const startProxyFn = jest.fn().mockRejectedValue(new Error('proxy failed'));
     const spawnFn = jest.fn();
 

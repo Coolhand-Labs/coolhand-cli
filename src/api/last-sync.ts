@@ -16,6 +16,11 @@ const COLLECTOR = `${PACKAGE_IDENTIFIER}/claude-code`;
  *
  * Auth mirrors the ingest path (`log-request.ts`): the public `api_key` sent as `X-API-Key`, since
  * the endpoint lives on the same `/api/v2/llm_request_logs` path.
+ *
+ * `opts.clientId` is expected to be an **already-resolved** `client_id` string (e.g. from
+ * `resolveClient`), not a raw user input. `getClient` is used here deliberately: by the time this
+ * is called the client has already been selected (or is undefined for dry-run), so re-running the
+ * full resolution chain would be redundant and could trigger a second TTY prompt.
  */
 export async function fetchLastSync(opts: { clientId?: string } = {}): Promise<Date | null> {
   let apiKey: string | undefined;
