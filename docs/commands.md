@@ -2,6 +2,28 @@
 
 Full flag reference and usage notes for all coolhand-cli commands.
 
+## Global Flags and Client Selection
+
+All commands that make API calls accept `--client-id ID` to choose which stored account to use. The flag can appear **before or after** the subcommand name (except `claude`, where it must come before — see the [`claude`](#claude) section below):
+
+```bash
+coolhand --client-id acme list-workloads   # global position
+coolhand list-workloads --client-id acme   # per-command position
+coolhand --client-id acme claude ...       # must be before for claude
+```
+
+`COOLHAND_CLIENT_ID=acme coolhand list-workloads` is the environment-variable equivalent and is useful in scripts or CI where passing flags is inconvenient. Note: `analyze-claude-sessions` does not honour `COOLHAND_CLIENT_ID` — use `--client-id` (before or after the subcommand) or set a default with `coolhand clients use <id>` to control which account it targets.
+
+**Client selection priority** (highest to lowest):
+
+1. `--client-id ID` flag
+2. `COOLHAND_CLIENT_ID` env var
+3. Configured default (`coolhand clients use <id>`)
+4. Auto-pick when exactly one client is stored
+5. Interactive prompt (TTY) or descriptive error listing all clients (non-TTY)
+
+Any command that calls `resolveClient` prints `Client: <name> (<id>)` to stderr when a client is successfully resolved, so you always know which account's data you are looking at. `wildcard` prints the label when a client is resolved but proceeds silently without one (it works even when not logged in). `analyze-claude-sessions` resolves the client internally per-submission and does not print the label at the top level.
+
 ## Authentication
 
 ### login
@@ -70,15 +92,18 @@ Lists all stored clients. `coolhand clients use <id>` switches the default. Each
 ### claude
 
 ```bash
-coolhand claude [claude args...]
+coolhand [--client-id ID] claude [claude args...]
 ```
 
 Runs the Claude CLI through the Coolhand proxy, capturing the session for later analysis. Any arguments after `claude` are passed straight to the Claude CLI:
 
 ```bash
-coolhand claude           # starts Claude with capture on
-coolhand claude --resume  # resume last session, captured
+coolhand claude                          # starts Claude with capture on
+coolhand claude --resume                 # resume last session, captured
+coolhand --client-id acme claude         # capture under the "acme" account
 ```
+
+`--client-id` must come **before** `claude` — anything after `claude` is forwarded verbatim to the Claude CLI.
 
 ## Workloads
 
@@ -190,6 +215,12 @@ coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json]
 
 Submits historical Claude Code sessions to Coolhand for pattern and cost analysis. Use `--dry-run` to preview what would be sent without submitting anything.
 
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Scan and report without submitting anything |
+| `--client-id ID` | Use a specific stored client. Note: `COOLHAND_CLIENT_ID` is not honoured by this command — use `--client-id` or set a default with `coolhand clients use <id>` |
+| `--json` | Emit JSON output |
+
 See [session-capture.md](./session-capture.md) for scan logic, duplicate-avoidance details, and envelope format.
 
 ## Agent Integration
@@ -210,4 +241,5 @@ When an agent is blocked because a capability does not exist in its environment,
 | `--agent-name` | Required (or set `COOLHAND_AGENT_NAME`). Name of the calling agent |
 | `--thinking` | Optional. Reasoning that led to the blocker |
 | `--log-id ID` | Optional. Ties the complaint to a specific LLM request log |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var). Recording is best-effort — `wildcard` always de-loops even if no client is configured. |
 | `--json` | Emit JSON output |

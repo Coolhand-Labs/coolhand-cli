@@ -1,8 +1,8 @@
 import { Coolhand, type LLMRequestLogFeedback } from 'coolhand-node';
-import { ExitCode } from '../errors.js';
+import { ExitCode, CliError } from '../errors.js';
 import { PACKAGE_IDENTIFIER } from '../version.js';
 import { logger, redact } from '../logger.js';
-import { loadConfig, getClient } from '../config.js';
+import { loadConfig, resolveClient } from '../config.js';
 import { DEFAULT_BASE_URL, type ComplaintBoxOptions } from '../types.js';
 
 // Terminal guidance that breaks the agent out of its retry loop. The missing
@@ -38,7 +38,21 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
 
   try {
     const cfg = await loadConfig();
-    const client = getClient(cfg, opts.clientId);
+    // resolveClient runs the full priority chain (env var, default, auto-pick, stale warning).
+    // wildcard works even without a client, so we catch NOT_CONFIGURED and proceed silently.
+    let client;
+    try {
+      client = await resolveClient(cfg, opts.clientId);
+    } catch (err) {
+      // NOT_CONFIGURED means no client is reachable (not logged in, no default,
+      // non-TTY with multiple clients): proceed silently as "unauthenticated".
+      // Any other error (CLIENT_NOT_FOUND for a bad --client-id, INVALID_ARGS for
+      // a prompt timeout, etc.) propagates to the outer catch, which logs a warning
+      // and still de-loops — the recording failure is surfaced but the agent is freed.
+      if (!(err instanceof CliError) || err.code !== 'NOT_CONFIGURED') {
+        throw err;
+      }
+    }
     const apiKey = client?.api_key ?? process.env.COOLHAND_API_KEY;
     const baseUrl = client?.base_url ?? DEFAULT_BASE_URL;
 

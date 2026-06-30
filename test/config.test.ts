@@ -1,3 +1,4 @@
+import { EventEmitter } from 'events';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import {
@@ -7,12 +8,27 @@ import {
   getClient,
   loadConfig,
   removeClient,
+  resolveClient,
   saveConfig,
   setDefault,
   upsertClient,
 } from '../src/config.js';
 import { CliError } from '../src/errors.js';
 import { createTmpHome, TmpHome } from './helpers/tmp-home.js';
+
+// Mock readline so promptClientSelection can be driven in TTY tests.
+jest.mock('readline', () => ({ createInterface: jest.fn() }));
+import * as readline from 'readline';
+
+// Suppress "Client: ..." label output so it doesn't pollute test output.
+// Use beforeEach/afterEach so the spy is always properly restored between tests.
+let stderrSpy: jest.SpyInstance;
+beforeEach(() => {
+  stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+});
+afterEach(() => {
+  stderrSpy.mockRestore();
+});
 
 describe('config', () => {
   let home: TmpHome;
@@ -113,5 +129,146 @@ describe('config', () => {
     await fs.mkdir(configDir(), { recursive: true });
     await fs.writeFile(path.join(configDir(), 'config.json'), '{not json');
     await expect(loadConfig()).rejects.toMatchObject({ code: 'CONFIG_READ_FAILED' });
+  });
+});
+
+describe('resolveClient', () => {
+  const entry = (id: string) => ({
+    client_id: id,
+    client_name: `Client ${id}`,
+    api_key: `key_${id}`,
+    base_url: 'https://coolhandlabs.com',
+    saved_at: '2026-01-01T00:00:00Z',
+  });
+
+  const cfg = (clients: Record<string, ReturnType<typeof entry>>, defaultId: string | null = null) => ({
+    version: 1 as const,
+    default_client_id: defaultId,
+    clients,
+  });
+
+  beforeEach(() => {
+    delete process.env.COOLHAND_CLIENT_ID;
+  });
+
+  afterEach(() => {
+    delete process.env.COOLHAND_CLIENT_ID;
+  });
+
+  test('resolves explicit clientId', async () => {
+    const a = entry('a');
+    const result = await resolveClient(cfg({ a }, 'a'), 'a');
+    expect(result).toEqual(a);
+  });
+
+  test('throws CLIENT_NOT_FOUND for unknown explicit clientId', async () => {
+    await expect(resolveClient(cfg({}), 'missing')).rejects.toMatchObject({ code: 'CLIENT_NOT_FOUND' });
+  });
+
+  test('resolves via COOLHAND_CLIENT_ID env var', async () => {
+    process.env.COOLHAND_CLIENT_ID = 'acme';
+    const acme = entry('acme');
+    const result = await resolveClient(cfg({ acme }));
+    expect(result).toEqual(acme);
+  });
+
+  test('throws CLIENT_NOT_FOUND when COOLHAND_CLIENT_ID does not match any client', async () => {
+    process.env.COOLHAND_CLIENT_ID = 'nope';
+    await expect(resolveClient(cfg({}))).rejects.toMatchObject({ code: 'CLIENT_NOT_FOUND' });
+  });
+
+  test('resolves via default_client_id', async () => {
+    const a = entry('a');
+    const result = await resolveClient(cfg({ a }, 'a'));
+    expect(result).toEqual(a);
+  });
+
+  test('auto-picks when exactly one client exists and no default is set', async () => {
+    const solo = entry('solo');
+    const result = await resolveClient(cfg({ solo }));
+    expect(result).toEqual(solo);
+  });
+
+  test('throws NOT_CONFIGURED when no clients exist', async () => {
+    await expect(resolveClient(cfg({}))).rejects.toMatchObject({ code: 'NOT_CONFIGURED' });
+  });
+
+  test('warns when default_client_id is stale and falls through to auto-pick', async () => {
+    stderrSpy.mockClear(); // reset call history accumulated from beforeEach
+    const solo = entry('solo');
+    // default_client_id points to a client that no longer exists
+    const result = await resolveClient(cfg({ solo }, 'deleted'));
+    expect(result).toEqual(solo);
+    // stderr should have received the stale-default warning
+    const calls = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(calls).toMatch(/no longer exists/);
+  });
+
+  test('throws NOT_CONFIGURED with client list when multiple clients exist and stdin is not a TTY', async () => {
+    const origIsTTY = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+    try {
+      const a = entry('a');
+      const b = entry('b');
+      const err = await resolveClient(cfg({ a, b })).catch((e) => e);
+      expect(err).toBeInstanceOf(CliError);
+      expect((err as CliError).code).toBe('NOT_CONFIGURED');
+      expect((err as CliError).message).toContain('a');
+      expect((err as CliError).message).toContain('b');
+    } finally {
+      Object.defineProperty(process.stdin, 'isTTY', { value: origIsTTY, configurable: true });
+    }
+  });
+
+  test('explicit clientId takes priority over COOLHAND_CLIENT_ID env var', async () => {
+    process.env.COOLHAND_CLIENT_ID = 'b';
+    const a = entry('a');
+    const b = entry('b');
+    const result = await resolveClient(cfg({ a, b }), 'a');
+    expect(result).toEqual(a);
+  });
+
+  describe('interactive prompt (TTY)', () => {
+    let mockRl: EventEmitter & { close: jest.Mock };
+    const origIsTTY = process.stdin.isTTY;
+
+    beforeEach(() => {
+      (readline.createInterface as jest.Mock).mockImplementation(() => {
+        const emitter = new EventEmitter() as EventEmitter & { close: jest.Mock };
+        emitter.close = jest.fn(() => { emitter.emit('close'); });
+        mockRl = emitter;
+        return mockRl;
+      });
+      Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+    });
+
+    afterEach(() => {
+      (readline.createInterface as jest.Mock).mockReset();
+      Object.defineProperty(process.stdin, 'isTTY', { value: origIsTTY, configurable: true });
+    });
+
+    test('resolves with chosen client on valid numeric input', async () => {
+      const a = entry('a');
+      const b = entry('b');
+      const promise = resolveClient(cfg({ a, b }));
+      setImmediate(() => mockRl.emit('line', '1'));
+      expect(await promise).toEqual(a);
+    });
+
+    test('rejects INVALID_ARGS on out-of-range selection', async () => {
+      const a = entry('a');
+      const b = entry('b');
+      const promise = resolveClient(cfg({ a, b }));
+      setImmediate(() => mockRl.emit('line', '5'));
+      await expect(promise).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+    });
+
+    test('rejects INVALID_ARGS when stdin closes before selection', async () => {
+      const a = entry('a');
+      const b = entry('b');
+      const promise = resolveClient(cfg({ a, b }));
+      setImmediate(() => mockRl.emit('close'));
+      await expect(promise).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+    });
   });
 });

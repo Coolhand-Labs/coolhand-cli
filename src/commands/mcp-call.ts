@@ -1,5 +1,5 @@
 import { CliError } from '../errors.js';
-import { loadConfig, getClient } from '../config.js';
+import { loadConfig, resolveClient } from '../config.js';
 import { DEFAULT_BASE_URL } from '../types.js';
 
 export async function mcpCall(
@@ -8,28 +8,34 @@ export async function mcpCall(
   opts: { clientId?: string } = {}
 ): Promise<unknown> {
   const cfg = await loadConfig();
-  const client = getClient(cfg, opts.clientId);
 
-  if (opts.clientId && !client) {
-    throw new CliError('CLIENT_NOT_FOUND', `No client "${opts.clientId}" is configured.`);
+  const hasStoredClients = Object.keys(cfg.clients).length > 0;
+  const envPrivateKey = process.env.COOLHAND_PRIVATE_KEY;
+
+  let privateKey: string;
+  let baseUrl: string;
+
+  try {
+    const client = await resolveClient(cfg, opts.clientId);
+    if (!client.private_key) {
+      throw new CliError(
+        'NO_PRIVATE_KEY',
+        "No private key configured. Run 'coolhand login --scope private' first."
+      );
+    }
+    privateKey = client.private_key;
+    baseUrl = client.base_url;
+  } catch (err) {
+    // Zero-config fallback: when there are no stored clients and the resolution
+    // chain returns NOT_CONFIGURED, fall back to COOLHAND_PRIVATE_KEY (raw env key).
+    // This lets users who have never run `coolhand login` authenticate via env var.
+    if (err instanceof CliError && err.code === 'NOT_CONFIGURED' && !hasStoredClients && envPrivateKey) {
+      privateKey = envPrivateKey;
+      baseUrl = DEFAULT_BASE_URL;
+    } else {
+      throw err;
+    }
   }
-
-  if (!client && !process.env.COOLHAND_PRIVATE_KEY) {
-    throw new CliError(
-      'NOT_CONFIGURED',
-      'Not logged in. Run `coolhand login --scope private` to authenticate.'
-    );
-  }
-
-  const privateKey = opts.clientId ? client?.private_key : (client?.private_key ?? process.env.COOLHAND_PRIVATE_KEY);
-  if (!privateKey) {
-    throw new CliError(
-      'NO_PRIVATE_KEY',
-      "No private key configured. Run 'coolhand login --scope private' first."
-    );
-  }
-
-  const baseUrl = client?.base_url ?? DEFAULT_BASE_URL;
   let parsedBaseUrl: URL;
   try {
     parsedBaseUrl = new URL(baseUrl);

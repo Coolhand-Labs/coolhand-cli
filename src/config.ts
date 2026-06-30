@@ -1,8 +1,10 @@
 import { promises as fs } from 'fs';
+import { createInterface } from 'readline';
 import * as os from 'os';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { CliError } from './errors.js';
+import { logger } from './logger.js';
 import type { ClientEntry, ConfigFile } from './types.js';
 
 const CONFIG_FILENAME = 'config.json';
@@ -134,4 +136,118 @@ export async function setDefault(clientId: string): Promise<ConfigFile> {
   cfg.default_client_id = clientId;
   await saveConfig(cfg);
   return cfg;
+}
+
+const PROMPT_TIMEOUT_MS = 30_000;
+
+async function promptClientSelection(clients: ClientEntry[]): Promise<ClientEntry> {
+  return new Promise<ClientEntry>((resolve, reject) => {
+    const lines = clients.map((c, i) => `  ${i + 1}. ${c.client_name} (${c.client_id})`).join('\n');
+    process.stderr.write(`Multiple clients configured — which one?\n${lines}\nEnter number: `);
+    const rl = createInterface({ input: process.stdin });
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) { return; }
+      settled = true;
+      rl.close();
+      reject(new CliError('INVALID_ARGS', 'No selection made within 30 seconds — pass --client-id to skip this prompt.'));
+    }, PROMPT_TIMEOUT_MS);
+    timer.unref();
+
+    rl.once('line', (answer: string) => {
+      if (settled) { return; }
+      settled = true;
+      rl.close();
+      clearTimeout(timer);
+      const n = parseInt(answer.trim(), 10);
+      if (isNaN(n) || n < 1 || n > clients.length) {
+        reject(new CliError('INVALID_ARGS', `Invalid selection "${answer.trim()}" — enter a number between 1 and ${clients.length}.`));
+      } else {
+        resolve(clients[n - 1]);
+      }
+    });
+    rl.once('close', () => {
+      if (settled) { return; }
+      settled = true;
+      clearTimeout(timer);
+      reject(new CliError('INVALID_ARGS', 'No client selected.'));
+    });
+  });
+}
+
+/**
+ * Resolves which client to use for an API command. Priority:
+ *   explicit clientId arg > COOLHAND_CLIENT_ID env > default_client_id config >
+ *   auto-pick if only one client exists > interactive prompt (TTY) or error.
+ *
+ * Prints "Client: <name> (<id>)" to stderr after resolution so the user always
+ * knows which account's data they are looking at.
+ */
+export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise<ClientEntry> {
+  if (clientId === '') {
+    throw new CliError('INVALID_ARGS', 'clientId must not be empty');
+  }
+  // 1. Explicit --client-id
+  if (clientId !== undefined) {
+    const entry = cfg.clients[clientId];
+    if (!entry) {
+      throw new CliError('CLIENT_NOT_FOUND', `No client "${clientId}" is configured.`);
+    }
+    process.stderr.write(`Client: ${entry.client_name} (${entry.client_id})\n`);
+    return entry;
+  }
+
+  // 2. COOLHAND_CLIENT_ID env var
+  const envClientId = process.env.COOLHAND_CLIENT_ID;
+  if (envClientId) {
+    const entry = cfg.clients[envClientId];
+    if (!entry) {
+      throw new CliError(
+        'CLIENT_NOT_FOUND',
+        `COOLHAND_CLIENT_ID="${envClientId}" does not match any configured client.`
+      );
+    }
+    process.stderr.write(`Client: ${entry.client_name} (${entry.client_id})\n`);
+    return entry;
+  }
+
+  // 3. Configured default
+  if (cfg.default_client_id) {
+    const entry = cfg.clients[cfg.default_client_id];
+    if (entry) {
+      process.stderr.write(`Client: ${entry.client_name} (${entry.client_id})\n`);
+      return entry;
+    }
+    logger.warn(
+      `Configured default client "${cfg.default_client_id}" no longer exists. Run \`coolhand clients use <id>\` to reset it.`
+    );
+  }
+
+  const clients = Object.values(cfg.clients);
+
+  // 4. No clients at all
+  if (clients.length === 0) {
+    throw new CliError('NOT_CONFIGURED', 'Not logged in. Run `coolhand login` to authenticate.');
+  }
+
+  // 5. Exactly one client — auto-pick without prompting
+  if (clients.length === 1) {
+    const entry = clients[0];
+    process.stderr.write(`Client: ${entry.client_name} (${entry.client_id})\n`);
+    return entry;
+  }
+
+  // 6. Multiple clients, no default — prompt interactively on a TTY, error otherwise
+  if (process.stdin.isTTY) {
+    const entry = await promptClientSelection(clients);
+    process.stderr.write(`Client: ${entry.client_name} (${entry.client_id})\n`);
+    return entry;
+  }
+
+  const list = clients.map((c) => `  ${c.client_id}  ${c.client_name}`).join('\n');
+  throw new CliError(
+    'NOT_CONFIGURED',
+    `Multiple clients configured but no default is set.\n\nConfigured clients:\n${list}\n\nRun \`coolhand clients use <id>\` to set a default, or pass --client-id.`
+  );
 }

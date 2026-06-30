@@ -1,4 +1,5 @@
 import { run } from '../../src/commands/wildcard.js';
+import { CliError } from '../../src/errors.js';
 
 const createFeedbackMock = jest.fn().mockResolvedValue({ id: 1 });
 
@@ -10,7 +11,7 @@ jest.mock('coolhand-node', () => ({
 
 jest.mock('../../src/config.js', () => ({
   loadConfig: jest.fn().mockResolvedValue({ version: 1, default_client_id: 'acme', clients: {} }),
-  getClient: jest.fn().mockReturnValue({
+  resolveClient: jest.fn().mockResolvedValue({
     client_id: 'acme',
     client_name: 'Acme',
     api_key: 'pub_key',
@@ -20,7 +21,7 @@ jest.mock('../../src/config.js', () => ({
 }));
 
 import { Coolhand } from 'coolhand-node';
-import { getClient } from '../../src/config.js';
+import { resolveClient } from '../../src/config.js';
 import { logger } from '../../src/logger.js';
 
 describe('wildcard command', () => {
@@ -31,7 +32,7 @@ describe('wildcard command', () => {
   beforeEach(() => {
     createFeedbackMock.mockReset().mockResolvedValue({ id: 1 });
     (Coolhand as jest.Mock).mockClear();
-    (getClient as jest.Mock).mockReturnValue({
+    (resolveClient as jest.Mock).mockResolvedValue({
       client_id: 'acme',
       client_name: 'Acme',
       api_key: 'pub_key',
@@ -101,8 +102,10 @@ describe('wildcard command', () => {
     expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('could not be recorded'));
   });
 
-  test('de-loops (exit 0) and skips submission when no api key is configured', async () => {
-    (getClient as jest.Mock).mockReturnValueOnce(undefined);
+  test('de-loops (exit 0) and skips submission when no client and no api key env var', async () => {
+    (resolveClient as jest.Mock).mockRejectedValueOnce(
+      new CliError('NOT_CONFIGURED', 'Not logged in.')
+    );
     const previous = process.env.COOLHAND_API_KEY;
     delete process.env.COOLHAND_API_KEY;
     try {
@@ -121,5 +124,21 @@ describe('wildcard command', () => {
   test('exits 0 on a confirmed write with --json', async () => {
     const code = await run({ complaint: 'x', agentName: 'a', json: true });
     expect(code).toBe(0);
+  });
+
+  test('forwards clientId to resolveClient when provided', async () => {
+    await run({ complaint: 'x', agentName: 'a', clientId: 'acme' });
+    expect(resolveClient).toHaveBeenCalledWith(expect.anything(), 'acme');
+  });
+
+  test('de-loops (exit 0) and warns when resolveClient throws CLIENT_NOT_FOUND for a bad --client-id', async () => {
+    (resolveClient as jest.Mock).mockRejectedValueOnce(
+      new CliError('CLIENT_NOT_FOUND', 'No client "bad-id" is configured.')
+    );
+    const code = await run({ complaint: 'x', agentName: 'a', clientId: 'bad-id' });
+    expect(code).toBe(0);
+    expect(createFeedbackMock).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Could not record blocker feedback'));
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('could not be recorded'));
   });
 });

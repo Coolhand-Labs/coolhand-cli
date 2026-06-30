@@ -1,20 +1,34 @@
 import { mcpCall } from '../../src/commands/mcp-call.js';
+import { CliError } from '../../src/errors.js';
 
 jest.mock('../../src/config.js', () => ({
   loadConfig: jest.fn(),
-  getClient: jest.fn(),
+  resolveClient: jest.fn(),
 }));
-import { loadConfig, getClient } from '../../src/config.js';
+import { loadConfig, resolveClient } from '../../src/config.js';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
 const fakeClient = {
-  id: 'client-1',
-  public_key: 'pub_key',
+  client_id: 'client-1',
+  client_name: 'Test Client',
+  api_key: 'pub_key',
   private_key: 'priv_key_abc',
-  base_url: undefined as string | undefined,
-  default: true,
+  base_url: 'https://coolhandlabs.com',
+  saved_at: new Date().toISOString(),
+};
+
+const cfgWithClient = {
+  version: 1 as const,
+  default_client_id: 'client-1',
+  clients: { 'client-1': fakeClient },
+};
+
+const cfgEmpty = {
+  version: 1 as const,
+  default_client_id: null,
+  clients: {},
 };
 
 const okResponse = (result: unknown) => ({
@@ -27,8 +41,8 @@ describe('mcpCall', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     delete process.env.COOLHAND_PRIVATE_KEY;
-    (loadConfig as jest.Mock).mockResolvedValue({});
-    (getClient as jest.Mock).mockReturnValue(fakeClient);
+    (loadConfig as jest.Mock).mockResolvedValue(cfgWithClient);
+    (resolveClient as jest.Mock).mockResolvedValue(fakeClient);
     mockFetch.mockResolvedValue(okResponse({ ok: true }));
   });
 
@@ -57,8 +71,11 @@ describe('mcpCall', () => {
     expect(headers['Content-Type']).toBe('application/json');
   });
 
-  test('uses COOLHAND_PRIVATE_KEY env when no client configured', async () => {
-    (getClient as jest.Mock).mockReturnValue(null);
+  test('uses COOLHAND_PRIVATE_KEY env when no clients configured', async () => {
+    (loadConfig as jest.Mock).mockResolvedValue(cfgEmpty);
+    (resolveClient as jest.Mock).mockRejectedValue(
+      new CliError('NOT_CONFIGURED', 'Not logged in.')
+    );
     process.env.COOLHAND_PRIVATE_KEY = 'env_priv_key';
     await mcpCall('tool', {});
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
@@ -66,50 +83,97 @@ describe('mcpCall', () => {
   });
 
   test('uses specified clientId client private_key', async () => {
-    const otherClient = { ...fakeClient, id: 'other', private_key: 'other_key' };
-    (getClient as jest.Mock).mockReturnValue(otherClient);
+    const otherClient = { ...fakeClient, client_id: 'other', private_key: 'other_key' };
+    (resolveClient as jest.Mock).mockResolvedValue(otherClient);
     await mcpCall('tool', {}, { clientId: 'other' });
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect((init.headers as Record<string, string>)['X-API-Key']).toBe('other_key');
   });
 
   test('throws CLIENT_NOT_FOUND when clientId given but client missing', async () => {
-    (getClient as jest.Mock).mockReturnValue(null);
+    (resolveClient as jest.Mock).mockRejectedValue(
+      new CliError('CLIENT_NOT_FOUND', 'No client "missing" is configured.')
+    );
     await expect(mcpCall('tool', {}, { clientId: 'missing' })).rejects.toMatchObject({
       code: 'CLIENT_NOT_FOUND',
     });
   });
 
-  test('throws NOT_CONFIGURED when no client and no env var', async () => {
-    (getClient as jest.Mock).mockReturnValue(null);
+  test('throws NOT_CONFIGURED when no clients and no env var', async () => {
+    (loadConfig as jest.Mock).mockResolvedValue(cfgEmpty);
+    (resolveClient as jest.Mock).mockRejectedValue(
+      new CliError('NOT_CONFIGURED', 'Not logged in.')
+    );
     await expect(mcpCall('tool', {})).rejects.toMatchObject({
       code: 'NOT_CONFIGURED',
     });
   });
 
-  test('throws NO_PRIVATE_KEY when client has no private_key', async () => {
-    (getClient as jest.Mock).mockReturnValue({ ...fakeClient, private_key: undefined });
+  test('throws NO_PRIVATE_KEY when resolved client has no private_key even if COOLHAND_PRIVATE_KEY is set', async () => {
+    process.env.COOLHAND_PRIVATE_KEY = 'env_priv_key';
+    (resolveClient as jest.Mock).mockResolvedValue({ ...fakeClient, private_key: undefined });
     await expect(mcpCall('tool', {})).rejects.toMatchObject({
       code: 'NO_PRIVATE_KEY',
     });
   });
 
+  test('propagates NOT_CONFIGURED when hasStoredClients but resolveClient throws NOT_CONFIGURED with no env var', async () => {
+    delete process.env.COOLHAND_PRIVATE_KEY;
+    (resolveClient as jest.Mock).mockRejectedValue(
+      new CliError('NOT_CONFIGURED', 'Multiple clients configured but no default is set.')
+    );
+    await expect(mcpCall('tool', {})).rejects.toMatchObject({ code: 'NOT_CONFIGURED' });
+  });
+
+  test('propagates CLIENT_NOT_FOUND when resolveClient throws for bad COOLHAND_CLIENT_ID in hasStoredClients branch', async () => {
+    (resolveClient as jest.Mock).mockRejectedValue(
+      new CliError('CLIENT_NOT_FOUND', 'COOLHAND_CLIENT_ID="nope" does not match any configured client.')
+    );
+    await expect(mcpCall('tool', {})).rejects.toMatchObject({
+      code: 'CLIENT_NOT_FOUND',
+    });
+  });
+
+  test('propagates NOT_CONFIGURED when stored clients exist but resolveClient throws NOT_CONFIGURED (even with COOLHAND_PRIVATE_KEY set)', async () => {
+    process.env.COOLHAND_PRIVATE_KEY = 'env_priv_key';
+    (resolveClient as jest.Mock).mockRejectedValue(
+      new CliError('NOT_CONFIGURED', 'Multiple clients configured but no default is set.')
+    );
+    await expect(mcpCall('tool', {})).rejects.toMatchObject({ code: 'NOT_CONFIGURED' });
+    expect(resolveClient).toHaveBeenCalled(); // confirms resolveClient ran before the catch fallback
+  });
+
+  test('throws NO_PRIVATE_KEY when client has no private_key', async () => {
+    (resolveClient as jest.Mock).mockResolvedValue({ ...fakeClient, private_key: undefined });
+    await expect(mcpCall('tool', {})).rejects.toMatchObject({
+      code: 'NO_PRIVATE_KEY',
+    });
+  });
+
+  test('throws NO_PRIVATE_KEY when explicit clientId client has no private_key even if COOLHAND_PRIVATE_KEY is set', async () => {
+    process.env.COOLHAND_PRIVATE_KEY = 'env_priv_key';
+    (resolveClient as jest.Mock).mockResolvedValue({ ...fakeClient, private_key: undefined });
+    await expect(mcpCall('tool', {}, { clientId: 'client-1' })).rejects.toMatchObject({
+      code: 'NO_PRIVATE_KEY',
+    });
+  });
+
   test('uses client base_url for request URL', async () => {
-    (getClient as jest.Mock).mockReturnValue({ ...fakeClient, base_url: 'https://custom.example.com' });
+    (resolveClient as jest.Mock).mockResolvedValue({ ...fakeClient, base_url: 'https://custom.example.com' });
     await mcpCall('tool', {});
     const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://custom.example.com/mcp');
   });
 
   test('throws INVALID_BASE_URL for malformed base_url', async () => {
-    (getClient as jest.Mock).mockReturnValue({ ...fakeClient, base_url: 'not a url' });
+    (resolveClient as jest.Mock).mockResolvedValue({ ...fakeClient, base_url: 'not a url' });
     await expect(mcpCall('tool', {})).rejects.toMatchObject({
       code: 'INVALID_BASE_URL',
     });
   });
 
   test('throws INVALID_BASE_URL for non-http protocol', async () => {
-    (getClient as jest.Mock).mockReturnValue({ ...fakeClient, base_url: 'ftp://example.com' });
+    (resolveClient as jest.Mock).mockResolvedValue({ ...fakeClient, base_url: 'ftp://example.com' });
     await expect(mcpCall('tool', {})).rejects.toMatchObject({
       code: 'INVALID_BASE_URL',
     });

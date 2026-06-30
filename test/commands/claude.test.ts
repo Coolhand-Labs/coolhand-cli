@@ -1,11 +1,12 @@
 import { EventEmitter } from 'events';
 import { run } from '../../src/commands/claude.js';
+import { CliError } from '../../src/errors.js';
 
 jest.mock('../../src/config.js', () => ({
   loadConfig: jest.fn(),
-  getClient: jest.fn(),
+  resolveClient: jest.fn(),
 }));
-import { loadConfig, getClient } from '../../src/config.js';
+import { loadConfig, resolveClient } from '../../src/config.js';
 
 type Spawn = typeof import('child_process').spawn;
 
@@ -34,7 +35,7 @@ describe('claude command', () => {
       default_client_id: 'c1',
       clients: { c1: ENTRY },
     });
-    (getClient as jest.Mock).mockReset().mockReturnValue(ENTRY);
+    (resolveClient as jest.Mock).mockReset().mockResolvedValue(ENTRY);
   });
 
   test('spawns the proxy wrap with claude + forwarded args and the stored key', async () => {
@@ -63,7 +64,9 @@ describe('claude command', () => {
   });
 
   test('errors (exit 1) and does not spawn when no client is configured', async () => {
-    (getClient as jest.Mock).mockReturnValue(undefined);
+    (resolveClient as jest.Mock).mockRejectedValue(
+      new CliError('NOT_CONFIGURED', 'No Coolhand account configured.')
+    );
     const spawnFn = jest.fn();
     const code = await run(
       { args: [] },
@@ -74,7 +77,7 @@ describe('claude command', () => {
   });
 
   test('adds --api-endpoint only for a non-default base_url, with the ingest path', async () => {
-    (getClient as jest.Mock).mockReturnValue({ ...ENTRY, base_url: 'https://staging.coolhandlabs.com' });
+    (resolveClient as jest.Mock).mockResolvedValue({ ...ENTRY, base_url: 'https://staging.coolhandlabs.com' });
     const spawnFn = spawnClosingWith(0);
     await run(
       { args: [] },
@@ -90,6 +93,15 @@ describe('claude command', () => {
       '--',
       'claude',
     ]);
+  });
+
+  test('forwards clientId to resolveClient when provided', async () => {
+    const spawnFn = spawnClosingWith(0);
+    await run(
+      { args: [], clientId: 'acme' },
+      { spawnFn: spawnFn as unknown as Spawn, resolveProxyCli: () => '/fake/cli.js' }
+    );
+    expect(resolveClient).toHaveBeenCalledWith(expect.anything(), 'acme');
   });
 
   test('returns INTERNAL (exit 2) when the proxy cannot be resolved', async () => {

@@ -1,5 +1,15 @@
-import { parseArgs, run } from '../src/cli.js';
+jest.mock('../src/commands/claude.js', () => ({
+  run: jest.fn(),
+}));
+jest.mock('../src/commands/search-optimizations.js', () => ({
+  run: jest.fn(),
+}));
+
+import { parseArgs, peelClientId, run } from '../src/cli.js';
+import { CliError } from '../src/errors.js';
 import { createTmpHome, TmpHome } from './helpers/tmp-home.js';
+import { run as runClaudeCommand } from '../src/commands/claude.js';
+import { run as runSearchOptimizationsCommand } from '../src/commands/search-optimizations.js';
 
 describe('parseArgs', () => {
   test('extracts subcommand and flags', () => {
@@ -43,9 +53,13 @@ describe('run', () => {
   let home: TmpHome;
   beforeEach(async () => {
     home = await createTmpHome();
+    (runClaudeCommand as jest.Mock).mockResolvedValue(0);
+    (runSearchOptimizationsCommand as jest.Mock).mockResolvedValue(0);
   });
   afterEach(async () => {
     await home.cleanup();
+    (runClaudeCommand as jest.Mock).mockReset();
+    (runSearchOptimizationsCommand as jest.Mock).mockReset();
   });
 
   test('--version exits 0', async () => {
@@ -93,4 +107,90 @@ describe('run', () => {
     expect(code).toBe(1);
   });
 
+  test('global --client-id with no value returns exit 1', async () => {
+    const code = await run(['--client-id']);
+    expect(code).toBe(1);
+  });
+
+  test('global --client-id= with empty value returns exit 1', async () => {
+    const code = await run(['--client-id=', 'status']);
+    expect(code).toBe(1);
+  });
+
+  test('global --client-id is merged and forwarded to the dispatched command', async () => {
+    const code = await run(['--client-id', 'acme', 'search-optimizations']);
+    expect(code).toBe(0);
+    expect(runSearchOptimizationsCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'acme' })
+    );
+  });
+
+  test('global --client-id is forwarded to the claude passthrough', async () => {
+    const code = await run(['--client-id', 'acme', 'claude', '--resume']);
+    expect(code).toBe(0);
+    expect(runClaudeCommand).toHaveBeenCalledWith({ args: ['--resume'], clientId: 'acme' });
+  });
+
+});
+
+describe('peelClientId', () => {
+  test('strips --client-id VALUE before a positional command', () => {
+    expect(peelClientId(['--client-id', 'acme', 'list-workloads'])).toEqual({
+      clientId: 'acme',
+      rest: ['list-workloads'],
+    });
+  });
+
+  test('strips --client-id=VALUE before a positional command', () => {
+    expect(peelClientId(['--client-id=acme', 'list-workloads'])).toEqual({
+      clientId: 'acme',
+      rest: ['list-workloads'],
+    });
+  });
+
+  test('leaves argv unchanged when no --client-id is present', () => {
+    expect(peelClientId(['list-workloads', '--json'])).toEqual({
+      clientId: undefined,
+      rest: ['list-workloads', '--json'],
+    });
+  });
+
+  test('stops peeling at the first positional (command name)', () => {
+    expect(peelClientId(['list-workloads', '--client-id', 'acme'])).toEqual({
+      clientId: undefined,
+      rest: ['list-workloads', '--client-id', 'acme'],
+    });
+  });
+
+  test('preserves other leading flags', () => {
+    expect(peelClientId(['--json', '--client-id', 'acme', 'status'])).toEqual({
+      clientId: 'acme',
+      rest: ['--json', 'status'],
+    });
+  });
+
+  test('throws INVALID_ARGS when --client-id appears with no following value', () => {
+    expect(() => peelClientId(['--client-id'])).toThrow(CliError);
+    expect(() => peelClientId(['--client-id'])).toThrow('--client-id requires a value');
+  });
+
+  test('throws INVALID_ARGS when --client-id= has an empty value', () => {
+    expect(() => peelClientId(['--client-id='])).toThrow(CliError);
+    expect(() => peelClientId(['--client-id='])).toThrow('non-empty');
+  });
+
+  test('throws INVALID_ARGS when --client-id value looks like a flag', () => {
+    expect(() => peelClientId(['--client-id', '--json', 'status'])).toThrow(CliError);
+    expect(() => peelClientId(['--client-id', '--json', 'status'])).toThrow('--json');
+  });
+
+  test('throws INVALID_ARGS when --client-id=VALUE uses a flag-like value', () => {
+    expect(() => peelClientId(['--client-id=--json', 'status'])).toThrow(CliError);
+    expect(() => peelClientId(['--client-id=--json', 'status'])).toThrow('--json');
+  });
+
+  test('throws INVALID_ARGS when --client-id appears twice before the command', () => {
+    expect(() => peelClientId(['--client-id', 'foo', '--client-id', 'bar', 'status'])).toThrow(CliError);
+    expect(() => peelClientId(['--client-id', 'foo', '--client-id', 'bar', 'status'])).toThrow('more than once');
+  });
 });
