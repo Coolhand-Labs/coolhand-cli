@@ -593,11 +593,28 @@ function updateWorkloadOptions(parsed: ParsedArgs): UpdateWorkloadOptions {
     throw new CliError('INVALID_ARGS', 'update-workload requires --id <id>');
   }
   const opts: UpdateWorkloadOptions = { id };
-  if (typeof parsed.flags['name'] === 'string') {
-    opts.name = parsed.flags['name'];
+  if ('name' in parsed.flags) {
+    const name = parsed.flags['name'];
+    if (typeof name !== 'string') {
+      throw new CliError(
+        'INVALID_ARGS',
+        '--name requires a value (use --name=VALUE if the value starts with a dash)'
+      );
+    }
+    if (name.length === 0) {
+      throw new CliError('INVALID_ARGS', '--name requires a non-empty value');
+    }
+    opts.name = name;
   }
-  if (typeof parsed.flags['description'] === 'string') {
-    opts.description = parsed.flags['description'];
+  if ('description' in parsed.flags) {
+    const description = parsed.flags['description'];
+    if (typeof description !== 'string') {
+      throw new CliError(
+        'INVALID_ARGS',
+        '--description requires a value (use --description=VALUE if the value starts with a dash)'
+      );
+    }
+    opts.description = description;
   }
   if (opts.name === undefined && opts.description === undefined) {
     throw new CliError('INVALID_ARGS', 'update-workload requires at least one of --name or --description');

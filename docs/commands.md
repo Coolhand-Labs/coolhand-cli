@@ -175,7 +175,7 @@ coolhand update-workload --id <id> [--name VALUE] [--description VALUE]
                           [--client-id ID] [--json]
 ```
 
-Updates a workload's name and/or description. At least one of `--name` or `--description` is required.
+Updates a workload's name and/or description. At least one of `--name` or `--description` is required. If a value starts with a dash (e.g. `-1 fix`), use `--name=VALUE`/`--description=VALUE` instead of the space-separated form, or it will be misread as a flag.
 
 | Flag | Description |
 |------|-------------|
