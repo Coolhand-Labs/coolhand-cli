@@ -26,7 +26,10 @@ const DEFAULT_ENDPOINT = "https://coolhandlabs.com/api/v2/llm_request_logs";
 
 let _nextId = 0;
 
-/** Reset the call ID counter. Exposed for test isolation only. */
+/** @internal Reset the call ID counter. Exposed for test isolation only.
+ *  Call in beforeEach in any test file that imports sendToCoolhand — Jest
+ *  may share this module instance across test files in the same worker.
+ */
 export function resetCallIdForTesting(): void { _nextId = 0; }
 
 /**
@@ -71,6 +74,9 @@ export async function sendToCoolhand(
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
+    // Cancel the abort timer as soon as the response headers arrive so that
+    // slow error-body reads (response.text() below) don't trigger it.
+    clearTimeout(timeout);
 
     if (!response.ok) {
       if (!silent) {
@@ -82,7 +88,6 @@ export async function sendToCoolhand(
     } else if (!silent) {
       console.error(`[coolhand-proxy] Logged ${captured.request.method} ${captured.request.url}`);
     }
-    clearTimeout(timeout);
   } catch (error) {
     clearTimeout(timeout);
     if (!silent) {

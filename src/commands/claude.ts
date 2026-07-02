@@ -109,15 +109,21 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
         });
       } catch (spawnErr) {
         if (spawnErr instanceof Error) { logger.info(`Error: ${redact(spawnErr.message)}`); }
-        stopOnce().catch((e: unknown) => {
-          if (e instanceof Error) { logger.info(`Error: ${redact(e.message)}`); }
-        });
-        resolve(ExitCode.INTERNAL);
+        // Chain .catch → .then so resolve() is called only after stop() drains,
+        // mirroring the error/close handler pattern and avoiding abandoned sends.
+        stopOnce()
+          .catch((e: unknown) => {
+            const msg = e instanceof Error ? redact(e.message) : String(e);
+            logger.info(`Error: ${msg}`);
+          })
+          .then(() => resolve(ExitCode.INTERNAL));
         return;
       }
       child.on('error', async (err: Error) => {
         try {
           await stopOnce();
+        } catch (stopErr: unknown) {
+          if (stopErr instanceof Error) { logger.info(`Error: ${redact(stopErr.message)}`); }
         } finally {
           logger.info(`Error: ${redact(err.message)}`);
           resolve(ExitCode.INTERNAL);
@@ -126,6 +132,8 @@ export async function run(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<n
       child.on('close', async (code: number | null) => {
         try {
           await stopOnce();
+        } catch (stopErr: unknown) {
+          if (stopErr instanceof Error) { logger.info(`Error: ${redact(stopErr.message)}`); }
         } finally {
           resolve(code ?? ExitCode.INTERNAL);
         }

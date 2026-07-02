@@ -5,6 +5,7 @@ import { sendToCoolhand, type CapturedInteraction } from "./sender.js";
 import type { CACredentials } from "./certs.js";
 
 export interface ProxyOptions {
+  /** The port to bind to. Omit or pass 0 to let the OS pick a free ephemeral port. */
   port?: number;
   apiKey: string;
   apiEndpoint?: string;
@@ -43,18 +44,24 @@ export async function startProxy(
   const inFlightSends = new Set<Promise<void>>();
 
   await server.on("request", (req: CompletedRequest) => {
-    if (!shouldCapture(req.url)) { return; }
+    // Guard against a PatternMatchingService constructor failure — if shouldCapture
+    // throws, skip capture for this request rather than crashing the event handler.
+    let capture: boolean;
+    try { capture = shouldCapture(req.url); } catch { return; }
+    if (!capture) { return; }
     pendingRequests.set(req.id, {
       method: req.method,
       url: req.url,
       headers: flattenHeaders(req.headers as Record<string, string | string[] | undefined>),
-      bodyPromise: req.body.getText(),
+      bodyPromise: Promise.resolve().then(() => req.body.getText()),
       startTimestamp: req.timingEvents?.startTimestamp ?? performance.now(),
       timestamp: new Date().toISOString(),
     });
   });
 
   await server.on("abort", (req: AbortedRequest) => {
+    // The stored bodyPromise continues running and resolves normally; its
+    // result is simply discarded. This is intentional — no cleanup needed.
     pendingRequests.delete(req.id);
   });
 
@@ -66,35 +73,35 @@ export async function startProxy(
     const endTimestamp = res.timingEvents?.responseSentTimestamp ?? performance.now();
     const durationMs = endTimestamp - req.startTimestamp;
 
-    // Get response body asynchronously, then forward
-    const send = res.body.getText().then((responseBodyText) => {
-      return req.bodyPromise.then((requestBodyText) => {
-        const captured: CapturedInteraction = {
-          request: {
-            method: req.method,
-            url: req.url,
-            headers: sanitizeHeaders(req.headers),
-            body: requestBodyText,
-          },
-          response: {
-            statusCode: res.statusCode,
-            headers: sanitizeHeaders(flattenHeaders(res.headers as Record<string, string | string[] | undefined>)),
-            body: responseBodyText,
-          },
-          timestamp: req.timestamp,
-        };
+    // Read request and response bodies concurrently — req.bodyPromise started
+    // when the request arrived and is likely already settled by the time the
+    // response handler fires, so Promise.all adds no extra latency.
+    const send = Promise.all([res.body.getText(), req.bodyPromise]).then(([responseBodyText, requestBodyText]) => {
+      const captured: CapturedInteraction = {
+        request: {
+          method: req.method,
+          url: req.url,
+          headers: sanitizeHeaders(req.headers),
+          body: requestBodyText,
+        },
+        response: {
+          statusCode: res.statusCode,
+          headers: sanitizeHeaders(flattenHeaders(res.headers as Record<string, string | string[] | undefined>)),
+          body: responseBodyText,
+        },
+        timestamp: req.timestamp,
+      };
 
-        if (!options.silent) {
-          console.error(
-            `[coolhand-proxy] Captured ${req.method} ${req.url} -> ${res.statusCode} (${Math.round(durationMs)}ms)`
-          );
-        }
+      if (!options.silent) {
+        console.error(
+          `[coolhand-proxy] Captured ${req.method} ${req.url} -> ${res.statusCode} (${Math.round(durationMs)}ms)`
+        );
+      }
 
-        return sendToCoolhand(captured, {
-          apiKey: options.apiKey,
-          apiEndpoint: options.apiEndpoint,
-          silent: options.silent,
-        });
+      return sendToCoolhand(captured, {
+        apiKey: options.apiKey,
+        apiEndpoint: options.apiEndpoint,
+        silent: options.silent,
       });
     }).catch((err) => {
       if (!options.silent) {
@@ -103,7 +110,7 @@ export async function startProxy(
     });
 
     inFlightSends.add(send);
-    send.then(() => inFlightSends.delete(send), () => inFlightSends.delete(send));
+    send.finally(() => inFlightSends.delete(send));
   });
 
   // Pass all requests through to their real destinations
@@ -119,11 +126,15 @@ export async function startProxy(
     port,
     stop: async () => {
       // Stop the server first so no new response events can fire and add to
-      // inFlightSends after we snapshot it for draining.
+      // inFlightSends after we snapshot it for draining. This relies on
+      // mockttp's server.stop() completing all queued event callbacks before
+      // resolving — a 15 s hard deadline guards against any future change to
+      // that guarantee or a pathological send that never settles.
       await server.stop();
-      // Each in-flight send has a 10 s AbortController timeout, so this loop
-      // waits at most 10 s per batch before all promises settle.
-      while (inFlightSends.size > 0) {
+      // Each in-flight send has a 10 s AbortController timeout so all sends
+      // settle within that window; the 15 s deadline is a safety net.
+      const drainDeadline = Date.now() + 15_000;
+      while (inFlightSends.size > 0 && Date.now() < drainDeadline) {
         await Promise.allSettled([...inFlightSends]);
       }
       if (!options.silent) {

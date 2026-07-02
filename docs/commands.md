@@ -103,7 +103,7 @@ coolhand claude --resume                 # resume last session, captured
 coolhand --client-id acme claude         # capture under the "acme" account
 ```
 
-On first run a self-signed CA certificate is generated at `~/.coolhand/proxy/ca-cert.pem`; the Claude process trusts it automatically via `NODE_EXTRA_CA_CERTS`. For other tools or system-wide trust, see [docs/proxy.md](./proxy.md).
+On first run a self-signed CA certificate is generated at `~/.coolhand/proxy/ca-cert.pem`; the Claude process trusts it automatically via `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, and `REQUESTS_CA_BUNDLE`. For other tools or system-wide trust, see [docs/proxy.md](./proxy.md).
 
 | Flag | Description |
 |------|-------------|

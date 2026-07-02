@@ -1,8 +1,14 @@
 import { PatternMatchingService } from "coolhand-node";
 
-// Eagerly constructed at module load so patterns are loaded once and reused
-// across all requests rather than on first call.
-const patternService = new PatternMatchingService({ silent: true });
+// Lazily instantiated so a constructor error surfaces at shouldCapture() call
+// time rather than at module load time. The proxy request handler wraps
+// shouldCapture() in a try/catch so the error degrades gracefully (skip
+// capture) rather than crashing mockttp's event dispatch.
+let _patternService: PatternMatchingService | undefined;
+function getPatternService(): PatternMatchingService {
+  if (!_patternService) { _patternService = new PatternMatchingService({ silent: true }); }
+  return _patternService;
+}
 
 /**
  * Check if a URL matches a known AI API pattern.
@@ -10,7 +16,7 @@ const patternService = new PatternMatchingService({ silent: true });
  * OpenAI, Anthropic, Google AI, Cohere, Hugging Face, etc.
  */
 export function shouldCapture(url: string): boolean {
-  return patternService.matchesAPIPatternFromURL(url) !== null;
+  return getPatternService().matchesAPIPatternFromURL(url) !== null;
 }
 
 /**

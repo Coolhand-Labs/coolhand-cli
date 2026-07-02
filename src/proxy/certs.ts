@@ -33,10 +33,17 @@ export async function getOrCreateCA(
     const code = (err as NodeJS.ErrnoException).code;
     if (code !== "ENOENT" && code !== "ENOTDIR") { throw err; }
     // One or both files absent — fall through to generate a fresh CA pair.
+    // If only one is missing, the installed CA cert will be invalidated; warn.
+    if (fs.existsSync(keyPath) || fs.existsSync(certPath)) {
+      process.stderr.write(
+        "[coolhand] Warning: CA certificate files are incomplete — regenerating key/cert pair." +
+        " If you installed the previous ca-cert.pem in your system trust store, re-install the new one.\n"
+      );
+    }
   }
 
   const ca = await mockttp.generateCACertificate();
-  fs.mkdirSync(certDir, { recursive: true });
+  fs.mkdirSync(certDir, { recursive: true, mode: 0o700 });
   // Write via temp+rename so a crash between the two writes never leaves a
   // mismatched key/cert pair on disk (TOCTOU guard).
   const keyTmp = keyPath + ".tmp";

@@ -202,4 +202,30 @@ describe('claude command', () => {
     expect(code).toBe(2);
     expect(spawnFn).not.toHaveBeenCalled();
   });
+
+  test('returns INTERNAL (exit 2) and drains proxy when spawnFn throws synchronously', async () => {
+    const stopFn = jest.fn().mockResolvedValue(undefined);
+    const startProxyFn = jest.fn().mockResolvedValue({ port: 9999, stop: stopFn });
+    const spawnFn = jest.fn().mockImplementation(() => { throw new Error('ENOENT'); });
+
+    const code = await run(
+      { args: [] },
+      { spawnFn: spawnFn as unknown as Spawn, startProxyFn }
+    );
+    expect(code).toBe(2);
+    expect(stopFn).toHaveBeenCalledTimes(1);
+  });
+
+  test('resolves with child exit code even when proxy.stop() rejects during close', async () => {
+    const stopFn = jest.fn().mockRejectedValue(new Error('stop failed'));
+    const startProxyFn = jest.fn().mockResolvedValue({ port: 9999, stop: stopFn });
+    const spawnFn = spawnClosingWith(42);
+
+    const code = await run(
+      { args: [] },
+      { spawnFn: spawnFn as unknown as Spawn, startProxyFn }
+    );
+    expect(code).toBe(42);
+    expect(stopFn).toHaveBeenCalledTimes(1);
+  });
 });
