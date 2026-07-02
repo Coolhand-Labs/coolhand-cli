@@ -23,6 +23,7 @@ All notable changes to `coolhand-cli` will be documented in this file.
 - `coolhand claude` now exits with a clear error if the configured client has no public API key, rather than spawning the proxy silently without a logging key.
 - `coolhand claude` (and all other API commands) now prompt interactively when multiple clients are stored and no default is set. In non-TTY environments (CI, scripts) this produces a descriptive error listing available clients instead of a generic NOT_CONFIGURED. Use `--client-id` or `COOLHAND_CLIENT_ID` to select a client non-interactively.
 - `status`, `whoami`, and `clients` display `(no public key)` instead of `***` for clients that have only a private key.
+- `mcp-call` now treats a tool result shaped `{ error: "..." }` (the convention every backend MCP tool uses for business-logic failures, e.g. "Cannot rename system workloads") as a failure. Previously only a top-level JSON-RPC `error` field was checked, so a rejected tool call (bad workload ID, disallowed rename, etc.) exited 0 and printed the raw `{"error": "..."}` object as if it were a successful result.
 
 ## [0.5.2] - 2026-06-27
 
