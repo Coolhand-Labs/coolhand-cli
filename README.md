@@ -135,6 +135,7 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
 ## Documentation
 
 - [Commands](./docs/commands.md) — full flag reference and usage notes for all commands
+- [Proxy](./docs/proxy.md) — CA certificate setup, proxy env vars, and system trust store instructions
 - [Auth Flow](./docs/auth-flow.md) — browser-callback sequence, state machine, timeout and error paths
 - [Configuration File](./docs/config-file.md) — full config schema, multi-client model, `COOLHAND_CONFIG_DIR` override
 - [Session Capture](./docs/session-capture.md) — session scanning, envelope format, deduplication, scope and limitations

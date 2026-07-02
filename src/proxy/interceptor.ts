@@ -1,0 +1,62 @@
+import { PatternMatchingService } from "coolhand-node";
+
+// Lazily instantiated so a constructor error surfaces at shouldCapture() call
+// time rather than at module load time. The proxy request handler wraps
+// shouldCapture() in a try/catch so the error degrades gracefully (skip
+// capture) rather than crashing mockttp's event dispatch.
+let _patternService: PatternMatchingService | undefined;
+function getPatternService(): PatternMatchingService {
+  if (!_patternService) { _patternService = new PatternMatchingService({ silent: true }); }
+  return _patternService;
+}
+
+/**
+ * Check if a URL matches a known AI API pattern.
+ * Uses coolhand-node's PatternMatchingService which covers
+ * OpenAI, Anthropic, Google AI, Cohere, Hugging Face, etc.
+ */
+export function shouldCapture(url: string): boolean {
+  return getPatternService().matchesAPIPatternFromURL(url) !== null;
+}
+
+/**
+ * Flatten a raw header map (values may be string[], string, or undefined)
+ * into Record<string, string>, joining multi-value headers with ", ".
+ */
+export function flattenHeaders(
+  headers: Record<string, string | string[] | undefined>
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (value === undefined) { continue; }
+    result[key] = Array.isArray(value) ? value.join(", ") : value;
+  }
+  return result;
+}
+
+/**
+ * Sanitize headers by redacting sensitive values (API keys, auth tokens).
+ */
+export function sanitizeHeaders(
+  headers: Record<string, string>
+): Record<string, string> {
+  const sensitiveKeys = new Set([
+    "authorization",
+    "proxy-authorization",
+    "x-goog-api-key",
+    "x-api-key",
+    "api-key",
+    "cookie",
+    "set-cookie",
+    "openai-api-key",
+  ]);
+
+  const sanitized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    sanitized[key] = sensitiveKeys.has(key.toLowerCase())
+      ? "[REDACTED]"
+      : value;
+  }
+  return sanitized;
+}
+

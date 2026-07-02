@@ -1,3 +1,10 @@
+jest.mock('../src/proxy/proxy.js', () => ({
+  startProxy: jest.fn(),
+}));
+jest.mock('../src/proxy/certs.js', () => ({
+  getOrCreateCA: jest.fn(),
+  getCertPath: jest.fn(),
+}));
 jest.mock('../src/commands/claude.js', () => ({
   run: jest.fn(),
 }));
