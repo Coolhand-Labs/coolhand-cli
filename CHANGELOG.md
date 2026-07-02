@@ -6,10 +6,11 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ### Added
 - `list-workloads` command: browse and search workloads by name with pagination (`--search`, `--page`, `--per-page`, `--include-archived`, `--include-system`, `--include-templates`). Requires a private API key (`coolhand login --scope private`).
+- `get-workload --id <id>` and `update-workload --id <id> [--name VALUE] [--description VALUE]` commands: fetch or rename/re-describe a single workload. Unlike `get-optimization`/`update-optimization`, the ID is passed via `--id` rather than as a positional argument, since `--workload-id` is already an established flag name elsewhere in the CLI for *filtering by* workload — using `--id` here avoids reusing that name for a different meaning. `update-workload` requires at least one of `--name`/`--description`; renaming a system workload (`Unmatched`, `Embedding Requests`, `Ignored API Calls`) is rejected by the API, though updating its description is allowed.
 - `--client-id ID` now works as a **global flag** placed before the subcommand (e.g. `coolhand --client-id acme list-workloads`) in addition to the existing per-command position. This also applies to `coolhand claude`.
 - `COOLHAND_CLIENT_ID` environment variable: set it to a stored client ID to select that client without passing `--client-id` on every invocation. Priority: `--client-id` flag > `COOLHAND_CLIENT_ID` env > configured default > auto-pick (single client) > interactive prompt.
 - When multiple clients are stored and no default is configured, API commands now **prompt interactively** (TTY) or emit a descriptive error listing all clients (non-TTY) instead of failing with NOT_CONFIGURED.
-- `claude`, `wildcard`, `mcp-call`, `analyze-claude-sessions`, `list-workloads`, `search-optimizations`, `get-optimization`, `close-optimization`, and `update-optimization` now print `Client: <name> (<id>)` to stderr when a stored client is used, so the active account is always visible.
+- `claude`, `wildcard`, `mcp-call`, `analyze-claude-sessions`, `list-workloads`, `search-optimizations`, `get-optimization`, `close-optimization`, `update-optimization`, `get-workload`, and `update-workload` now print `Client: <name> (<id>)` to stderr when a stored client is used, so the active account is always visible.
 - `wildcard` now saves feedback locally to `~/.coolhand/pending/` when no API key is configured, instead of silently dropping it. Pending feedback is automatically uploaded on the next `coolhand login`. A background flush retry runs after each login; if it fails, a reminder prompt appears on the next interactive command.
 
 ### Changed
@@ -24,6 +25,7 @@ All notable changes to `coolhand-cli` will be documented in this file.
 - `coolhand claude` now exits with a clear error if the configured client has no public API key, rather than spawning the proxy silently without a logging key.
 - `coolhand claude` (and all other API commands) now prompt interactively when multiple clients are stored and no default is set. In non-TTY environments (CI, scripts) this produces a descriptive error listing available clients instead of a generic NOT_CONFIGURED. Use `--client-id` or `COOLHAND_CLIENT_ID` to select a client non-interactively.
 - `status`, `whoami`, and `clients` display `(no public key)` instead of `***` for clients that have only a private key.
+- `mcp-call` now treats a tool result shaped `{ error: "..." }` (the convention every backend MCP tool uses for business-logic failures, e.g. "Cannot rename system workloads") as a failure. Previously only a top-level JSON-RPC `error` field was checked, so a rejected tool call (bad workload ID, disallowed rename, etc.) exited 0 and printed the raw `{"error": "..."}` object as if it were a successful result.
 
 ## [0.5.2] - 2026-06-27
 

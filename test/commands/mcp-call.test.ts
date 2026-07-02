@@ -242,4 +242,37 @@ describe('mcpCall', () => {
       code: 'MCP_ERROR',
     });
   });
+
+  test('throws MCP_ERROR with the message when result.error is a string (tool-execution failure)', async () => {
+    mockFetch.mockResolvedValue(okResponse({ error: 'Cannot rename system workloads' }));
+    await expect(mcpCall('update_workload', {})).rejects.toMatchObject({
+      code: 'MCP_ERROR',
+      message: 'Cannot rename system workloads',
+    });
+  });
+
+  test('throws MCP_ERROR with the message when result.error is a string (not found)', async () => {
+    mockFetch.mockResolvedValue(okResponse({ error: 'Workload not found' }));
+    await expect(mcpCall('get_workload', {})).rejects.toMatchObject({
+      code: 'MCP_ERROR',
+      message: 'Workload not found',
+    });
+  });
+
+  test('does not treat a normal object result as an error when error is absent', async () => {
+    const result = await mcpCall('get_workload', {});
+    expect(result).toEqual({ ok: true });
+  });
+
+  test('does not misinterpret a plain array result as a tool error', async () => {
+    mockFetch.mockResolvedValue(okResponse([{ id: '1' }, { id: '2' }]));
+    const result = await mcpCall('list_workloads', {});
+    expect(result).toEqual([{ id: '1' }, { id: '2' }]);
+  });
+
+  test('passes through a workload result that has no error field unaffected', async () => {
+    mockFetch.mockResolvedValue(okResponse({ workload: { id: 'wl-1', name: 'Renamed' } }));
+    const result = await mcpCall('update_workload', {});
+    expect(result).toEqual({ workload: { id: 'wl-1', name: 'Renamed' } });
+  });
 });

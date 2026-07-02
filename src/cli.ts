@@ -14,6 +14,8 @@ import { run as runWildcard } from './commands/wildcard.js';
 import { run as runClaude } from './commands/claude.js';
 import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
 import { run as runListWorkloads } from './commands/list-workloads.js';
+import { run as runGetWorkload } from './commands/get-workload.js';
+import { run as runUpdateWorkload } from './commands/update-workload.js';
 import { run as runFlushPending, spawnBackgroundFlush } from './commands/flush-pending.js';
 import { countPending, flushFailed } from './pending-store.js';
 import { confirm } from './prompt.js';
@@ -30,6 +32,8 @@ import type {
   ComplaintBoxOptions,
   AnalyzeClaudeSessionsOptions,
   ListWorkloadsOptions,
+  GetWorkloadOptions,
+  UpdateWorkloadOptions,
 } from './types.js';
 
 interface ParsedArgs {
@@ -190,6 +194,28 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--include-archived', description: 'Include archived workloads' },
       { flag: '--include-system', description: 'Include system workloads (Unmatched, etc.)' },
       { flag: '--include-templates', description: 'Include templates (with routing patterns) for each workload' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'get-workload',
+    oneLiner: 'Get a single workload by ID',
+    usage: 'coolhand get-workload --id <id> [options]',
+    options: [
+      { flag: '--id ID', description: 'Workload ID (required)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'update-workload',
+    oneLiner: 'Update an existing workload',
+    usage: 'coolhand update-workload --id <id> [options]',
+    options: [
+      { flag: '--id ID', description: 'Workload ID (required)' },
+      { flag: '--name VALUE', description: 'New name (not allowed for system workloads)' },
+      { flag: '--description VALUE', description: 'New description' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -546,6 +572,62 @@ function analyzeClaudeSessionsOptions(parsed: ParsedArgs): AnalyzeClaudeSessions
   return opts;
 }
 
+function getWorkloadOptions(parsed: ParsedArgs): GetWorkloadOptions {
+  const id = parsed.flags['id'];
+  if (typeof id !== 'string' || id.length === 0) {
+    throw new CliError('INVALID_ARGS', 'get-workload requires --id <id>');
+  }
+  const opts: GetWorkloadOptions = { id };
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+function updateWorkloadOptions(parsed: ParsedArgs): UpdateWorkloadOptions {
+  const id = parsed.flags['id'];
+  if (typeof id !== 'string' || id.length === 0) {
+    throw new CliError('INVALID_ARGS', 'update-workload requires --id <id>');
+  }
+  const opts: UpdateWorkloadOptions = { id };
+  if ('name' in parsed.flags) {
+    const name = parsed.flags['name'];
+    if (typeof name !== 'string') {
+      throw new CliError(
+        'INVALID_ARGS',
+        '--name requires a value (use --name=VALUE if the value starts with a dash)'
+      );
+    }
+    if (name.length === 0) {
+      throw new CliError('INVALID_ARGS', '--name requires a non-empty value');
+    }
+    opts.name = name;
+  }
+  if ('description' in parsed.flags) {
+    const description = parsed.flags['description'];
+    if (typeof description !== 'string') {
+      throw new CliError(
+        'INVALID_ARGS',
+        '--description requires a value (use --description=VALUE if the value starts with a dash)'
+      );
+    }
+    opts.description = description;
+  }
+  if (opts.name === undefined && opts.description === undefined) {
+    throw new CliError('INVALID_ARGS', 'update-workload requires at least one of --name or --description');
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 function listWorkloadsOptions(parsed: ParsedArgs): ListWorkloadsOptions {
   const opts: ListWorkloadsOptions = {};
   if (typeof parsed.flags.search === 'string') {
@@ -740,6 +822,10 @@ export async function run(argv: string[]): Promise<number> {
         return await runAnalyzeClaudeSessions(analyzeClaudeSessionsOptions(parsed));
       case 'list-workloads':
         return await runListWorkloads(listWorkloadsOptions(parsed));
+      case 'get-workload':
+        return await runGetWorkload(getWorkloadOptions(parsed));
+      case 'update-workload':
+        return await runUpdateWorkload(updateWorkloadOptions(parsed));
       default:
         logger.info(`Unknown command: ${parsed.command}`);
         logger.info(buildSummaryHelp());

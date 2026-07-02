@@ -70,6 +70,20 @@ export interface ListWorkloadsOptions {
   clientId?: string;
 }
 
+export interface GetWorkloadOptions {
+  id: string;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface UpdateWorkloadOptions {
+  id: string;
+  name?: string;
+  description?: string;
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface SearchOptimizationsOptions {
   status?: string;
   type?: string;

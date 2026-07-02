@@ -112,5 +112,16 @@ export async function mcpCall(
     throw new CliError('MCP_ERROR', `MCP error: ${json.error.message ?? JSON.stringify(json.error)}`);
   }
 
+  // A tool call can also fail at the tool-execution level (e.g. a business-rule
+  // rejection like "Cannot rename system workloads") while the JSON-RPC envelope
+  // itself reports success. Every tool in this backend returns that case as a plain
+  // `{ error: "..." }` result hash rather than a top-level JSON-RPC `error`.
+  if (json.result !== null && typeof json.result === 'object' && !Array.isArray(json.result)) {
+    const result = json.result as { error?: unknown };
+    if (typeof result.error === 'string' && result.error.length > 0) {
+      throw new CliError('MCP_ERROR', result.error);
+    }
+  }
+
   return json.result;
 }

@@ -72,6 +72,16 @@ describe('parseArgs', () => {
     expect(parsed.command).toBe('close-optimization');
     expect(parsed.positional).toEqual(['opt-1', 'looks', 'good']);
   });
+
+  test('space-separated flag value starting with a dash is NOT consumed (use --flag=value instead)', () => {
+    const parsed = parseArgs(['update-workload', '--description', '-1 fix']);
+    expect(parsed.flags.description).toBe(true);
+  });
+
+  test('--flag=value syntax correctly captures a value starting with a dash', () => {
+    const parsed = parseArgs(['update-workload', '--description=-1 fix']);
+    expect(parsed.flags.description).toBe('-1 fix');
+  });
 });
 
 describe('run', () => {
@@ -135,6 +145,42 @@ describe('run', () => {
 
   test('update-optimization without id returns exit 1', async () => {
     const code = await run(['update-optimization']);
+    expect(code).toBe(1);
+  });
+
+  test('get-workload without --id returns exit 1', async () => {
+    const code = await run(['get-workload']);
+    expect(code).toBe(1);
+  });
+
+  test('update-workload without --id returns exit 1', async () => {
+    const code = await run(['update-workload', '--name', 'New name']);
+    expect(code).toBe(1);
+  });
+
+  test('update-workload with --id but no --name/--description returns exit 1', async () => {
+    const code = await run(['update-workload', '--id', 'wl-1']);
+    expect(code).toBe(1);
+  });
+
+  test('update-workload with trailing --name (no value) returns exit 1 with a specific error', async () => {
+    const spy = jest.spyOn(logger, 'info');
+    const code = await run(['update-workload', '--id', 'wl-1', '--name']);
+    expect(code).toBe(1);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('--name requires a value'));
+    spy.mockRestore();
+  });
+
+  test('update-workload with --description value starting with a dash uses --description=VALUE, not silent drop', async () => {
+    const spy = jest.spyOn(logger, 'info');
+    const code = await run(['update-workload', '--id', 'wl-1', '--description', '-1 fix']);
+    expect(code).toBe(1);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('--description requires a value'));
+    spy.mockRestore();
+  });
+
+  test('update-workload with empty --name returns exit 1', async () => {
+    const code = await run(['update-workload', '--id', 'wl-1', '--name', '']);
     expect(code).toBe(1);
   });
 
