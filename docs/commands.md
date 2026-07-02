@@ -154,6 +154,37 @@ The `templates` key is absent entirely when `--include-templates` is not passed.
 
 Human-readable output includes a pagination hint: `Page N of M (X total) — use --page N to navigate`.
 
+### get-workload
+
+```bash
+coolhand get-workload --id <id> [--client-id ID] [--json]
+```
+
+Fetches a single workload by ID.
+
+| Flag | Description |
+|------|-------------|
+| `--id ID` | Workload ID (required) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+### update-workload
+
+```bash
+coolhand update-workload --id <id> [--name VALUE] [--description VALUE]
+                          [--client-id ID] [--json]
+```
+
+Updates a workload's name and/or description. At least one of `--name` or `--description` is required.
+
+| Flag | Description |
+|------|-------------|
+| `--id ID` | Workload ID (required) |
+| `--name VALUE` | New name (system workloads such as Unmatched, Embedding Requests, and Ignored API Calls cannot be renamed) |
+| `--description VALUE` | New description |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
 ## Optimizations
 
 Coolhand stores LLM-generated optimization suggestions as structured records. These commands let you query, update, and act on them from the terminal or from agent workflows.

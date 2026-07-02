@@ -131,6 +131,21 @@ describe('run', () => {
     expect(code).toBe(1);
   });
 
+  test('get-workload without --id returns exit 1', async () => {
+    const code = await run(['get-workload']);
+    expect(code).toBe(1);
+  });
+
+  test('update-workload without --id returns exit 1', async () => {
+    const code = await run(['update-workload', '--name', 'New name']);
+    expect(code).toBe(1);
+  });
+
+  test('update-workload with --id but no --name/--description returns exit 1', async () => {
+    const code = await run(['update-workload', '--id', 'wl-1']);
+    expect(code).toBe(1);
+  });
+
   test('global --client-id with no value returns exit 1', async () => {
     const code = await run(['--client-id']);
     expect(code).toBe(1);
