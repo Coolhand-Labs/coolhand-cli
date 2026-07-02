@@ -4,6 +4,8 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-02
+
 ### Added
 - `list-workloads` command: browse and search workloads by name with pagination (`--search`, `--page`, `--per-page`, `--include-archived`, `--include-system`, `--include-templates`). Requires a private API key (`coolhand login --scope private`).
 - `get-workload --id <id>` and `update-workload --id <id> [--name VALUE] [--description VALUE]` commands: fetch or rename/re-describe a single workload. Unlike `get-optimization`/`update-optimization`, the ID is passed via `--id` rather than as a positional argument, since `--workload-id` is already an established flag name elsewhere in the CLI for *filtering by* workload — using `--id` here avoids reusing that name for a different meaning. `update-workload` requires at least one of `--name`/`--description`; renaming a system workload (`Unmatched`, `Embedding Requests`, `Ignored API Calls`) is rejected by the API, though updating its description is allowed.
