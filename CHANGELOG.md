@@ -4,6 +4,8 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-03
+
 ### Added
 - `monitor` command: generalizes the in-process MITM proxy wrapping that `claude` already provides to any CLI (e.g. `coolhand monitor -- kimi --resume`), so other tools' outbound LLM traffic can be captured the same way, without a separate daemon process.
 
