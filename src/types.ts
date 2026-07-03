@@ -144,7 +144,7 @@ export interface ClaudeOptions {
   clientId?: string;
 }
 
-export interface ProxyWrapOptions {
+export interface MonitorOptions {
   // The CLI to spawn behind the proxy.
   command: string;
   // Arguments to forward verbatim to that CLI.

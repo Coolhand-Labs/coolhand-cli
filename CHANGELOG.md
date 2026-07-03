@@ -5,7 +5,7 @@ All notable changes to `coolhand-cli` will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- `proxy-wrap` command: generalizes the in-process MITM proxy wrapping that `claude` already provides to any CLI (e.g. `coolhand proxy-wrap -- kimi --resume`), so other tools' outbound LLM traffic can be captured the same way, without a separate daemon process.
+- `monitor` command: generalizes the in-process MITM proxy wrapping that `claude` already provides to any CLI (e.g. `coolhand monitor -- kimi --resume`), so other tools' outbound LLM traffic can be captured the same way, without a separate daemon process.
 
 ## [0.6.0] - 2026-07-02
 

@@ -8,7 +8,7 @@ jest.mock('../src/proxy/certs.js', () => ({
 jest.mock('../src/commands/claude.js', () => ({
   run: jest.fn(),
 }));
-jest.mock('../src/commands/proxy-wrap.js', () => ({
+jest.mock('../src/commands/monitor.js', () => ({
   run: jest.fn(),
 }));
 jest.mock('../src/commands/search-optimizations.js', () => ({
@@ -28,7 +28,7 @@ import { confirm } from '../src/prompt.js';
 import { markFlushFailed, savePendingRecord } from '../src/pending-store.js';
 import { createTmpHome, TmpHome } from './helpers/tmp-home.js';
 import { run as runClaudeCommand } from '../src/commands/claude.js';
-import { run as runProxyWrapCommand } from '../src/commands/proxy-wrap.js';
+import { run as runMonitorCommand } from '../src/commands/monitor.js';
 import { run as runSearchOptimizationsCommand } from '../src/commands/search-optimizations.js';
 
 function makePending() {
@@ -94,7 +94,7 @@ describe('run', () => {
   beforeEach(async () => {
     home = await createTmpHome();
     (runClaudeCommand as jest.Mock).mockResolvedValue(0);
-    (runProxyWrapCommand as jest.Mock).mockResolvedValue(0);
+    (runMonitorCommand as jest.Mock).mockResolvedValue(0);
     (runSearchOptimizationsCommand as jest.Mock).mockResolvedValue(0);
     (runFlushPending as jest.Mock).mockClear().mockResolvedValue(0);
     (spawnBackgroundFlush as jest.Mock).mockClear();
@@ -104,7 +104,7 @@ describe('run', () => {
   afterEach(async () => {
     await home.cleanup();
     (runClaudeCommand as jest.Mock).mockReset();
-    (runProxyWrapCommand as jest.Mock).mockReset();
+    (runMonitorCommand as jest.Mock).mockReset();
     (runSearchOptimizationsCommand as jest.Mock).mockReset();
     warnSpy.mockRestore();
   });
@@ -214,28 +214,28 @@ describe('run', () => {
     expect(runClaudeCommand).toHaveBeenCalledWith({ args: ['--resume'], clientId: 'acme' });
   });
 
-  test('global --client-id is forwarded to the proxy-wrap passthrough', async () => {
-    const code = await run(['--client-id', 'acme', 'proxy-wrap', 'kimi', '--resume']);
+  test('global --client-id is forwarded to the monitor passthrough', async () => {
+    const code = await run(['--client-id', 'acme', 'monitor', 'kimi', '--resume']);
     expect(code).toBe(0);
-    expect(runProxyWrapCommand).toHaveBeenCalledWith({ command: 'kimi', args: ['--resume'], clientId: 'acme' });
+    expect(runMonitorCommand).toHaveBeenCalledWith({ command: 'kimi', args: ['--resume'], clientId: 'acme' });
   });
 
-  test('proxy-wrap strips a leading -- before the wrapped command', async () => {
-    const code = await run(['proxy-wrap', '--', 'kimi', '--resume']);
+  test('monitor strips a leading -- before the wrapped command', async () => {
+    const code = await run(['monitor', '--', 'kimi', '--resume']);
     expect(code).toBe(0);
-    expect(runProxyWrapCommand).toHaveBeenCalledWith({ command: 'kimi', args: ['--resume'], clientId: undefined });
+    expect(runMonitorCommand).toHaveBeenCalledWith({ command: 'kimi', args: ['--resume'], clientId: undefined });
   });
 
-  test('proxy-wrap with no command exits with USER_ERROR', async () => {
-    const code = await run(['proxy-wrap']);
+  test('monitor with no command exits with USER_ERROR', async () => {
+    const code = await run(['monitor']);
     expect(code).toBe(1);
-    expect(runProxyWrapCommand).not.toHaveBeenCalled();
+    expect(runMonitorCommand).not.toHaveBeenCalled();
   });
 
-  test('proxy-wrap with only -- and no command exits with USER_ERROR', async () => {
-    const code = await run(['proxy-wrap', '--']);
+  test('monitor with only -- and no command exits with USER_ERROR', async () => {
+    const code = await run(['monitor', '--']);
     expect(code).toBe(1);
-    expect(runProxyWrapCommand).not.toHaveBeenCalled();
+    expect(runMonitorCommand).not.toHaveBeenCalled();
   });
 
   test('warns when both global and per-command --client-id are supplied (per-command wins)', async () => {

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { run } from '../../src/commands/proxy-wrap.js';
+import { run } from '../../src/commands/monitor.js';
 import { resolveWrapSpawn } from '../../src/proxy/wrap-runner.js';
 import { CliError } from '../../src/errors.js';
 
@@ -51,7 +51,7 @@ describe('resolveWrapSpawn', () => {
   });
 });
 
-describe('proxy-wrap command', () => {
+describe('monitor command', () => {
   beforeEach(() => {
     (loadConfig as jest.Mock).mockReset().mockResolvedValue({
       version: 1,

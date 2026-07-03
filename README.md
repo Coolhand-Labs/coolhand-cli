@@ -62,7 +62,7 @@ See [Your AI agent has notes](https://michael.carroll.io/talks/2026/your-ai-agen
 | `coolhand whoami` | Show the currently configured client |
 | `coolhand clients` | List or switch the default client |
 | `coolhand claude` | Run Claude CLI through the Coolhand proxy |
-| `coolhand proxy-wrap` | Run an arbitrary CLI through the Coolhand proxy |
+| `coolhand monitor` | Run an arbitrary CLI through the Coolhand proxy |
 | `coolhand list-workloads` | List workloads with optional search and pagination |
 | `coolhand get-workload` | Fetch a single workload by ID |
 | `coolhand update-workload` | Update a workload's name and/or description |
