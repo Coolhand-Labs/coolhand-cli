@@ -12,6 +12,7 @@ import { run as runCloseOptimization } from './commands/close-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
 import { run as runWildcard } from './commands/wildcard.js';
 import { run as runClaude } from './commands/claude.js';
+import { run as runProxyWrap } from './commands/proxy-wrap.js';
 import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
 import { run as runListWorkloads } from './commands/list-workloads.js';
 import { run as runGetWorkload } from './commands/get-workload.js';
@@ -181,6 +182,15 @@ const COMMANDS: CommandMeta[] = [
     options: [
       { flag: '--client-id ID', description: 'Use a specific stored client (must come before `claude`, not after)' },
       { flag: '[claude args...]', description: 'Everything after `claude` is passed straight to the Claude CLI' },
+    ],
+  },
+  {
+    name: 'proxy-wrap',
+    oneLiner: 'Run an arbitrary CLI through the Coolhand proxy (captures LLM calls)',
+    usage: 'coolhand [--client-id ID] proxy-wrap [--] <command> [args...]',
+    options: [
+      { flag: '--client-id ID', description: 'Use a specific stored client (must come before `proxy-wrap`, not after)' },
+      { flag: '<command> [args...]', description: 'The CLI to run and its arguments, e.g. `kimi --resume`' },
     ],
   },
   {
@@ -745,6 +755,21 @@ export async function run(argv: string[]): Promise<number> {
     // verbatim (e.g. `coolhand claude --resume`), so it must skip the flag parser.
     if (argv2[0] === 'claude') {
       return await runClaude({ args: argv2.slice(1), clientId: globalClientId });
+    }
+
+    // `proxy-wrap` is a passthrough wrapper too: everything after the wrapped
+    // command's name goes to it verbatim (e.g. `coolhand proxy-wrap kimi --resume`).
+    // An optional leading `--` may be used to separate it from `proxy-wrap` itself.
+    if (argv2[0] === 'proxy-wrap') {
+      let rest = argv2.slice(1);
+      if (rest[0] === '--') {
+        rest = rest.slice(1);
+      }
+      const [command, ...args] = rest;
+      if (!command) {
+        throw new CliError('INVALID_ARGS', 'proxy-wrap requires a command to run, e.g. `coolhand proxy-wrap -- kimi --resume`');
+      }
+      return await runProxyWrap({ command, args, clientId: globalClientId });
     }
 
     parsed = parseArgs(argv2);

@@ -144,5 +144,13 @@ export interface ClaudeOptions {
   clientId?: string;
 }
 
+export interface ProxyWrapOptions {
+  // The CLI to spawn behind the proxy.
+  command: string;
+  // Arguments to forward verbatim to that CLI.
+  args: string[];
+  clientId?: string;
+}
+
 export const DEFAULT_BASE_URL = 'https://coolhandlabs.com';
 export const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
