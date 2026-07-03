@@ -176,6 +176,20 @@ describe('startProxy', () => {
     expect(sendToCoolhand).not.toHaveBeenCalled();
   });
 
+  test('passes a custom collector option through to sendToCoolhand', async () => {
+    (shouldCapture as jest.Mock).mockReturnValue(true);
+    await startProxy(CA, { apiKey: 'key', silent: true, collector: 'coolhand-cli-0.7.0/kimi' });
+
+    registeredHandlers.request(makeReq('r6'));
+    registeredHandlers.response(makeRes('r6'));
+
+    await flush();
+
+    expect(sendToCoolhand).toHaveBeenCalledTimes(1);
+    const [, sendOpts] = (sendToCoolhand as jest.Mock).mock.calls[0];
+    expect(sendOpts.collector).toBe('coolhand-cli-0.7.0/kimi');
+  });
+
   test('response for unknown request id is silently ignored', async () => {
     await startProxy(CA, { apiKey: 'key', silent: true });
 

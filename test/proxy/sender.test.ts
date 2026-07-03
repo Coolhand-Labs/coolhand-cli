@@ -78,4 +78,20 @@ describe('sendToCoolhand', () => {
     await expect(sendToCoolhand(INTERACTION, { apiKey: 'k', silent: true })).resolves.toBeUndefined();
   });
 
+  test('defaults the collector label to <package>/claude when omitted', async () => {
+    await sendToCoolhand(INTERACTION, { apiKey: 'k', silent: true });
+
+    const [, init] = (fetch as jest.Mock).mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.llm_request_log.collector).toMatch(/\/claude$/);
+  });
+
+  test('uses a custom collector label when provided', async () => {
+    await sendToCoolhand(INTERACTION, { apiKey: 'k', silent: true, collector: 'coolhand-cli-0.7.0/kimi' });
+
+    const [, init] = (fetch as jest.Mock).mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.llm_request_log.collector).toBe('coolhand-cli-0.7.0/kimi');
+  });
+
 });

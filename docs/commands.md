@@ -109,6 +109,27 @@ On first run a self-signed CA certificate is generated at `~/.coolhand/proxy/ca-
 |------|-------------|
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var). Must come **before** `claude` — anything after `claude` is forwarded to the Claude CLI verbatim, so `coolhand claude --client-id acme` passes `--client-id acme` to Claude itself (which does not recognize it). |
 
+### monitor
+
+```bash
+coolhand [--client-id ID] monitor [--] <command> [args...]
+```
+
+Runs an arbitrary CLI through the same in-process HTTPS MITM proxy `claude` uses, capturing outbound LLM API calls and forwarding them to Coolhand. Generalizes `claude`'s proxy wiring to any tool (e.g. `kimi`). A leading `--` is optional and, if present, is stripped before the wrapped command name:
+
+```bash
+coolhand monitor -- kimi                    # starts kimi with capture on
+coolhand monitor kimi --resume              # the -- is optional
+coolhand --client-id acme monitor -- kimi   # capture under the "acme" account
+```
+
+On first run a self-signed CA certificate is generated at `~/.coolhand/proxy/ca-cert.pem`; the wrapped process trusts it automatically via `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, and `REQUESTS_CA_BUNDLE`. See [docs/proxy.md](./proxy.md) for details.
+
+| Flag | Description |
+|------|-------------|
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var). Must come **before** `monitor` — anything after it is forwarded to the wrapped command verbatim. |
+| `<command> [args...]` | The CLI to run and its arguments, e.g. `kimi --resume`. |
+
 ## Workloads
 
 ### list-workloads

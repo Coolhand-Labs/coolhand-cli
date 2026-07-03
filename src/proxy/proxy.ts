@@ -10,6 +10,8 @@ export interface ProxyOptions {
   apiKey: string;
   apiEndpoint?: string;
   silent?: boolean;
+  /** Overrides the default `<package>/claude` collector label sent with each captured request. */
+  collector?: string;
 }
 
 export interface ProxyInstance {
@@ -102,6 +104,7 @@ export async function startProxy(
         apiKey: options.apiKey,
         apiEndpoint: options.apiEndpoint,
         silent: options.silent,
+        collector: options.collector,
       });
     }).catch((err) => {
       if (!options.silent) {
