@@ -4,6 +4,8 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-02
+
 ### Added
 - `list-workloads` command: browse and search workloads by name with pagination (`--search`, `--page`, `--per-page`, `--include-archived`, `--include-system`, `--include-templates`). Requires a private API key (`coolhand login --scope private`).
 - `get-workload --id <id>` and `update-workload --id <id> [--name VALUE] [--description VALUE]` commands: fetch or rename/re-describe a single workload. Unlike `get-optimization`/`update-optimization`, the ID is passed via `--id` rather than as a positional argument, since `--workload-id` is already an established flag name elsewhere in the CLI for *filtering by* workload — using `--id` here avoids reusing that name for a different meaning. `update-workload` requires at least one of `--name`/`--description`; renaming a system workload (`Unmatched`, `Embedding Requests`, `Ignored API Calls`) is rejected by the API, though updating its description is allowed.
@@ -26,6 +28,9 @@ All notable changes to `coolhand-cli` will be documented in this file.
 - `coolhand claude` (and all other API commands) now prompt interactively when multiple clients are stored and no default is set. In non-TTY environments (CI, scripts) this produces a descriptive error listing available clients instead of a generic NOT_CONFIGURED. Use `--client-id` or `COOLHAND_CLIENT_ID` to select a client non-interactively.
 - `status`, `whoami`, and `clients` display `(no public key)` instead of `***` for clients that have only a private key.
 - `mcp-call` now treats a tool result shaped `{ error: "..." }` (the convention every backend MCP tool uses for business-logic failures, e.g. "Cannot rename system workloads") as a failure. Previously only a top-level JSON-RPC `error` field was checked, so a rejected tool call (bad workload ID, disallowed rename, etc.) exited 0 and printed the raw `{"error": "..."}` object as if it were a successful result.
+
+### Docs
+- README `analyze-claude-sessions` section clarifies exactly what gets uploaded (conversation transcripts from `~/.claude/projects/`) and replaces "scans" with "analyzes"/"capture" for accuracy.
 
 ## [0.5.2] - 2026-06-27
 
