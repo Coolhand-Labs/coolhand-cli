@@ -4,6 +4,14 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `get-optimization` now prints a human-readable summary by default (title, status, type, category, impact, complexity, client/template/workload, created date, analysis, and plan) instead of a raw JSON dump, plus a "Next steps" footer pointing to `close-optimization`/`update-optimization`.
+- `get-optimization --full` flag: includes the internal `orchestrator_messages` transcript (and any `thoughtSignature` blobs it contains) on both text and `--json` output. This is omitted by default — including from `--json` output, which previously always returned the complete raw payload — since it can add tens of KB of internal agent-transcript data that isn't decision-relevant for most callers. Pass `--full --json` to get the complete payload as before.
+
+### Fixed
+- `close-optimization` now sends `explanation` (matching what the backend `close_optimization` tool actually requires) instead of `reason` in the underlying API call. The CLI-facing `<reason>` positional argument is unchanged; only the outgoing field name was corrected. Previously this command failed against the real API.
+- `get-optimization` now correctly unwraps the `{ optimization: {...} }` response shape returned by the backend. Previously fields (`pr_number`, `pr_url`, `coding_prompt`, etc.) were read from the top level and were silently never populated.
+
 ## [0.6.0] - 2026-07-02
 
 ### Added

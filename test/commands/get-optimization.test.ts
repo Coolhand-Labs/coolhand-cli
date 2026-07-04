@@ -69,4 +69,107 @@ describe('get-optimization command', () => {
     expect(code).toBe(0);
     expect(mcpCall).toHaveBeenCalledWith('get_optimization', { id: 'opt-1' }, { clientId: 'my-client' });
   });
+
+  test('prints known summary fields when present', async () => {
+    (mcpCall as jest.Mock).mockResolvedValue({
+      id: 'opt-1',
+      title: 'Reduce latency',
+      status: 'proposed',
+      impact: 'high_impact',
+      complexity: 'medium_complexity',
+    });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ id: 'opt-1' });
+    const calls = spy.mock.calls.map(([msg]) => msg as string);
+    expect(calls).toContain('Title: Reduce latency');
+    expect(calls).toContain('Status: proposed');
+    expect(calls).toContain('Impact: high_impact');
+    expect(calls).toContain('Complexity: medium_complexity');
+    spy.mockRestore();
+  });
+
+  test('unwraps a nested { optimization: {...} } response', async () => {
+    (mcpCall as jest.Mock).mockResolvedValue({ optimization: { id: 'opt-1', title: 'Reduce latency' } });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ id: 'opt-1' });
+    const calls = spy.mock.calls.map(([msg]) => msg as string);
+    expect(calls).toContain('Title: Reduce latency');
+    spy.mockRestore();
+  });
+
+  test('does not print orchestrator_messages in default text mode', async () => {
+    (mcpCall as jest.Mock).mockResolvedValue({
+      id: 'opt-1',
+      title: 'Reduce latency',
+      orchestrator_messages: [{ role: 'tool', thoughtSignature: 'abc123' }],
+    });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ id: 'opt-1' });
+    const calls = spy.mock.calls.map(([msg]) => msg as string);
+    expect(calls.every((msg) => !msg.includes('thoughtSignature'))).toBe(true);
+    expect(calls.every((msg) => !msg.includes('Orchestrator Messages'))).toBe(true);
+    spy.mockRestore();
+  });
+
+  test('strips orchestrator_messages from default --json output', async () => {
+    (mcpCall as jest.Mock).mockResolvedValue({
+      optimization: { id: 'opt-1', title: 'Reduce latency', orchestrator_messages: [{ thoughtSignature: 'abc123' }] },
+    });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'json');
+    await run({ id: 'opt-1', json: true });
+    const payload = spy.mock.calls[0][0] as { result: { optimization: Record<string, unknown> } };
+    expect(payload.result.optimization.orchestrator_messages).toBeUndefined();
+    spy.mockRestore();
+  });
+
+  test('--full includes orchestrator_messages in --json output', async () => {
+    (mcpCall as jest.Mock).mockResolvedValue({
+      optimization: { id: 'opt-1', title: 'Reduce latency', orchestrator_messages: [{ thoughtSignature: 'abc123' }] },
+    });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'json');
+    await run({ id: 'opt-1', json: true, full: true });
+    const payload = spy.mock.calls[0][0] as { result: { optimization: Record<string, unknown> } };
+    expect(payload.result.optimization.orchestrator_messages).toEqual([{ thoughtSignature: 'abc123' }]);
+    spy.mockRestore();
+  });
+
+  test('--full text mode prints orchestrator_messages block', async () => {
+    (mcpCall as jest.Mock).mockResolvedValue({
+      id: 'opt-1',
+      title: 'Reduce latency',
+      orchestrator_messages: [{ thoughtSignature: 'abc123' }],
+    });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ id: 'opt-1', full: true });
+    const calls = spy.mock.calls.map(([msg]) => msg as string);
+    expect(calls.some((msg) => msg.includes('Orchestrator Messages') && msg.includes('thoughtSignature'))).toBe(true);
+    spy.mockRestore();
+  });
+
+  test('prints Next steps footer in text mode but not in --json mode', async () => {
+    (mcpCall as jest.Mock).mockResolvedValue({ id: 'opt-1', title: 'Reduce latency' });
+    const { logger } = await import('../../src/logger.js');
+    const infoSpy = jest.spyOn(logger, 'info');
+    const jsonSpy = jest.spyOn(logger, 'json');
+
+    await run({ id: 'opt-1' });
+    const textCalls = infoSpy.mock.calls.map(([msg]) => msg as string);
+    expect(textCalls.some((msg) => msg.includes('Next steps:') && msg.includes('close-optimization opt-1'))).toBe(true);
+
+    infoSpy.mockClear();
+    jsonSpy.mockClear();
+    await run({ id: 'opt-1', json: true });
+    expect(infoSpy).not.toHaveBeenCalled();
+    const payload = JSON.stringify(jsonSpy.mock.calls[0][0]);
+    expect(payload).not.toContain('Next steps');
+
+    infoSpy.mockRestore();
+    jsonSpy.mockRestore();
+  });
 });
