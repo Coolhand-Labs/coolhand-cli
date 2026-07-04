@@ -243,13 +243,24 @@ coolhand search-optimizations [--status V] [--type V] [--category V] [--query V]
 ### get-optimization
 
 ```bash
-coolhand get-optimization <id> [--client-id ID] [--json]
+coolhand get-optimization <id> [--full] [--client-id ID] [--json]
 ```
 
-Fetches a single optimization by ID. When present, output includes PR information (`PR: #N <url>`) and a `--- Coding Prompt ---` block with the full coding prompt text.
+Fetches a single optimization by ID. Default output is a human-readable summary (ID, title,
+status, type, category, impact, complexity, client, template, workload, created date, dismissal
+reason, analysis, and plan, when present), followed by PR information (`PR: #N <url>`) and a
+`--- Coding Prompt ---` block when present, and a "Next steps" footer pointing to
+`close-optimization`/`update-optimization`.
+
+The backend response also includes an internal `orchestrator_messages` field — the full
+tool-call transcript from the agent that produced the optimization, including raw model
+`thoughtSignature` blobs. This is large (tens of KB) and not decision-relevant for most
+callers, so it is **omitted by default** from both text and `--json` output. Pass `--full` to
+include it in either mode.
 
 | Flag | Description |
 |------|-------------|
+| `--full` | Include the internal `orchestrator_messages` transcript (large; contains raw `thoughtSignature` blobs), on both text and `--json` output |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 

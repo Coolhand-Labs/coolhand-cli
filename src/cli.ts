@@ -51,7 +51,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full']);
 
 const COMMANDS: CommandMeta[] = [
   {
@@ -124,8 +124,9 @@ const COMMANDS: CommandMeta[] = [
   {
     name: 'get-optimization',
     oneLiner: 'Get a single optimization by ID',
-    usage: 'coolhand get-optimization <id> [options]',
+    usage: 'coolhand get-optimization <id> [--full] [options]',
     options: [
+      { flag: '--full', description: 'Include the internal orchestrator_messages transcript (large; contains raw thoughtSignature blobs), on both text and --json output' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -524,6 +525,9 @@ function getOptimizationOptions(parsed: ParsedArgs): GetOptimizationOptions {
   }
   if (parsed.flags.json === true) {
     opts.json = true;
+  }
+  if (parsed.flags.full === true) {
+    opts.full = true;
   }
   return opts;
 }
