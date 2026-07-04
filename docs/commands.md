@@ -63,13 +63,14 @@ Exit code `0` if a token is configured for the default (or requested) client, `1
   "configured": true,
   "clients": [
     {"client_id": "acme", "client_name": "Acme Inc",
-     "masked_token": "e885b463…1148", "base_url": "https://coolhandlabs.com"}
+     "masked_token": "e885b463…1148", "masked_private_key": "ch_priv_a…b6a4",
+     "base_url": "https://coolhandlabs.com"}
   ],
   "default_client_id": "acme"
 }
 ```
 
-`masked_token` is `"(no public key)"` when only a private key was granted.
+`masked_token` is `"(no public key)"` when only a private key was granted. Likewise `masked_private_key` is `"(no private key)"` when no private key is stored — run `coolhand login --scope private` to obtain one.
 
 ### whoami
 
@@ -77,7 +78,7 @@ Exit code `0` if a token is configured for the default (or requested) client, `1
 coolhand whoami [--client-id ID]
 ```
 
-Prints the currently configured client name, ID, masked token, and base URL.
+Prints the currently configured client name, ID, masked public token, masked private key (or `(no private key)`), and base URL.
 
 ### clients
 
@@ -86,6 +87,8 @@ coolhand clients [use <id>] [--json]
 ```
 
 Lists all stored clients. `coolhand clients use <id>` switches the default. Each `coolhand login` adds (or refreshes) one entry, keyed by the server-assigned `client_id`.
+
+The plain-text listing is `<id>  <name>  <masked public key>  <masked private key>  <base_url>` (one client per line, default marked with `*`). The masked private key column is `(no private key)` when none is stored. Scripts parsing this output by column position should account for this column.
 
 ## LLM Capture
 

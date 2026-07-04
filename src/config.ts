@@ -114,7 +114,11 @@ export function getClient(cfg: ConfigFile, clientId?: string): ClientEntry | und
 
 export async function upsertClient(entry: ClientEntry, makeDefault = true): Promise<ConfigFile> {
   const cfg = await loadConfig();
-  cfg.clients[entry.client_id] = entry;
+  // Merge onto any existing entry for this client_id so a partial entry (e.g. a
+  // public-only re-login) doesn't silently drop fields it didn't provide, such as a
+  // previously-stored private_key.
+  const existing = cfg.clients[entry.client_id];
+  cfg.clients[entry.client_id] = existing ? { ...existing, ...entry } : entry;
   if (makeDefault || !cfg.default_client_id) {
     cfg.default_client_id = entry.client_id;
   }

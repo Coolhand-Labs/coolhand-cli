@@ -1,5 +1,5 @@
-import { run as runStatus } from '../../src/commands/status.js';
-import { upsertClient } from '../../src/config.js';
+import { run as runStatus, buildStatusOutput } from '../../src/commands/status.js';
+import { loadConfig, upsertClient } from '../../src/config.js';
 import { createTmpHome, TmpHome } from '../helpers/tmp-home.js';
 
 function makeEntry(id: string) {
@@ -44,5 +44,19 @@ describe('status command', () => {
     await upsertClient(makeEntry('a'), true);
     const code = await runStatus({ clientId: 'missing' });
     expect(code).toBe(1);
+  });
+
+  test('buildStatusOutput reports masked_private_key when a private key is stored', async () => {
+    await upsertClient({ ...makeEntry('a'), private_key: 'ch_priv_aaaaaaaaaaaaaaaa' }, true);
+    const cfg = await loadConfig();
+    const output = buildStatusOutput(cfg);
+    expect(output.clients[0].masked_private_key).not.toBe('(no private key)');
+  });
+
+  test('buildStatusOutput reports no private key when none is stored', async () => {
+    await upsertClient(makeEntry('a'), true);
+    const cfg = await loadConfig();
+    const output = buildStatusOutput(cfg);
+    expect(output.clients[0].masked_private_key).toBe('(no private key)');
   });
 });

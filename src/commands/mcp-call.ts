@@ -98,7 +98,11 @@ export async function mcpCall(
   const text = await res.text().catch(() => '');
   const snippet = text.slice(0, 2000);
   if (!res.ok) {
-    throw new CliError('MCP_ERROR', `MCP request failed (${res.status}): ${snippet}`);
+    const hint =
+      res.status === 401
+        ? " The stored private key was rejected — run 'coolhand login --scope private' to re-authenticate."
+        : '';
+    throw new CliError('MCP_ERROR', `MCP request failed (${res.status}): ${snippet}${hint}`);
   }
 
   let json: { result?: unknown; error?: { message?: string } };

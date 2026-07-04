@@ -4,6 +4,13 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- `login` no longer silently drops a previously-stored `private_key` when a later plain `coolhand login` (public scope only) re-authenticates the same client. `upsertClient` now merges onto the existing stored entry instead of fully replacing it, fixing intermittent 401s on private-scope commands (`update-workload`, `list-workloads`) after re-logging in without `--scope private` (#59).
+
+### Changed
+- `mcp-call` 401 errors now include a hint to run `coolhand login --scope private` to re-authenticate.
+- `status`, `whoami`, and `clients` now also display whether a private key is stored (masked, or `(no private key)`), via a new `masked_private_key` field in JSON output and an extra column in `clients`' plain-text listing.
+
 ## [0.7.0] - 2026-07-03
 
 ### Added
