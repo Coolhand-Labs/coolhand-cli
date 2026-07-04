@@ -52,6 +52,23 @@ Set `COOLHAND_AGENT_NAME` to avoid passing `--agent-name` on every call. Optiona
 
 See [Your AI agent has notes](https://michael.carroll.io/talks/2026/your-ai-agent-has-notes) for a presentation on the research & best practices for using this pattern.
 
+## Optimizations
+
+Coolhand surfaces optimizations found for your production agents — a way to search, inspect, and act on suggested improvements without leaving the terminal:
+
+```bash
+# Find open, high-impact optimizations
+coolhand search-optimizations --status proposed --sort-by impact_desc
+
+# Inspect one in full (human-readable by default; add --json for scripting)
+coolhand get-optimization opt-123
+
+# Apply the fix, then close it out with a reason
+coolhand close-optimization opt-123 "Added the suggested index; verified query latency dropped from 800ms to 120ms in staging."
+```
+
+`get-optimization` prints a scannable summary by default — title, status, impact/complexity, analysis, and plan — not a raw JSON dump. Internal agent transcript data (`orchestrator_messages`) is only included with `--full`. See [docs/commands.md](./docs/commands.md) for the full flag reference, including `update-optimization` for editing an optimization's fields in place.
+
 ## Commands
 
 | Command | Description |

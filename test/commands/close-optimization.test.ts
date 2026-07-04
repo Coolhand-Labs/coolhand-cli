@@ -10,12 +10,12 @@ describe('close-optimization command', () => {
     (mcpCall as jest.Mock).mockReset().mockResolvedValue({ ok: true });
   });
 
-  test('calls close_optimization with id and reason', async () => {
+  test('calls close_optimization with id and explanation', async () => {
     const code = await run({ id: 'opt-1', reason: 'shipped' });
     expect(code).toBe(0);
     expect(mcpCall).toHaveBeenCalledWith('close_optimization', {
       id: 'opt-1',
-      reason: 'shipped',
+      explanation: 'shipped',
     }, { clientId: undefined });
   });
 
@@ -43,7 +43,7 @@ describe('close-optimization command', () => {
     expect(code).toBe(0);
     expect(mcpCall).toHaveBeenCalledWith('close_optimization', {
       id: 'opt-1',
-      reason: 'shipped',
+      explanation: 'shipped',
     }, { clientId: 'my-client' });
   });
 });

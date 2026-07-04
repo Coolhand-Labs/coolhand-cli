@@ -104,6 +104,7 @@ export interface SearchOptimizationsOptions {
 export interface GetOptimizationOptions {
   id: string;
   json?: boolean;
+  full?: boolean;
   clientId?: string;
 }
 

@@ -5,7 +5,7 @@ import type { CloseOptimizationOptions } from '../types.js';
 
 export async function run(opts: CloseOptimizationOptions): Promise<number> {
   try {
-    const result = await mcpCall('close_optimization', { id: opts.id, reason: opts.reason }, { clientId: opts.clientId });
+    const result = await mcpCall('close_optimization', { id: opts.id, explanation: opts.reason }, { clientId: opts.clientId });
 
     if (opts.json) {
       logger.json({ ok: true, result });
