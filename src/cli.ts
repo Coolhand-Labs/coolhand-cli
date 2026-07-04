@@ -12,6 +12,7 @@ import { run as runCloseOptimization } from './commands/close-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
 import { run as runWildcard } from './commands/wildcard.js';
 import { run as runClaude } from './commands/claude.js';
+import { run as runMonitor } from './commands/monitor.js';
 import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
 import { run as runListWorkloads } from './commands/list-workloads.js';
 import { run as runGetWorkload } from './commands/get-workload.js';
@@ -182,6 +183,15 @@ const COMMANDS: CommandMeta[] = [
     options: [
       { flag: '--client-id ID', description: 'Use a specific stored client (must come before `claude`, not after)' },
       { flag: '[claude args...]', description: 'Everything after `claude` is passed straight to the Claude CLI' },
+    ],
+  },
+  {
+    name: 'monitor',
+    oneLiner: 'Run an arbitrary CLI through the Coolhand proxy (captures LLM calls)',
+    usage: 'coolhand [--client-id ID] monitor [--] <command> [args...]',
+    options: [
+      { flag: '--client-id ID', description: 'Use a specific stored client (must come before `monitor`, not after)' },
+      { flag: '<command> [args...]', description: 'The CLI to run and its arguments, e.g. `kimi --resume`' },
     ],
   },
   {
@@ -749,6 +759,21 @@ export async function run(argv: string[]): Promise<number> {
     // verbatim (e.g. `coolhand claude --resume`), so it must skip the flag parser.
     if (argv2[0] === 'claude') {
       return await runClaude({ args: argv2.slice(1), clientId: globalClientId });
+    }
+
+    // `monitor` is a passthrough wrapper too: everything after the wrapped
+    // command's name goes to it verbatim (e.g. `coolhand monitor kimi --resume`).
+    // An optional leading `--` may be used to separate it from `monitor` itself.
+    if (argv2[0] === 'monitor') {
+      let rest = argv2.slice(1);
+      if (rest[0] === '--') {
+        rest = rest.slice(1);
+      }
+      const [command, ...args] = rest;
+      if (!command) {
+        throw new CliError('INVALID_ARGS', 'monitor requires a command to run, e.g. `coolhand monitor -- kimi --resume`');
+      }
+      return await runMonitor({ command, args, clientId: globalClientId });
     }
 
     parsed = parseArgs(argv2);

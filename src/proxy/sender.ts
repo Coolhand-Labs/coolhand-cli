@@ -20,6 +20,7 @@ interface SendOptions {
   apiKey: string;
   apiEndpoint?: string;
   silent?: boolean;
+  collector?: string;
 }
 
 const DEFAULT_ENDPOINT = "https://coolhandlabs.com/api/v2/llm_request_logs";
@@ -61,7 +62,7 @@ export async function sendToCoolhand(
           timestamp: captured.timestamp,
           protocol: new URL(captured.request.url).protocol.replace(":", ""),
         },
-        collector: `${PACKAGE_IDENTIFIER}/claude`,
+        collector: options.collector ?? `${PACKAGE_IDENTIFIER}/claude`,
       },
     };
 

@@ -12,6 +12,11 @@ All notable changes to `coolhand-cli` will be documented in this file.
 - `close-optimization` now sends `explanation` (matching what the backend `close_optimization` tool actually requires) instead of `reason` in the underlying API call. The CLI-facing `<reason>` positional argument is unchanged; only the outgoing field name was corrected. Previously this command failed against the real API.
 - `get-optimization` now correctly unwraps the `{ optimization: {...} }` response shape returned by the backend. Previously fields (`pr_number`, `pr_url`, `coding_prompt`, etc.) were read from the top level and were silently never populated.
 
+## [0.7.0] - 2026-07-03
+
+### Added
+- `monitor` command: generalizes the in-process MITM proxy wrapping that `claude` already provides to any CLI (e.g. `coolhand monitor -- kimi --resume`), so other tools' outbound LLM traffic can be captured the same way, without a separate daemon process.
+
 ## [0.6.0] - 2026-07-02
 
 ### Added

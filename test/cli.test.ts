@@ -8,6 +8,9 @@ jest.mock('../src/proxy/certs.js', () => ({
 jest.mock('../src/commands/claude.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/monitor.js', () => ({
+  run: jest.fn(),
+}));
 jest.mock('../src/commands/search-optimizations.js', () => ({
   run: jest.fn(),
 }));
@@ -25,6 +28,7 @@ import { confirm } from '../src/prompt.js';
 import { markFlushFailed, savePendingRecord } from '../src/pending-store.js';
 import { createTmpHome, TmpHome } from './helpers/tmp-home.js';
 import { run as runClaudeCommand } from '../src/commands/claude.js';
+import { run as runMonitorCommand } from '../src/commands/monitor.js';
 import { run as runSearchOptimizationsCommand } from '../src/commands/search-optimizations.js';
 
 function makePending() {
@@ -90,6 +94,7 @@ describe('run', () => {
   beforeEach(async () => {
     home = await createTmpHome();
     (runClaudeCommand as jest.Mock).mockResolvedValue(0);
+    (runMonitorCommand as jest.Mock).mockResolvedValue(0);
     (runSearchOptimizationsCommand as jest.Mock).mockResolvedValue(0);
     (runFlushPending as jest.Mock).mockClear().mockResolvedValue(0);
     (spawnBackgroundFlush as jest.Mock).mockClear();
@@ -99,6 +104,7 @@ describe('run', () => {
   afterEach(async () => {
     await home.cleanup();
     (runClaudeCommand as jest.Mock).mockReset();
+    (runMonitorCommand as jest.Mock).mockReset();
     (runSearchOptimizationsCommand as jest.Mock).mockReset();
     warnSpy.mockRestore();
   });
@@ -206,6 +212,30 @@ describe('run', () => {
     const code = await run(['--client-id', 'acme', 'claude', '--resume']);
     expect(code).toBe(0);
     expect(runClaudeCommand).toHaveBeenCalledWith({ args: ['--resume'], clientId: 'acme' });
+  });
+
+  test('global --client-id is forwarded to the monitor passthrough', async () => {
+    const code = await run(['--client-id', 'acme', 'monitor', 'kimi', '--resume']);
+    expect(code).toBe(0);
+    expect(runMonitorCommand).toHaveBeenCalledWith({ command: 'kimi', args: ['--resume'], clientId: 'acme' });
+  });
+
+  test('monitor strips a leading -- before the wrapped command', async () => {
+    const code = await run(['monitor', '--', 'kimi', '--resume']);
+    expect(code).toBe(0);
+    expect(runMonitorCommand).toHaveBeenCalledWith({ command: 'kimi', args: ['--resume'], clientId: undefined });
+  });
+
+  test('monitor with no command exits with USER_ERROR', async () => {
+    const code = await run(['monitor']);
+    expect(code).toBe(1);
+    expect(runMonitorCommand).not.toHaveBeenCalled();
+  });
+
+  test('monitor with only -- and no command exits with USER_ERROR', async () => {
+    const code = await run(['monitor', '--']);
+    expect(code).toBe(1);
+    expect(runMonitorCommand).not.toHaveBeenCalled();
   });
 
   test('warns when both global and per-command --client-id are supplied (per-command wins)', async () => {
