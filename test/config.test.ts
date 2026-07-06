@@ -88,6 +88,39 @@ describe('config', () => {
     expect(cfg.clients.a.client_name).toBe('Renamed');
   });
 
+  test('upsertClient preserves private_key when a later upsert omits it', async () => {
+    await upsertClient({ ...makeEntry('a'), private_key: 'ch_priv_aaaaaaaaaaaaaaaa' }, true);
+    // e.g. a plain `login` (public scope only) after `login --scope private`.
+    const publicOnly = makeEntry('a');
+    delete (publicOnly as { private_key?: string }).private_key;
+    await upsertClient(publicOnly, false);
+    const cfg = await loadConfig();
+    expect(cfg.clients.a.private_key).toBe('ch_priv_aaaaaaaaaaaaaaaa');
+    expect(cfg.clients.a.api_key).toBe(publicOnly.api_key);
+  });
+
+  test('upsertClient preserves api_key when a later upsert omits it', async () => {
+    await upsertClient(makeEntry('a'), true);
+    const privateOnly = {
+      client_id: 'a',
+      client_name: 'Client a',
+      private_key: 'ch_priv_aaaaaaaaaaaaaaaa',
+      base_url: 'https://coolhandlabs.com',
+      saved_at: new Date().toISOString(),
+    };
+    await upsertClient(privateOnly, false);
+    const cfg = await loadConfig();
+    expect(cfg.clients.a.api_key).toBe(makeEntry('a').api_key);
+    expect(cfg.clients.a.private_key).toBe('ch_priv_aaaaaaaaaaaaaaaa');
+  });
+
+  test('upsertClient explicit new value overwrites old value for the same field', async () => {
+    await upsertClient({ ...makeEntry('a'), private_key: 'ch_priv_old0000000000000' }, true);
+    await upsertClient({ ...makeEntry('a'), private_key: 'ch_priv_new0000000000000' }, false);
+    const cfg = await loadConfig();
+    expect(cfg.clients.a.private_key).toBe('ch_priv_new0000000000000');
+  });
+
   test('removeClient last entry deletes the file', async () => {
     await upsertClient(makeEntry('a'), true);
     const result = await removeClient('a');

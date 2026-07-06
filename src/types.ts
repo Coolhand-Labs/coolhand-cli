@@ -54,6 +54,7 @@ export interface StatusOutput {
     client_id: string;
     client_name: string;
     masked_token: string;
+    masked_private_key: string;
     base_url: string;
   }>;
   default_client_id: string | null;

@@ -219,9 +219,17 @@ describe('mcpCall', () => {
   });
 
   test('throws MCP_ERROR on non-ok HTTP response', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve('boom') });
+    await expect(mcpCall('tool', {})).rejects.toMatchObject({
+      code: 'MCP_ERROR',
+    });
+  });
+
+  test('401 response includes a re-authenticate hint', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 401, text: () => Promise.resolve('Unauthorized') });
     await expect(mcpCall('tool', {})).rejects.toMatchObject({
       code: 'MCP_ERROR',
+      message: expect.stringContaining("coolhand login --scope private"),
     });
   });
 

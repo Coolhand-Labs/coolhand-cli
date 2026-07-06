@@ -18,7 +18,7 @@ export async function run(opts: WhoamiOptions): Promise<number> {
   }
 
   logger.info(
-    `Logged in as "${entry.client_name}" (id: ${entry.client_id}) via ${entry.base_url} — ${entry.api_key ? maskToken(entry.api_key) : '(no public key)'}`
+    `Logged in as "${entry.client_name}" (id: ${entry.client_id}) via ${entry.base_url} — ${entry.api_key ? maskToken(entry.api_key) : '(no public key)'}, ${entry.private_key ? maskToken(entry.private_key) : '(no private key)'}`
   );
   return ExitCode.OK;
 }

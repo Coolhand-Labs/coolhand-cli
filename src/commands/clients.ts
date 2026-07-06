@@ -18,7 +18,9 @@ async function listClients(opts: ClientsOptions): Promise<number> {
   }
   for (const acct of output.clients) {
     const marker = acct.client_id === output.default_client_id ? '* ' : '  ';
-    logger.info(`${marker}${acct.client_id}  ${acct.client_name}  ${acct.masked_token}  ${acct.base_url}`);
+    logger.info(
+      `${marker}${acct.client_id}  ${acct.client_name}  ${acct.masked_token}  ${acct.masked_private_key}  ${acct.base_url}`
+    );
   }
   return ExitCode.OK;
 }
@@ -37,6 +39,7 @@ async function useClient(clientId: string, opts: ClientsOptions): Promise<number
         client_id: entry.client_id,
         client_name: entry.client_name,
         masked_token: entry.api_key ? maskToken(entry.api_key) : '(no public key)',
+        masked_private_key: entry.private_key ? maskToken(entry.private_key) : '(no private key)',
         base_url: entry.base_url,
       },
     });
