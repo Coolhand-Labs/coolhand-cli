@@ -1,3 +1,4 @@
+import { McpService } from 'coolhand-node';
 import { CliError } from '../errors.js';
 import { loadConfig, resolveClient } from '../config.js';
 import { type ClientEntry, DEFAULT_BASE_URL } from '../types.js';
@@ -63,65 +64,17 @@ export async function mcpCall(
     privateKey = envPrivateKey as string;
     baseUrl = DEFAULT_BASE_URL;
   }
-  let parsedBaseUrl: URL;
+  let mcp: McpService;
   try {
-    parsedBaseUrl = new URL(baseUrl);
-  } catch {
-    throw new CliError('INVALID_BASE_URL', `Invalid base_url for client: ${baseUrl}`);
-  }
-  if (parsedBaseUrl.protocol !== 'http:' && parsedBaseUrl.protocol !== 'https:') {
-    throw new CliError('INVALID_BASE_URL', `base_url must be http or https, got: ${parsedBaseUrl.protocol}`);
-  }
-  const url = new URL('/mcp', parsedBaseUrl).toString();
-
-  const body = {
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'tools/call',
-    params: { name: toolName, arguments: args },
-  };
-
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': privateKey,
-      },
-      body: JSON.stringify(body),
-    });
+    // McpService's constructor rejects a bad base_url (https required; http only for localhost).
+    mcp = new McpService({ apiKey: privateKey, baseUrl, silent: true });
   } catch (err) {
-    throw new CliError('MCP_ERROR', `MCP request failed: ${(err as Error).message}`);
+    throw new CliError('INVALID_BASE_URL', `Invalid base_url for client: ${baseUrl} (${(err as Error).message})`);
   }
 
-  const text = await res.text().catch(() => '');
-  const snippet = text.slice(0, 2000);
-  if (!res.ok) {
-    throw new CliError('MCP_ERROR', `MCP request failed (${res.status}): ${snippet}`);
-  }
-
-  let json: { result?: unknown; error?: { message?: string } };
   try {
-    json = JSON.parse(text) as { result?: unknown; error?: { message?: string } };
-  } catch {
-    throw new CliError('MCP_ERROR', `MCP response was not valid JSON: ${snippet}`);
+    return await mcp.mcpCall(toolName, args);
+  } catch (err) {
+    throw new CliError('MCP_ERROR', (err as Error).message);
   }
-
-  if (json.error) {
-    throw new CliError('MCP_ERROR', `MCP error: ${json.error.message ?? JSON.stringify(json.error)}`);
-  }
-
-  // A tool call can also fail at the tool-execution level (e.g. a business-rule
-  // rejection like "Cannot rename system workloads") while the JSON-RPC envelope
-  // itself reports success. Every tool in this backend returns that case as a plain
-  // `{ error: "..." }` result hash rather than a top-level JSON-RPC `error`.
-  if (json.result !== null && typeof json.result === 'object' && !Array.isArray(json.result)) {
-    const result = json.result as { error?: unknown };
-    if (typeof result.error === 'string' && result.error.length > 0) {
-      throw new CliError('MCP_ERROR', result.error);
-    }
-  }
-
-  return json.result;
 }
