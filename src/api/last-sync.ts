@@ -1,3 +1,4 @@
+import { LoggingService } from 'coolhand-node';
 import { loadConfig, getClient } from '../config.js';
 import { DEFAULT_BASE_URL } from '../types.js';
 import { PACKAGE_IDENTIFIER } from '../version.js';
@@ -37,44 +38,13 @@ export async function fetchLastSync(opts: { clientId?: string } = {}): Promise<D
     return null;
   }
 
-  let url: string;
+  let service: LoggingService;
   try {
-    const parsedBaseUrl = new URL(baseUrl);
-    if (parsedBaseUrl.protocol !== 'http:' && parsedBaseUrl.protocol !== 'https:') {
-      return null;
-    }
-    const endpoint = new URL('/api/v2/llm_request_logs/last_sync', parsedBaseUrl);
-    endpoint.searchParams.set('collector', COLLECTOR);
-    url = endpoint.toString();
+    // LoggingService's constructor rejects a bad base_url; degrade to local state instead.
+    service = new LoggingService({ apiKey, baseUrl, silent: true });
   } catch {
     return null;
   }
 
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json', 'X-API-Key': apiKey },
-    });
-  } catch {
-    // Network failure — degrade to local state.
-    return null;
-  }
-  if (!res.ok) {
-    // 404 (endpoint not built yet) or any other non-2xx — degrade to local state.
-    return null;
-  }
-
-  let body: { last_created_at?: string | null };
-  try {
-    body = (await res.json()) as { last_created_at?: string | null };
-  } catch {
-    return null;
-  }
-
-  if (typeof body.last_created_at !== 'string') {
-    return null;
-  }
-  const date = new Date(body.last_created_at);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return service.fetchLastSync(COLLECTOR);
 }
