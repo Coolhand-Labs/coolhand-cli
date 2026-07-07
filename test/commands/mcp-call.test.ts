@@ -233,6 +233,14 @@ describe('mcpCall', () => {
     });
   });
 
+  test('does not append the re-authenticate hint on a non-401 failure', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve('Server boom') });
+    const err = (await mcpCall('tool', {}).catch((e) => e)) as CliError;
+    expect(err.code).toBe('MCP_ERROR');
+    expect(err.message).toBe('MCP request failed (500): Server boom');
+    expect(err.message).not.toContain('coolhand login');
+  });
+
   test('throws MCP_ERROR when response body is not valid JSON', async () => {
     mockFetch.mockResolvedValue({ ok: true, status: 200, text: () => Promise.resolve('not json') });
     await expect(mcpCall('tool', {})).rejects.toMatchObject({

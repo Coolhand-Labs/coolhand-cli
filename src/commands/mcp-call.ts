@@ -75,6 +75,13 @@ export async function mcpCall(
   try {
     return await mcp.mcpCall(toolName, args);
   } catch (err) {
-    throw new CliError('MCP_ERROR', (err as Error).message);
+    // A 401 means the stored private key was rejected. Re-add the login hint that
+    // lived in the CLI before /mcp moved into coolhand-node.
+    const status = (err as { status?: number }).status;
+    const hint =
+      status === 401
+        ? " The stored private key was rejected. Run 'coolhand login --scope private' to re-authenticate."
+        : '';
+    throw new CliError('MCP_ERROR', `${(err as Error).message}${hint}`);
   }
 }
