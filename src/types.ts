@@ -11,6 +11,8 @@ export interface ConfigFile {
   version: 1;
   default_client_id: string | null;
   clients: Record<string, ClientEntry>;
+  // Persisted enabled feature groups (issue #57); optional so older config files stay valid.
+  feature_flags?: string[];
 }
 
 export interface LoginOptions {
