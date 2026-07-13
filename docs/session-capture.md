@@ -22,9 +22,14 @@ the other.
 1. **Scan.** Reads every session transcript from both sources above. A missing directory simply
    yields zero sessions. The tool is general — each user runs it on their own machine and submits
    to their own Coolhand account.
-2. **Assemble.** Turns each transcript into **one** envelope holding the whole conversation: every
-   user and assistant message, in order, in `request_body.messages`; the final assistant turn in
-   `response_body`; and the session's **summed** token usage in `response_body.usage`.
+2. **Assemble.** Turns each transcript into **one** envelope holding the whole conversation in
+   `request_body.messages`: every user and assistant message, in order, with **tool calls and tool
+   results serialised inline** so the actual work — not just the chat — is preserved. Assistant
+   *thinking* is omitted for now, likely secrets (API keys, tokens, `KEY=value` pairs) are redacted,
+   and oversized tool inputs/outputs are truncated. A single assistant turn split across multiple
+   transcript lines is merged into one message, and its token usage (including
+   `cache_creation_input_tokens`) is summed **once**. The final assistant turn goes in
+   `response_body`; the session's summed usage in `response_body.usage`.
 3. **Submit.** POSTs one envelope per session to `POST /api/v2/llm_request_logs`, with the collector
    string `coolhand-cli/claude-code`.
 

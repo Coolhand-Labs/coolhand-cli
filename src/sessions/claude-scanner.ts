@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { redactSecrets } from './redact-secrets.js';
 
 /** One message in the reconstructed conversation. */
 export interface ConversationMessage {
@@ -12,7 +13,8 @@ export interface ConversationMessage {
  * An Anthropic-shaped envelope for ONE whole Claude Code session (a conversation). The server's
  * `claude_code` ingestor recognises it by the synthetic `claudecode://session/<sessionId>` url,
  * stores the full back-and-forth (the server already treats a multi-message request as one "chat"
- * log), and deduplicates on the session id. `request_body.messages` is the conversation;
+ * log), and deduplicates on the session id. `request_body.messages` is the conversation — including
+ * tool calls and tool results, serialised into each message's text so nothing is lost;
  * `response_body` is the final assistant turn; `response_body.usage` is the session's summed tokens.
  */
 export interface CaptureEnvelope {
@@ -45,52 +47,197 @@ export interface ScanResult {
   ok: boolean;
 }
 
+/** Cap on a single serialised tool input/output. Edit/Write inputs carry whole file bodies. */
+const MAX_BLOCK_CHARS = 2000;
+
 export function defaultProjectsDir(): string {
   return path.join(os.homedir(), '.claude', 'projects');
-}
-
-/** Pull plain text out of a Claude message `content`, which is either a string or block array. */
-function extractText(content: unknown): string {
-  if (typeof content === 'string') {
-    return content;
-  }
-  if (Array.isArray(content)) {
-    return content
-      .filter(
-        (block): block is { type: string; text: string } =>
-          Boolean(block) &&
-          typeof block === 'object' &&
-          (block as { type?: unknown }).type === 'text' &&
-          typeof (block as { text?: unknown }).text === 'string'
-      )
-      .map((block) => block.text)
-      .join('\n');
-  }
-  return '';
 }
 
 function toCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+/** JSON.stringify that yields a placeholder instead of throwing on circular structures. */
+function safeStringify(value: unknown): string {
+  let json: string;
+  try {
+    json = JSON.stringify(value);
+  } catch {
+    return '[unserializable]';
+  }
+  if (typeof json !== 'string') {
+    return '';
+  }
+  return json;
+}
+
+function truncate(text: string): string {
+  return text.length > MAX_BLOCK_CHARS ? `${text.slice(0, MAX_BLOCK_CHARS)}…[truncated]` : text;
+}
+
+/**
+ * Render one content block as plain text. `thinking`/`redacted_thinking` are dropped for now
+ * (highest-sensitivity; restored once redaction is proven) and unknown types render empty. Never throws.
+ */
+function blockToText(block: unknown): string {
+  if (!block || typeof block !== 'object') {
+    return '';
+  }
+  const type = (block as { type?: unknown }).type;
+
+  if (type === 'text') {
+    const text = (block as { text?: unknown }).text;
+    return typeof text === 'string' ? text : '';
+  }
+
+  if (type === 'tool_use') {
+    const name = (block as { name?: unknown }).name;
+    const toolName = typeof name === 'string' ? name : 'unknown';
+    const input = (block as { input?: unknown }).input;
+    const rendered = input === undefined ? '' : ` ${truncate(redactSecrets(safeStringify(input)))}`;
+    return `[tool_use: ${toolName}]${rendered}`;
+  }
+
+  if (type === 'tool_result') {
+    const isError = (block as { is_error?: unknown }).is_error === true;
+    const label = isError ? '[tool_result:error]' : '[tool_result]';
+    const body = toolResultToText((block as { content?: unknown }).content);
+    return body ? `${label} ${body}` : label;
+  }
+
+  if (type === 'image') {
+    return '[image]';
+  }
+
+  return '';
+}
+
+/** A tool_result's `content` is a string OR an array of blocks; render either to text. */
+function toolResultToText(content: unknown): string {
+  if (typeof content === 'string') {
+    return truncate(redactSecrets(content));
+  }
+  if (Array.isArray(content)) {
+    return truncate(redactSecrets(content.map(blockToText).filter((part) => part.length > 0).join('\n')));
+  }
+  return '';
+}
+
+/** A user message's `content` is a plain string OR an array of blocks (e.g. tool_result). */
+function userContentToText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content.map(blockToText).filter((part) => part.length > 0).join('\n');
+  }
+  return '';
+}
+
+/** Deep-redact secret-looking strings while preserving object/array structure. */
+function redactDeep(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return redactSecrets(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map(redactDeep);
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+        continue;
+      }
+      out[key] = redactDeep(inner);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * The final assistant turn's raw blocks, prepared for `response_body.content`: thinking is dropped
+ * (as in the message text) and every string is run through the secret scrubber so nothing sensitive
+ * rides along in the structured half of the envelope.
+ */
+function sanitizeResponseBlocks(blocks: unknown[]): unknown[] {
+  const out: unknown[] = [];
+  for (const block of blocks) {
+    if (!block || typeof block !== 'object') {
+      continue;
+    }
+    const type = (block as { type?: unknown }).type;
+    if (type === 'thinking' || type === 'redacted_thinking') {
+      continue;
+    }
+    out.push(redactDeep(block));
+  }
+  return out;
+}
+
 interface SessionUsage {
   input_tokens: number;
   output_tokens: number;
   cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+}
+
+/** The stable identity of an assistant turn. One turn is split across multiple JSONL lines. */
+function turnKey(event: Record<string, unknown>, message: Record<string, unknown>, sessionId: string): string {
+  const requestId = event.requestId;
+  if (typeof requestId === 'string' && requestId) {
+    return requestId;
+  }
+  const messageId = message.id;
+  if (typeof messageId === 'string' && messageId) {
+    return messageId;
+  }
+  return sessionId;
+}
+
+interface PendingTurn {
+  key: string;
+  blocks: unknown[];
+  model?: string;
 }
 
 /**
  * Parse one transcript's raw text (newline-delimited JSON) into a SINGLE session envelope holding
  * the whole conversation — one log per session, not one per turn. Returns `null` when the transcript
  * contains no assistant turns. Pure function (no filesystem) so it is easy to unit test.
+ *
+ * Real transcripts split a single assistant API call across MULTIPLE lines — one per content block
+ * (thinking / text / tool_use) — and repeat the identical `usage` on every line. We therefore merge
+ * lines that share a `requestId` into one assistant message and count each turn (and its tokens)
+ * exactly once, matching benchmark/lib/transcript.mjs.
  */
 export function parseTranscript(content: string, sessionId: string): CaptureEnvelope | null {
   const messages: ConversationMessage[] = [];
-  const usage: SessionUsage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
+  const usage: SessionUsage = {
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_read_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+  };
   let sawUsage = false;
   let sessionModel: string | undefined;
-  let lastAssistant: { id: string; content: unknown; model?: string } | null = null;
+  let lastAssistant: { id: string; content: unknown[]; model?: string } | null = null;
   let turnCount = 0;
+  const countedTurns = new Set<string>();
+  let pending: PendingTurn | null = null;
+
+  const flushPending = (): void => {
+    if (!pending) {
+      return;
+    }
+    const text = redactSecrets(pending.blocks.map(blockToText).filter((part) => part.length > 0).join('\n')).trim();
+    if (text) {
+      messages.push({ role: 'assistant', content: text });
+    }
+    lastAssistant = { id: pending.key, content: pending.blocks, model: pending.model };
+    pending = null;
+  };
 
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
@@ -109,13 +256,14 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
     }
 
     const message = event.message as Record<string, unknown> | undefined;
-    if (!message) {
+    if (!message || typeof message !== 'object') {
       continue;
     }
 
     if (event.type === 'user') {
-      // `user` events include tool results (no text) — only keep actual prompt text.
-      const text = extractText(message.content);
+      // A user turn ends any in-progress assistant turn (e.g. a tool_use awaiting its result).
+      flushPending();
+      const text = redactSecrets(userContentToText(message.content)).trim();
       if (text) {
         messages.push({ role: 'user', content: text });
       }
@@ -123,41 +271,49 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
     }
 
     if (event.type === 'assistant' && message.role === 'assistant') {
-      const requestId =
-        typeof event.requestId === 'string'
-          ? event.requestId
-          : typeof message.id === 'string'
-            ? message.id
-            : undefined;
+      const key = turnKey(event, message, sessionId);
 
-      messages.push({ role: 'assistant', content: extractText(message.content) });
-      turnCount += 1;
+      if (!pending || pending.key !== key) {
+        flushPending();
+        pending = { key, blocks: [], model: undefined };
+      }
+
+      const blocks = Array.isArray(message.content) ? message.content : [];
+      for (const block of blocks) {
+        pending.blocks.push(block);
+      }
 
       const model = typeof message.model === 'string' ? message.model : undefined;
       if (model) {
         sessionModel = model;
+        pending.model = model;
       }
 
-      const turnUsage = message.usage as Record<string, unknown> | undefined;
-      if (turnUsage && typeof turnUsage === 'object') {
-        sawUsage = true;
-        usage.input_tokens += toCount(turnUsage.input_tokens);
-        usage.output_tokens += toCount(turnUsage.output_tokens);
-        usage.cache_read_input_tokens += toCount(turnUsage.cache_read_input_tokens);
-      }
+      // Count each turn — and sum its usage — exactly once, no matter how many lines it spans.
+      if (!countedTurns.has(key)) {
+        countedTurns.add(key);
+        turnCount += 1;
 
-      lastAssistant = {
-        id: requestId ?? sessionId,
-        content: Array.isArray(message.content) ? message.content : [],
-        model,
-      };
+        const turnUsage = message.usage as Record<string, unknown> | undefined;
+        if (turnUsage && typeof turnUsage === 'object') {
+          sawUsage = true;
+          usage.input_tokens += toCount(turnUsage.input_tokens);
+          usage.output_tokens += toCount(turnUsage.output_tokens);
+          usage.cache_read_input_tokens += toCount(turnUsage.cache_read_input_tokens);
+          usage.cache_creation_input_tokens += toCount(turnUsage.cache_creation_input_tokens);
+        }
+      }
     }
   }
+
+  flushPending();
 
   // A session with no assistant turns has nothing to log.
   if (!lastAssistant) {
     return null;
   }
+
+  const finalTurn: { id: string; content: unknown[]; model?: string } = lastAssistant;
 
   return {
     url: `claudecode://session/${sessionId}`,
@@ -168,11 +324,11 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
       messages,
     },
     response_body: {
-      id: lastAssistant.id,
+      id: finalTurn.id,
       type: 'message',
       role: 'assistant',
-      model: lastAssistant.model ?? sessionModel,
-      content: lastAssistant.content,
+      model: finalTurn.model ?? sessionModel,
+      content: sanitizeResponseBlocks(finalTurn.content),
       usage: sawUsage ? usage : undefined,
     },
     turnCount,
@@ -234,7 +390,14 @@ export async function scanSessions(
     }
     sessionCount += 1;
     const sessionId = path.basename(relativePath, '.jsonl');
-    const envelope = parseTranscript(content, sessionId);
+
+    let envelope: CaptureEnvelope | null;
+    try {
+      envelope = parseTranscript(content, sessionId);
+    } catch {
+      // A single malformed transcript must never abort the whole scan.
+      continue;
+    }
     if (envelope) {
       envelopes.push(envelope);
     }
