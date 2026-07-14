@@ -129,6 +129,17 @@ export interface AnalyzeClaudeSessionsOptions {
   dryRun?: boolean;
   clientId?: string;
   json?: boolean;
+  /** Raw --since value (date or Nh/Nd/Nw shorthand); parsed in the command so bad input
+   *  surfaces as a CliError rather than a crash in the flag layer. */
+  since?: string;
+  /** Raw --until value, same formats as since. */
+  until?: string;
+  /** Override for the Claude Code scan root (--projects-dir). */
+  projectsDir?: string;
+  /** Only upload sessions whose project folder matches one of these (--project, repeatable). */
+  projects?: string[];
+  /** Never upload sessions whose project folder matches one of these (--exclude-project). */
+  excludeProjects?: string[];
 }
 
 export interface ComplaintBoxOptions {

@@ -40,7 +40,7 @@ import type {
 interface ParsedArgs {
   command: string;
   positional: string[];
-  flags: Record<string, string | boolean>;
+  flags: Record<string, string | boolean | string[]>;
 }
 
 interface CommandMeta {
@@ -52,6 +52,9 @@ interface CommandMeta {
 }
 
 const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full']);
+
+/** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
+const REPEATABLE_FLAGS = new Set(['project', 'exclude-project']);
 
 const COMMANDS: CommandMeta[] = [
   {
@@ -174,6 +177,11 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--dry-run', description: 'Scan and report what would be submitted, without sending' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+      { flag: '--since WHEN', description: 'Only sessions modified at or after WHEN (YYYY-MM-DD, ISO datetime, or 12h/7d/2w)' },
+      { flag: '--until WHEN', description: 'Only sessions modified at or before WHEN (same formats; a date means its whole day)' },
+      { flag: '--projects-dir PATH', description: 'Scan PATH instead of ~/.claude/projects' },
+      { flag: '--project NAME', description: 'Only sessions from matching project folders (repeatable, comma-separable)' },
+      { flag: '--exclude-project NAME', description: 'Skip sessions from matching project folders (repeatable, comma-separable)' },
     ],
   },
   {
@@ -351,8 +359,20 @@ export function peelClientId(argv: string[]): { clientId: string | undefined; re
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
-  const flags: Record<string, string | boolean> = {};
+  const flags: Record<string, string | boolean | string[]> = {};
   const positional: string[] = [];
+
+  const setValueFlag = (name: string, value: string): void => {
+    const prev = flags[name];
+    if (REPEATABLE_FLAGS.has(name) && typeof prev === 'string') {
+      flags[name] = [prev, value];
+    } else if (REPEATABLE_FLAGS.has(name) && Array.isArray(prev)) {
+      flags[name] = [...prev, value];
+    } else {
+      flags[name] = value;
+    }
+  };
+
   let i = 0;
   while (i < argv.length) {
     const arg = argv[i];
@@ -363,13 +383,13 @@ export function parseArgs(argv: string[]): ParsedArgs {
     if (arg.startsWith('--')) {
       const eq = arg.indexOf('=');
       if (eq >= 0) {
-        flags[arg.slice(2, eq)] = arg.slice(eq + 1);
+        setValueFlag(arg.slice(2, eq), arg.slice(eq + 1));
         i += 1;
       } else {
         const name = arg.slice(2);
         const next = argv[i + 1];
         if (!BOOLEAN_FLAGS.has(name) && next !== undefined && !next.startsWith('-')) {
-          flags[name] = next;
+          setValueFlag(name, next);
           i += 2;
         } else {
           flags[name] = true;
@@ -572,6 +592,16 @@ function updateOptimizationOptions(parsed: ParsedArgs): UpdateOptimizationOption
   return opts;
 }
 
+/** Flatten a repeatable flag's value(s) into a trimmed list, splitting each on commas. */
+function stringListFlag(value: string | boolean | string[] | undefined): string[] | undefined {
+  const raw = Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
+  const items = raw
+    .flatMap((entry) => entry.split(','))
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return items.length > 0 ? items : undefined;
+}
+
 function analyzeClaudeSessionsOptions(parsed: ParsedArgs): AnalyzeClaudeSessionsOptions {
   const opts: AnalyzeClaudeSessionsOptions = {};
   if (parsed.flags['dry-run'] === true) {
@@ -582,6 +612,23 @@ function analyzeClaudeSessionsOptions(parsed: ParsedArgs): AnalyzeClaudeSessions
   }
   if (parsed.flags.json === true) {
     opts.json = true;
+  }
+  if (typeof parsed.flags.since === 'string') {
+    opts.since = parsed.flags.since;
+  }
+  if (typeof parsed.flags.until === 'string') {
+    opts.until = parsed.flags.until;
+  }
+  if (typeof parsed.flags['projects-dir'] === 'string') {
+    opts.projectsDir = parsed.flags['projects-dir'];
+  }
+  const projects = stringListFlag(parsed.flags.project);
+  if (projects) {
+    opts.projects = projects;
+  }
+  const excludeProjects = stringListFlag(parsed.flags['exclude-project']);
+  if (excludeProjects) {
+    opts.excludeProjects = excludeProjects;
   }
   return opts;
 }

@@ -38,6 +38,7 @@ import { scanSessions } from '../../src/sessions/claude-scanner.js';
 import { scanCoworkSessions } from '../../src/sessions/cowork-scanner.js';
 import { logRequest } from '../../src/log-request.js';
 import { fetchLastSync } from '../../src/api/last-sync.js';
+import { logger } from '../../src/logger.js';
 
 const envelope = {
   url: 'claudecode://session/s',
@@ -66,8 +67,12 @@ describe('analyze-claude-sessions command', () => {
         saved_at: 'now',
       })
     );
-    (scanSessions as jest.Mock).mockReset().mockResolvedValue({ envelopes: [envelope], sessionCount: 1 });
-    (scanCoworkSessions as jest.Mock).mockReset().mockResolvedValue({ envelopes: [], sessionCount: 0, ok: true });
+    (scanSessions as jest.Mock)
+      .mockReset()
+      .mockResolvedValue({ envelopes: [envelope], sessionCount: 1, filteredOut: 0, ok: true });
+    (scanCoworkSessions as jest.Mock)
+      .mockReset()
+      .mockResolvedValue({ envelopes: [], sessionCount: 0, filteredOut: 0, ok: true });
     (logRequest as jest.Mock).mockReset().mockResolvedValue({ id: 1 });
     (fetchLastSync as jest.Mock).mockReset().mockResolvedValue(null);
   });
@@ -149,7 +154,7 @@ describe('analyze-claude-sessions command', () => {
   });
 
   test('does NOT advance coworkLastSyncAt when Cowork scan returned ok:false', async () => {
-    (scanCoworkSessions as jest.Mock).mockResolvedValue({ envelopes: [], sessionCount: 0, ok: false });
+    (scanCoworkSessions as jest.Mock).mockResolvedValue({ envelopes: [], sessionCount: 0, filteredOut: 0, ok: false });
     await run({});
     const raw = JSON.parse(await fs.readFile(path.join(dir, 'capture-state.json'), 'utf8'));
     expect(raw.coworkLastSyncAt).toBeUndefined();
@@ -204,7 +209,7 @@ describe('analyze-claude-sessions command', () => {
   });
 
   test('returns 0 with zero sessions', async () => {
-    (scanSessions as jest.Mock).mockResolvedValue({ envelopes: [], sessionCount: 0 });
+    (scanSessions as jest.Mock).mockResolvedValue({ envelopes: [], sessionCount: 0, filteredOut: 0, ok: true });
     const code = await run({});
     expect(code).toBe(0);
     expect(logRequest).not.toHaveBeenCalled();
@@ -254,5 +259,80 @@ describe('analyze-claude-sessions command', () => {
     const code = await run({});
     expect(code).not.toBe(0);
     expect(logRequest).not.toHaveBeenCalled();
+  });
+
+  describe('upload filters (time period + location)', () => {
+    test('--since overrides the reference time for both scanners', async () => {
+      await run({ since: '2026-06-01' });
+      const claudeOpts = (scanSessions as jest.Mock).mock.calls[0][0];
+      const coworkOpts = (scanCoworkSessions as jest.Mock).mock.calls[0][0];
+      expect(claudeOpts.sinceTime).toEqual(new Date(2026, 5, 1, 0, 0, 0, 0));
+      expect(coworkOpts.sinceTime).toEqual(new Date(2026, 5, 1, 0, 0, 0, 0));
+    });
+
+    test('--projects-dir is forwarded to scanSessions', async () => {
+      await run({ projectsDir: 'C:/custom/projects' });
+      const claudeOpts = (scanSessions as jest.Mock).mock.calls[0][0];
+      expect(claudeOpts.projectsDir).toBe('C:/custom/projects');
+    });
+
+    test('--until wires a preFilter that rejects files modified after the bound', async () => {
+      await run({ until: '2026-06-30' });
+      const claudeOpts = (scanSessions as jest.Mock).mock.calls[0][0];
+      expect(typeof claudeOpts.preFilter).toBe('function');
+      const julyFile = { sessionId: 's', project: 'p', mtimeMs: new Date(2026, 6, 15).getTime(), source: 'claude-code' as const };
+      const juneFile = { sessionId: 's', project: 'p', mtimeMs: new Date(2026, 5, 15).getTime(), source: 'claude-code' as const };
+      expect(claudeOpts.preFilter(julyFile)).toBe(false);
+      expect(claudeOpts.preFilter(juneFile)).toBe(true);
+    });
+
+    test('--project include list wires a preFilter matching project folders', async () => {
+      await run({ projects: ['coolhand-cli'] });
+      const claudeOpts = (scanSessions as jest.Mock).mock.calls[0][0];
+      const matching = { sessionId: 's', project: 'C--Users-x-coolhand-cli', mtimeMs: 1, source: 'claude-code' as const };
+      const other = { sessionId: 's', project: 'C--Users-x-other-repo', mtimeMs: 1, source: 'claude-code' as const };
+      const cowork = { sessionId: 's', project: null, mtimeMs: 1, source: 'cowork' as const };
+      expect(claudeOpts.preFilter(matching)).toBe(true);
+      expect(claudeOpts.preFilter(other)).toBe(false);
+      expect(claudeOpts.preFilter(cowork)).toBe(false);
+    });
+
+    test('no preFilter is wired when no filter flags are given', async () => {
+      await run({});
+      const claudeOpts = (scanSessions as jest.Mock).mock.calls[0][0];
+      expect(claudeOpts.preFilter).toBeUndefined();
+    });
+
+    test('a narrowing run does not advance lastSyncAt or coworkLastSyncAt even on full success', async () => {
+      const code = await run({ since: '7d' });
+      expect(code).toBe(0);
+      const raw = JSON.parse(await fs.readFile(path.join(dir, 'capture-state.json'), 'utf8'));
+      expect(raw.lastSyncAt).toBeUndefined();
+      expect(raw.coworkLastSyncAt).toBeUndefined();
+    });
+
+    test('an invalid --since value returns USER_ERROR', async () => {
+      const code = await run({ since: 'yesterday-ish' });
+      expect(code).toBe(1);
+      expect(logRequest).not.toHaveBeenCalled();
+    });
+
+    test('--since after --until returns USER_ERROR', async () => {
+      const code = await run({ since: '2026-07-01', until: '2026-06-01' });
+      expect(code).toBe(1);
+      expect(logRequest).not.toHaveBeenCalled();
+    });
+
+    test('dry-run JSON output includes the filtered count from both scanners', async () => {
+      (scanSessions as jest.Mock).mockResolvedValue({ envelopes: [], sessionCount: 0, filteredOut: 2, ok: true });
+      (scanCoworkSessions as jest.Mock).mockResolvedValue({ envelopes: [], sessionCount: 0, filteredOut: 1, ok: true });
+      const jsonSpy = jest.spyOn(logger, 'json').mockImplementation(() => {});
+      try {
+        await run({ dryRun: true, json: true, projects: ['x'] });
+        expect(jsonSpy).toHaveBeenCalledWith(expect.objectContaining({ filtered: 3 }));
+      } finally {
+        jsonSpy.mockRestore();
+      }
+    });
   });
 });
