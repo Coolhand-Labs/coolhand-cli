@@ -298,7 +298,7 @@ Closes an optimization. The reason is a free-text positional argument (quote it 
 ### analyze-claude-sessions
 
 ```bash
-coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json]
+coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json] [filter options]
 ```
 
 Submits historical Claude Code sessions to Coolhand for pattern and cost analysis. Use `--dry-run` to preview what would be sent without submitting anything.
@@ -308,6 +308,13 @@ Submits historical Claude Code sessions to Coolhand for pattern and cost analysi
 | `--dry-run` | Scan and report without submitting anything |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
+| `--since WHEN` | Only sessions modified at or after WHEN |
+| `--until WHEN` | Only sessions modified at or before WHEN (a plain date means its whole day) |
+| `--projects-dir PATH` | Scan PATH instead of `~/.claude/projects` |
+| `--project NAME` | Only sessions from project folders matching NAME (repeatable; comma-separable) |
+| `--exclude-project NAME` | Skip sessions from project folders matching NAME (repeatable; comma-separable) |
+
+`WHEN` accepts `YYYY-MM-DD`, a full ISO datetime, or a duration shorthand relative to now: `12h`, `7d`, `2w`. Project names match as substrings, case-insensitively, against the encoded folder names under `~/.claude/projects` (so `--project coolhand-cli` matches the folder for any checkout of that repo). Sessions rejected by a filter are never read from disk, and a filtered run never advances the incremental sync cutoff — see [session-capture.md](./session-capture.md#choosing-what-gets-uploaded).
 
 See [session-capture.md](./session-capture.md) for scan logic, duplicate-avoidance details, and envelope format.
 
