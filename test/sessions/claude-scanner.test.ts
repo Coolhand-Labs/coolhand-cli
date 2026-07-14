@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { parseTranscript, scanSessions, sessionIdOf } from '../../src/sessions/claude-scanner.js';
+import type { SessionFileMeta } from '../../src/sessions/session-filter.js';
 
 const SAMPLE = [
   JSON.stringify({ type: 'user', message: { role: 'user', content: 'First question' } }),
@@ -344,7 +345,7 @@ describe('scanSessions', () => {
 
   test('returns empty when the projects dir does not exist', async () => {
     const res = await scanSessions({ projectsDir: path.join(dir, 'missing') });
-    expect(res).toEqual({ envelopes: [], sessionCount: 0, ok: true });
+    expect(res).toEqual({ envelopes: [], sessionCount: 0, filteredOut: 0, ok: true });
   });
 
   test('produces one envelope per session file', async () => {
@@ -396,5 +397,49 @@ describe('scanSessions', () => {
 
     const res = await scanSessions({ projectsDir: dir, sinceTime: cutoff });
     expect(res.envelopes).toHaveLength(1);
+  });
+
+  test('reports filteredOut 0 when no preFilter is given', async () => {
+    await fs.writeFile(path.join(dir, 'proj-a', 'sess-1.jsonl'), SAMPLE);
+    const res = await scanSessions({ projectsDir: dir });
+    expect(res.filteredOut).toBe(0);
+  });
+
+  test('a rejected file is counted as filteredOut and never read from disk', async () => {
+    await fs.writeFile(path.join(dir, 'proj-a', 'private.jsonl'), SAMPLE);
+    const readSpy = jest.spyOn(fs, 'readFile');
+    try {
+      const res = await scanSessions({ projectsDir: dir, preFilter: () => false });
+      expect(res.envelopes).toHaveLength(0);
+      expect(res.sessionCount).toBe(0);
+      expect(res.filteredOut).toBe(1);
+      expect(readSpy).not.toHaveBeenCalled();
+    } finally {
+      readSpy.mockRestore();
+    }
+  });
+
+  test('preFilter receives the session id, project folder, mtime, and source', async () => {
+    await fs.writeFile(path.join(dir, 'proj-a', 'sess-1.jsonl'), SAMPLE);
+    const seen: SessionFileMeta[] = [];
+    await scanSessions({
+      projectsDir: dir,
+      preFilter: (meta) => {
+        seen.push(meta);
+        return true;
+      },
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0].sessionId).toBe('sess-1');
+    expect(seen[0].project).toBe('proj-a');
+    expect(seen[0].source).toBe('claude-code');
+    expect(seen[0].mtimeMs).toBeGreaterThan(0);
+  });
+
+  test('preFilter accepting keeps the session in the result', async () => {
+    await fs.writeFile(path.join(dir, 'proj-a', 'sess-1.jsonl'), SAMPLE);
+    const res = await scanSessions({ projectsDir: dir, preFilter: () => true });
+    expect(res.envelopes).toHaveLength(1);
+    expect(res.filteredOut).toBe(0);
   });
 });

@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { redactSecrets } from './redact-secrets.js';
+import type { SessionFileMeta } from './session-filter.js';
 
 /** One message in the reconstructed conversation. */
 export interface ConversationMessage {
@@ -40,6 +41,8 @@ export interface CaptureEnvelope {
 export interface ScanResult {
   envelopes: CaptureEnvelope[];
   sessionCount: number;
+  /** Number of session files rejected by the caller's preFilter — skipped without being read. */
+  filteredOut: number;
   /** False when the scan directory could not be read and the error was swallowed. The caller must
    *  not advance its mtime cutoff in this case — doing so would permanently hide pre-existing files
    *  whose mtimes predate the new cutoff, since the turn-count guard never sees them if they are
@@ -342,19 +345,27 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
  * When `sinceTime` is given, files whose last-modified time is older than it are skipped entirely
  * (not even read) — they cannot have grown since the last sync. `sessionCount` therefore counts only
  * the files actually examined this run, so it reflects the work done rather than the whole corpus.
+ *
+ * When `preFilter` is given it runs on each file's metadata (id, project folder, mtime) BEFORE the
+ * file is read; a rejected file is counted in `filteredOut` and its content never leaves disk.
  */
 export async function scanSessions(
-  options: { projectsDir?: string; sinceTime?: Date } = {}
+  options: {
+    projectsDir?: string;
+    sinceTime?: Date;
+    preFilter?: (meta: SessionFileMeta) => boolean;
+  } = {}
 ): Promise<ScanResult> {
   const dir = options.projectsDir ?? defaultProjectsDir();
   const sinceMs = options.sinceTime?.getTime();
+  const preFilter = options.preFilter;
 
   let names: string[];
   try {
     names = await fs.readdir(dir, { recursive: true });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { envelopes: [], sessionCount: 0, ok: true };
+      return { envelopes: [], sessionCount: 0, filteredOut: 0, ok: true };
     }
     throw err;
   }
@@ -362,11 +373,13 @@ export async function scanSessions(
   const files = names.filter((name) => name.endsWith('.jsonl'));
   const envelopes: CaptureEnvelope[] = [];
   let sessionCount = 0;
+  let filteredOut = 0;
 
   for (const relativePath of files) {
     const fullPath = path.join(dir, relativePath);
 
-    if (sinceMs !== undefined) {
+    let mtimeMs = 0;
+    if (sinceMs !== undefined || preFilter !== undefined) {
       let stat;
       try {
         stat = await fs.stat(fullPath);
@@ -374,9 +387,25 @@ export async function scanSessions(
         // Unreadable transcript — skip it rather than failing the whole scan.
         continue;
       }
+      mtimeMs = stat.mtimeMs;
       // Skip files unchanged since the cutoff. Use `>=` so a file touched exactly at the cutoff
       // is still examined.
-      if (stat.mtimeMs < sinceMs) {
+      if (sinceMs !== undefined && mtimeMs < sinceMs) {
+        continue;
+      }
+    }
+
+    if (preFilter !== undefined) {
+      // readdir({recursive}) yields platform separators; split on both to find the project folder.
+      const parts = relativePath.split(/[\\/]/);
+      const meta: SessionFileMeta = {
+        sessionId: path.basename(relativePath, '.jsonl'),
+        project: parts.length > 1 ? parts[0] : null,
+        mtimeMs,
+        source: 'claude-code',
+      };
+      if (!preFilter(meta)) {
+        filteredOut += 1;
         continue;
       }
     }
@@ -403,7 +432,7 @@ export async function scanSessions(
     }
   }
 
-  return { envelopes, sessionCount, ok: true };
+  return { envelopes, sessionCount, filteredOut, ok: true };
 }
 
 /** The session id this envelope represents — used as the local dedup key. */
