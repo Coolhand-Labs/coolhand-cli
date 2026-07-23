@@ -63,4 +63,33 @@ describe('redactSecrets', () => {
     expect(out).not.toContain('sk-abcdef1234567890ABCDEF');
     expect(out).toContain('[REDACTED]');
   });
+
+  test('redacts a Slack token', () => {
+    const token = 'xoxb-fake-token-used-only-in-tests-000';
+    const out = redactSecrets(`slack said ${token} ok`);
+    expect(out).not.toContain(token);
+    expect(out).toContain('[REDACTED]');
+  });
+
+  test('redacts a Google API key', () => {
+    const token = `AIza${'x'.repeat(35)}`;
+    const out = redactSecrets(`url?key=${token}`);
+    expect(out).not.toContain(token);
+    expect(out).toContain('[REDACTED]');
+  });
+
+  test('redacts a Stripe live secret key', () => {
+    const token = `sk_live_${'a'.repeat(24)}`;
+    const out = redactSecrets(token);
+    expect(out).not.toContain(token);
+    expect(out).toContain('[REDACTED]');
+  });
+
+  test('redacts a JWT', () => {
+    const token =
+      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const out = redactSecrets(`token=${token}`);
+    expect(out).not.toContain(token);
+    expect(out).toContain('[REDACTED]');
+  });
 });
