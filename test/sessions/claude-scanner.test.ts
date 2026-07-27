@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { parseTranscript, scanSessions, sessionIdOf } from '../../src/sessions/claude-scanner.js';
+import type { SessionFileMeta } from '../../src/sessions/session-filter.js';
 
 const SAMPLE = [
   JSON.stringify({ type: 'user', message: { role: 'user', content: 'First question' } }),
@@ -65,6 +66,7 @@ describe('parseTranscript', () => {
       input_tokens: 30,
       output_tokens: 12,
       cache_read_input_tokens: 5,
+      cache_creation_input_tokens: 0,
     });
   });
 
@@ -111,6 +113,217 @@ describe('parseTranscript', () => {
   });
 });
 
+describe('parseTranscript — tool activity & block rendering', () => {
+  const assistantLine = (content: unknown[], extra: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      type: 'assistant',
+      requestId: 'r',
+      message: { role: 'assistant', id: 'm', content, ...extra },
+    });
+
+  test('serialises a tool_use block with its name and input', () => {
+    const env = parseTranscript(
+      assistantLine([{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls -la' } }]),
+      's'
+    );
+    expect(env?.request_body.messages[0].content).toBe('[tool_use: Bash] {"command":"ls -la"}');
+  });
+
+  test('tool_use with no input omits the payload', () => {
+    const env = parseTranscript(assistantLine([{ type: 'tool_use', name: 'Read' }]), 's');
+    expect(env?.request_body.messages[0].content).toBe('[tool_use: Read]');
+  });
+
+  test('renders a tool_result whose content is a plain string', () => {
+    const line = JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'file.txt' }] },
+    });
+    // A user-only transcript has no assistant turn, so pair it with one to get an envelope.
+    const env = parseTranscript(`${line}\n${assistantLine([{ type: 'text', text: 'done' }])}`, 's');
+    expect(env?.request_body.messages[0].content).toBe('[tool_result] file.txt');
+  });
+
+  test('renders a tool_result whose content is a block array (no [object Object])', () => {
+    const line = JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 't1', content: [{ type: 'text', text: 'nested output' }] }],
+      },
+    });
+    const env = parseTranscript(`${line}\n${assistantLine([{ type: 'text', text: 'done' }])}`, 's');
+    expect(env?.request_body.messages[0].content).toBe('[tool_result] nested output');
+    expect(env?.request_body.messages[0].content).not.toContain('[object Object]');
+  });
+
+  test('flags an errored tool_result', () => {
+    const line = JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'boom', is_error: true }] },
+    });
+    const env = parseTranscript(`${line}\n${assistantLine([{ type: 'text', text: 'done' }])}`, 's');
+    expect(env?.request_body.messages[0].content).toBe('[tool_result:error] boom');
+  });
+
+  test('renders an image block as a placeholder, never its payload', () => {
+    const line = JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'image', source: { type: 'base64', data: 'AAAA' } }] },
+    });
+    const env = parseTranscript(`${line}\n${assistantLine([{ type: 'text', text: 'done' }])}`, 's');
+    expect(env?.request_body.messages[0].content).toBe('[image]');
+    expect(env?.request_body.messages[0].content).not.toContain('AAAA');
+  });
+
+  test('keeps both text and tool_use from a single turn, in order', () => {
+    const env = parseTranscript(
+      assistantLine([
+        { type: 'text', text: 'Let me check.' },
+        { type: 'tool_use', id: 't1', name: 'Grep', input: { pattern: 'foo' } },
+      ]),
+      's'
+    );
+    expect(env?.request_body.messages[0].content).toBe('Let me check.\n[tool_use: Grep] {"pattern":"foo"}');
+  });
+
+  test('drops thinking blocks but still counts the turn', () => {
+    const env = parseTranscript(assistantLine([{ type: 'thinking', thinking: 'secret reasoning' }]), 's');
+    expect(env).not.toBeNull();
+    expect(env?.turnCount).toBe(1);
+    expect(env?.request_body.messages).toHaveLength(0);
+    expect(JSON.stringify(env)).not.toContain('secret reasoning');
+  });
+
+  test('drops unknown block types safely', () => {
+    const env = parseTranscript(
+      assistantLine([{ type: 'mystery', data: 'x' }, { type: 'text', text: 'hi' }]),
+      's'
+    );
+    expect(env?.request_body.messages[0].content).toBe('hi');
+  });
+
+  test('does not throw on a null block inside the content array', () => {
+    const env = parseTranscript(assistantLine([null, { type: 'text', text: 'hi' }]), 's');
+    expect(env?.request_body.messages[0].content).toBe('hi');
+  });
+
+  test('truncates an oversized tool input', () => {
+    const big = 'x'.repeat(5000);
+    const env = parseTranscript(assistantLine([{ type: 'tool_use', name: 'Write', input: { content: big } }]), 's');
+    const rendered = env?.request_body.messages[0].content ?? '';
+    expect(rendered.length).toBeLessThan(3000);
+    expect(rendered).toContain('…[truncated]');
+  });
+
+  test('redacts secrets in tool output before capture', () => {
+    const line = JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 't1', content: 'OPENAI_API_KEY=sk-abcdef1234567890ABCDEF' }],
+      },
+    });
+    const env = parseTranscript(`${line}\n${assistantLine([{ type: 'text', text: 'done' }])}`, 's');
+    const rendered = env?.request_body.messages[0].content ?? '';
+    expect(rendered).toContain('[REDACTED]');
+    expect(rendered).not.toContain('sk-abcdef1234567890ABCDEF');
+  });
+});
+
+describe('parseTranscript — multi-line turn dedup', () => {
+  // One assistant turn (requestId r1) split across two lines, repeating identical usage.
+  const MULTILINE = [
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'do it' } }),
+    JSON.stringify({
+      type: 'assistant',
+      requestId: 'r1',
+      message: {
+        role: 'assistant',
+        id: 'm1',
+        model: 'claude-opus-4-8',
+        content: [{ type: 'text', text: 'Running it.' }],
+        usage: { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 5, cache_creation_input_tokens: 20 },
+      },
+    }),
+    JSON.stringify({
+      type: 'assistant',
+      requestId: 'r1',
+      message: {
+        role: 'assistant',
+        id: 'm1',
+        model: 'claude-opus-4-8',
+        content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } }],
+        usage: { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 5, cache_creation_input_tokens: 20 },
+      },
+    }),
+    JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'file.txt' }] },
+    }),
+    JSON.stringify({
+      type: 'assistant',
+      requestId: 'r2',
+      message: {
+        role: 'assistant',
+        id: 'm2',
+        model: 'claude-opus-4-8',
+        content: [{ type: 'text', text: 'Done.' }],
+        usage: { input_tokens: 50, output_tokens: 8, cache_read_input_tokens: 2, cache_creation_input_tokens: 0 },
+      },
+    }),
+  ].join('\n');
+
+  test('counts each requestId once despite spanning multiple lines', () => {
+    expect(parseTranscript(MULTILINE, 's')?.turnCount).toBe(2);
+  });
+
+  test('sums usage once per turn, including cache_creation', () => {
+    expect(parseTranscript(MULTILINE, 's')?.response_body.usage).toEqual({
+      input_tokens: 150,
+      output_tokens: 18,
+      cache_read_input_tokens: 7,
+      cache_creation_input_tokens: 20,
+    });
+  });
+
+  test('merges the split lines of one turn into a single assistant message', () => {
+    const env = parseTranscript(MULTILINE, 's');
+    expect(env?.request_body.messages).toEqual([
+      { role: 'user', content: 'do it' },
+      { role: 'assistant', content: 'Running it.\n[tool_use: Bash] {"command":"ls"}' },
+      { role: 'user', content: '[tool_result] file.txt' },
+      { role: 'assistant', content: 'Done.' },
+    ]);
+  });
+});
+
+describe('parseTranscript — review hardening', () => {
+  test('redacts a secret even when it sits past the truncation boundary', () => {
+    const line = JSON.stringify({
+      type: 'assistant',
+      requestId: 'r',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'tool_use', name: 'Write', input: { content: 'x'.repeat(2100) + 'sk-abcdef1234567890ABCDEF' } },
+        ],
+      },
+    });
+    const env = parseTranscript(line, 's');
+    const rendered = env?.request_body.messages[0].content ?? '';
+    expect(rendered).not.toContain('sk-abcdef1234567890ABCDEF');
+  });
+
+  test('two id-less turns merge into one message (documented approximation)', () => {
+    const l1 = JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'one' }] } });
+    const l2 = JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'two' }] } });
+    const env = parseTranscript(l1 + '\n' + l2, 'sess');
+    expect(env?.turnCount).toBe(1);
+    expect(env?.request_body.messages).toEqual([{ role: 'assistant', content: 'one\ntwo' }]);
+  });
+});
+
 describe('sessionIdOf', () => {
   test('returns the session id from a session envelope', () => {
     const env = parseTranscript(SAMPLE, 'sess-42');
@@ -132,7 +345,7 @@ describe('scanSessions', () => {
 
   test('returns empty when the projects dir does not exist', async () => {
     const res = await scanSessions({ projectsDir: path.join(dir, 'missing') });
-    expect(res).toEqual({ envelopes: [], sessionCount: 0, ok: true });
+    expect(res).toEqual({ envelopes: [], sessionCount: 0, filteredOut: 0, ok: true });
   });
 
   test('produces one envelope per session file', async () => {
@@ -184,5 +397,49 @@ describe('scanSessions', () => {
 
     const res = await scanSessions({ projectsDir: dir, sinceTime: cutoff });
     expect(res.envelopes).toHaveLength(1);
+  });
+
+  test('reports filteredOut 0 when no preFilter is given', async () => {
+    await fs.writeFile(path.join(dir, 'proj-a', 'sess-1.jsonl'), SAMPLE);
+    const res = await scanSessions({ projectsDir: dir });
+    expect(res.filteredOut).toBe(0);
+  });
+
+  test('a rejected file is counted as filteredOut and never read from disk', async () => {
+    await fs.writeFile(path.join(dir, 'proj-a', 'private.jsonl'), SAMPLE);
+    const readSpy = jest.spyOn(fs, 'readFile');
+    try {
+      const res = await scanSessions({ projectsDir: dir, preFilter: () => false });
+      expect(res.envelopes).toHaveLength(0);
+      expect(res.sessionCount).toBe(0);
+      expect(res.filteredOut).toBe(1);
+      expect(readSpy).not.toHaveBeenCalled();
+    } finally {
+      readSpy.mockRestore();
+    }
+  });
+
+  test('preFilter receives the session id, project folder, mtime, and source', async () => {
+    await fs.writeFile(path.join(dir, 'proj-a', 'sess-1.jsonl'), SAMPLE);
+    const seen: SessionFileMeta[] = [];
+    await scanSessions({
+      projectsDir: dir,
+      preFilter: (meta) => {
+        seen.push(meta);
+        return true;
+      },
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0].sessionId).toBe('sess-1');
+    expect(seen[0].project).toBe('proj-a');
+    expect(seen[0].source).toBe('claude-code');
+    expect(seen[0].mtimeMs).toBeGreaterThan(0);
+  });
+
+  test('preFilter accepting keeps the session in the result', async () => {
+    await fs.writeFile(path.join(dir, 'proj-a', 'sess-1.jsonl'), SAMPLE);
+    const res = await scanSessions({ projectsDir: dir, preFilter: () => true });
+    expect(res.envelopes).toHaveLength(1);
+    expect(res.filteredOut).toBe(0);
   });
 });

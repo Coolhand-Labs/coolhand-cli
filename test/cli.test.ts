@@ -14,6 +14,9 @@ jest.mock('../src/commands/monitor.js', () => ({
 jest.mock('../src/commands/search-optimizations.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/analyze-claude-sessions.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
 jest.mock('../src/commands/flush-pending.js', () => ({
   run: jest.fn().mockResolvedValue(0),
   spawnBackgroundFlush: jest.fn(),
@@ -30,6 +33,7 @@ import { createTmpHome, TmpHome } from './helpers/tmp-home.js';
 import { run as runClaudeCommand } from '../src/commands/claude.js';
 import { run as runMonitorCommand } from '../src/commands/monitor.js';
 import { run as runSearchOptimizationsCommand } from '../src/commands/search-optimizations.js';
+import { run as runAnalyzeClaudeSessions } from '../src/commands/analyze-claude-sessions.js';
 
 function makePending() {
   return savePendingRecord({
@@ -85,6 +89,50 @@ describe('parseArgs', () => {
   test('--flag=value syntax correctly captures a value starting with a dash', () => {
     const parsed = parseArgs(['update-workload', '--description=-1 fix']);
     expect(parsed.flags.description).toBe('-1 fix');
+  });
+
+  test('a single repeatable flag occurrence stays a string', () => {
+    const parsed = parseArgs(['analyze-claude-sessions', '--project', 'coolhand-cli']);
+    expect(parsed.flags.project).toBe('coolhand-cli');
+  });
+
+  test('repeated --project flags accumulate into an array in order', () => {
+    const parsed = parseArgs(['analyze-claude-sessions', '--project', 'p1', '--project', 'p2', '--project', 'p3']);
+    expect(parsed.flags.project).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  test('repeatable flags accumulate across = and space syntaxes', () => {
+    const parsed = parseArgs(['analyze-claude-sessions', '--exclude-project=p1', '--exclude-project', 'p2']);
+    expect(parsed.flags['exclude-project']).toEqual(['p1', 'p2']);
+  });
+
+  test('a repeated non-repeatable flag still keeps only the last value', () => {
+    const parsed = parseArgs(['login', '--base-url', 'https://a', '--base-url', 'https://b']);
+    expect(parsed.flags['base-url']).toBe('https://b');
+  });
+
+  test('analyze-claude-sessions filter flags are mapped into command options', async () => {
+    (runAnalyzeClaudeSessions as jest.Mock).mockClear();
+    await run([
+      'analyze-claude-sessions',
+      '--dry-run',
+      '--since', '7d',
+      '--until', '2026-06-30',
+      '--projects-dir', 'C:/tmp/projects',
+      '--project', 'alpha',
+      '--project', 'beta,gamma',
+      '--exclude-project', 'secret',
+    ]);
+    expect(runAnalyzeClaudeSessions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dryRun: true,
+        since: '7d',
+        until: '2026-06-30',
+        projectsDir: 'C:/tmp/projects',
+        projects: ['alpha', 'beta', 'gamma'],
+        excludeProjects: ['secret'],
+      })
+    );
   });
 });
 

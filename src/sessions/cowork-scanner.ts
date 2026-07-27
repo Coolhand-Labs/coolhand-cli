@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { parseTranscript, type CaptureEnvelope, type ScanResult } from './claude-scanner.js';
+import type { SessionFileMeta } from './session-filter.js';
 
 export function defaultCoworkSessionsDir(): string {
   return path.join(
@@ -33,10 +34,15 @@ const LOCAL_AUDIT_RE = /[/\\]local_([^/\\]+)[/\\]audit\.jsonl$/;
  * Returns an empty result when the directory is missing (non-macOS systems, first-time setup, etc.).
  */
 export async function scanCoworkSessions(
-  options: { sessionsDir?: string; sinceTime?: Date } = {}
+  options: {
+    sessionsDir?: string;
+    sinceTime?: Date;
+    preFilter?: (meta: SessionFileMeta) => boolean;
+  } = {}
 ): Promise<ScanResult> {
   const dir = options.sessionsDir ?? defaultCoworkSessionsDir();
   const sinceMs = options.sinceTime?.getTime();
+  const preFilter = options.preFilter;
 
   let names: string[];
   try {
@@ -45,24 +51,41 @@ export async function scanCoworkSessions(
     // Treat any readdir failure (ENOENT, EACCES, ENOTDIR, …) as an empty result. Cowork scanning
     // is best-effort and macOS-only; an error here must not abort the Claude Code capture running
     // in parallel inside Promise.all.
-    return { envelopes: [], sessionCount: 0, ok: false };
+    return { envelopes: [], sessionCount: 0, filteredOut: 0, ok: false };
   }
 
   const files = (names as string[]).filter((name) => LOCAL_AUDIT_RE.test(name));
   const envelopes: CaptureEnvelope[] = [];
   let sessionCount = 0;
+  let filteredOut = 0;
 
   for (const relativePath of files) {
     const fullPath = path.join(dir, relativePath);
 
-    if (sinceMs !== undefined) {
+    // The id lives in the path (already matched by LOCAL_AUDIT_RE above), so it is known
+    // before the file is read — which is what lets preFilter reject without reading.
+    const m = relativePath.match(LOCAL_AUDIT_RE);
+    if (!m) { continue; }
+    const sessionUuid = m[1];
+
+    let mtimeMs = 0;
+    if (sinceMs !== undefined || preFilter !== undefined) {
       let stat;
       try {
         stat = await fs.stat(fullPath);
       } catch {
         continue;
       }
-      if (stat.mtimeMs < sinceMs) {
+      mtimeMs = stat.mtimeMs;
+      if (sinceMs !== undefined && mtimeMs < sinceMs) {
+        continue;
+      }
+    }
+
+    if (preFilter !== undefined) {
+      const meta: SessionFileMeta = { sessionId: sessionUuid, project: null, mtimeMs, source: 'cowork' };
+      if (!preFilter(meta)) {
+        filteredOut += 1;
         continue;
       }
     }
@@ -73,10 +96,6 @@ export async function scanCoworkSessions(
     } catch {
       continue;
     }
-
-    const m = relativePath.match(LOCAL_AUDIT_RE);
-    if (!m) { continue; }
-    const sessionUuid = m[1];
     sessionCount += 1;
 
     const envelope = parseTranscript(content, sessionUuid);
@@ -85,5 +104,5 @@ export async function scanCoworkSessions(
     }
   }
 
-  return { envelopes, sessionCount, ok: true };
+  return { envelopes, sessionCount, filteredOut, ok: true };
 }
