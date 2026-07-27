@@ -31,9 +31,20 @@ export function parseWhen(input: string, opts: { now: Date; boundary: 'start' | 
       opts.boundary === 'start'
         ? new Date(Number(year), Number(month) - 1, Number(dayOfMonth), 0, 0, 0, 0)
         : new Date(Number(year), Number(month) - 1, Number(dayOfMonth), 23, 59, 59, 999);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed;
+    // Date silently rolls invalid components over into the next day/month (e.g. 2026-02-30
+    // becomes March 2nd) instead of rejecting them, so confirm the parsed date's components
+    // still match what was typed before accepting it.
+    const rolledOver =
+      parsed.getFullYear() !== Number(year) ||
+      parsed.getMonth() !== Number(month) - 1 ||
+      parsed.getDate() !== Number(dayOfMonth);
+    if (Number.isNaN(parsed.getTime()) || rolledOver) {
+      throw new CliError(
+        'INVALID_ARGS',
+        `Invalid date "${input}". Use YYYY-MM-DD, an ISO datetime, or a duration like 12h, 7d, 2w.`
+      );
     }
+    return parsed;
   }
 
   if (trimmed) {

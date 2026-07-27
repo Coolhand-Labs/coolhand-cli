@@ -61,4 +61,17 @@ describe('parseWhen', () => {
   test('rejects a zero-length duration unit without a count', () => {
     expect(() => parseWhen('d', { now, boundary: 'start' })).toThrow(CliError);
   });
+
+  test('rejects an out-of-range day of month instead of silently rolling over', () => {
+    // JS `Date` normalizes Feb 30 into Mar 2 rather than throwing; parseWhen must catch this.
+    expect(() => parseWhen('2026-02-30', { now, boundary: 'start' })).toThrow(CliError);
+  });
+
+  test('rejects an out-of-range month instead of silently rolling over', () => {
+    expect(() => parseWhen('2026-13-01', { now, boundary: 'start' })).toThrow(CliError);
+  });
+
+  test('rejects a day that overflows into the next month for the end boundary too', () => {
+    expect(() => parseWhen('2026-06-31', { now, boundary: 'end' })).toThrow(CliError);
+  });
 });

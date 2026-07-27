@@ -310,7 +310,7 @@ Submits historical Claude Code sessions to Coolhand for pattern and cost analysi
 | `--json` | Emit JSON output |
 | `--since WHEN` | Only sessions modified at or after WHEN |
 | `--until WHEN` | Only sessions modified at or before WHEN (a plain date means its whole day) |
-| `--projects-dir PATH` | Scan PATH instead of `~/.claude/projects` |
+| `--projects-dir PATH` | Scan PATH instead of `~/.claude/projects`; also skips Cowork sessions, which have no equivalent override |
 | `--project NAME` | Only sessions from project folders matching NAME (repeatable; comma-separable) |
 | `--exclude-project NAME` | Skip sessions from project folders matching NAME (repeatable; comma-separable) |
 

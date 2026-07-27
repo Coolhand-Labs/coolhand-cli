@@ -93,7 +93,16 @@ coolhand analyze-claude-sessions --projects-dir D:/exports/claude-projects
 (`--project a,b`) and match project folder names as case-insensitive substrings. Cowork
 sessions have no project folder, so an include filter (`--project`) excludes them.
 Combine any of these with `--dry-run` first to preview the effect; the summary reports how
-many sessions the filters excluded.
+many sessions `--until`, `--project`, and `--exclude-project` excluded (the "filtered out"
+count). `--since` uses the same mtime cutoff as the routine incremental scan, so its
+exclusions aren't broken out separately — they'd be indistinguishable from the sessions a
+normal run already skips for being unchanged since the last sync.
+
+`--until`, `--project`, and `--exclude-project` narrow *within* the normal incremental window
+— they don't lower it. On a machine that has already synced, sessions older than the last
+successful sync are excluded by that cutoff regardless of these flags. Pair with `--since` to
+reach further back (e.g. `--since 2026-01-01 --until 2026-01-31` for a full window into the
+past).
 
 ### Privacy & compliance guarantees
 
@@ -114,7 +123,7 @@ many sessions the filters excluded.
 | `--json`            | Emit machine-readable JSON output instead of human-readable text.  |
 | `--since WHEN`      | Only sessions modified at or after WHEN (`YYYY-MM-DD`, ISO datetime, or `12h`/`7d`/`2w`). |
 | `--until WHEN`      | Only sessions modified at or before WHEN (a plain date means its whole day). |
-| `--projects-dir`    | Scan a custom directory instead of `~/.claude/projects`.           |
+| `--projects-dir`    | Scan a custom directory instead of `~/.claude/projects`; also skips Cowork sessions entirely, since they have no equivalent override. |
 | `--project`         | Only matching project folders (repeatable, comma-separable).       |
 | `--exclude-project` | Skip matching project folders (repeatable, comma-separable).       |
 

@@ -270,10 +270,11 @@ describe('analyze-claude-sessions command', () => {
       expect(coworkOpts.sinceTime).toEqual(new Date(2026, 5, 1, 0, 0, 0, 0));
     });
 
-    test('--projects-dir is forwarded to scanSessions', async () => {
+    test('--projects-dir is forwarded to scanSessions and skips Cowork entirely', async () => {
       await run({ projectsDir: 'C:/custom/projects' });
       const claudeOpts = (scanSessions as jest.Mock).mock.calls[0][0];
       expect(claudeOpts.projectsDir).toBe('C:/custom/projects');
+      expect(scanCoworkSessions).not.toHaveBeenCalled();
     });
 
     test('--until wires a preFilter that rejects files modified after the bound', async () => {

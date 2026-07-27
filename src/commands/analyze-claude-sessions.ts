@@ -1,6 +1,6 @@
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
-import { scanSessions, sessionIdOf, type CaptureEnvelope } from '../sessions/claude-scanner.js';
+import { scanSessions, sessionIdOf, type CaptureEnvelope, type ScanResult } from '../sessions/claude-scanner.js';
 import { scanCoworkSessions } from '../sessions/cowork-scanner.js';
 import {
   loadCaptureState,
@@ -138,13 +138,19 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
         })
       : undefined;
 
+    // --projects-dir redirects the scan to a caller-chosen directory (e.g. a curated export for
+    // a compliance-scoped run); Cowork sessions live under a separate, fixed macOS path that has
+    // no equivalent override, so skip Cowork entirely rather than silently including sessions
+    // from the default location alongside the redirected Claude Code scan.
     const [claudeResult, coworkResult] = await Promise.all([
       scanSessions({
         projectsDir: opts.projectsDir,
         sinceTime: sinceOverride ?? referenceTime,
         preFilter,
       }),
-      scanCoworkSessions({ sinceTime: sinceOverride ?? coworkSinceTime, preFilter }),
+      opts.projectsDir
+        ? Promise.resolve<ScanResult>({ envelopes: [], sessionCount: 0, filteredOut: 0, ok: true })
+        : scanCoworkSessions({ sinceTime: sinceOverride ?? coworkSinceTime, preFilter }),
     ]);
     const envelopes = [...claudeResult.envelopes, ...coworkResult.envelopes];
     const sessionCount = claudeResult.sessionCount + coworkResult.sessionCount;
