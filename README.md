@@ -22,7 +22,7 @@ Requires Node 20 or newer.
 ## Analyze Claude sessions
 
 ```bash
-coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json]
+coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json] [filter options]
 ```
 
 Upload your historical Claude Code session transcripts to your Coolhand account for analysis. Coolhand analyzes the uploaded conversations to surface:
@@ -31,7 +31,7 @@ Upload your historical Claude Code session transcripts to your Coolhand account 
 - **Efficiency gaps** — workflows with unnecessary back-and-forth or redundant steps
 - **Cost insights** — sessions with high token usage relative to their outcome
 
-> **What gets uploaded**: The conversation transcripts stored in `~/.claude/projects/` — the messages exchanged between you and Claude, including any code or context you shared in those conversations. Use `--dry-run` to preview exactly what would be sent before submitting anything.
+> **What gets uploaded**: The conversation transcripts stored in `~/.claude/projects/` — the messages exchanged between you and Claude, including any code or context you shared in those conversations. Use `--dry-run` to preview exactly what would be sent before submitting anything. You control the scope: `--since`/`--until` bound the time period, and `--project`/`--exclude-project`/`--projects-dir` choose which folders are uploaded from — excluded sessions are never even read from disk.
 
 See [Session capture](./docs/session-capture.md) for capture logic, duplicate-avoidance details, and the full flag reference.
 

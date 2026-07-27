@@ -5,6 +5,7 @@ All notable changes to `coolhand-cli` will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `analyze-claude-sessions` gains upload filters: `--since`/`--until` (date, ISO datetime, or `12h`/`7d`/`2w` duration) narrow by modified time, `--project`/`--exclude-project` narrow by project folder name, and `--projects-dir` redirects the scan to a custom directory (and skips Cowork sessions, which have no equivalent override). Filtered sessions are never read from disk, and a filtered run never advances the incremental sync cutoff — see [docs/session-capture.md](./docs/session-capture.md#choosing-what-gets-uploaded).
 - `get-optimization` now prints a human-readable summary by default (title, status, type, category, impact, complexity, client/template/workload, created date, analysis, and plan) instead of a raw JSON dump, plus a "Next steps" footer pointing to `close-optimization`/`update-optimization`.
 - `get-optimization --full` flag: includes the internal `orchestrator_messages` transcript (and any `thoughtSignature` blobs it contains) on both text and `--json` output. This is omitted by default — including from `--json` output, which previously always returned the complete raw payload — since it can add tens of KB of internal agent-transcript data that isn't decision-relevant for most callers. Pass `--full --json` to get the complete payload as before.
 
