@@ -19,6 +19,11 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
   /gho_[A-Za-z0-9]{20,}/g, // GitHub OAuth token
   /github_pat_[A-Za-z0-9_]{20,}/g, // GitHub fine-grained PAT
   /AKIA[0-9A-Z]{16}/g, // AWS access key id
+  /xox[baprs]-[A-Za-z0-9-]{10,}/g, // Slack token (bot/user/app/refresh/config)
+  /AIza[0-9A-Za-z_-]{35}/g, // Google API key
+  /sk_live_[0-9A-Za-z]{16,}/g, // Stripe live secret key
+  /sk_test_[0-9A-Za-z]{16,}/g, // Stripe test secret key
+  /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, // JWT (three base64url segments)
   /\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*/gi, // Authorization: Bearer <token>
   /\b[A-Fa-f0-9]{40,}\b/g, // long hex blobs (generic tokens / hashes)
 ];
