@@ -142,6 +142,30 @@ export interface AnalyzeClaudeSessionsOptions {
   excludeProjects?: string[];
 }
 
+export interface SearchFeedbackOptions {
+  sentiment?: 'positive' | 'negative' | 'neutral';
+  search?: string;
+  creatorId?: string;
+  workloadId?: string;
+  /** Only feedback linked to an LLM request log. Mutually exclusive with `unmatched`. */
+  matched?: boolean;
+  /** Only feedback not linked to an LLM request log. Mutually exclusive with `matched`. */
+  unmatched?: boolean;
+  since?: string;
+  sortBy?: 'created_at' | 'updated_at';
+  sortDir?: 'asc' | 'desc';
+  page?: number;
+  perPage?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface GetFeedbackOptions {
+  id: string;
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface ComplaintBoxOptions {
   complaint: string;
   agentName: string;

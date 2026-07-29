@@ -59,7 +59,7 @@
     "smoke": "node dist/bin.js --version"
   },
   "dependencies": {
-    "coolhand-node": "^0.9.0",
+    "coolhand-node": "github:Coolhand-Labs/coolhand-node#issue-89",
     "mockttp": "^4.2.1"
   },
   "overrides": {

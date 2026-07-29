@@ -87,6 +87,8 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand get-optimization` | Fetch a single optimization by ID |
 | `coolhand update-optimization` | Update an optimization's fields |
 | `coolhand close-optimization` | Close an optimization with a reason |
+| `coolhand search-feedback` | Search and filter feedback records |
+| `coolhand get-feedback` | Fetch a single feedback record by ID |
 | `coolhand analyze-claude-sessions` | Submit Claude sessions for pattern and cost analysis |
 | `coolhand wildcard` | Record an agent blocker and exit cleanly |
 

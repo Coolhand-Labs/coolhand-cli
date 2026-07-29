@@ -14,6 +14,12 @@ jest.mock('../src/commands/monitor.js', () => ({
 jest.mock('../src/commands/search-optimizations.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/search-feedback.js', () => ({
+  run: jest.fn(),
+}));
+jest.mock('../src/commands/get-feedback.js', () => ({
+  run: jest.fn(),
+}));
 jest.mock('../src/commands/analyze-claude-sessions.js', () => ({
   run: jest.fn().mockResolvedValue(0),
 }));
@@ -33,6 +39,8 @@ import { createTmpHome, TmpHome } from './helpers/tmp-home.js';
 import { run as runClaudeCommand } from '../src/commands/claude.js';
 import { run as runMonitorCommand } from '../src/commands/monitor.js';
 import { run as runSearchOptimizationsCommand } from '../src/commands/search-optimizations.js';
+import { run as runSearchFeedbackCommand } from '../src/commands/search-feedback.js';
+import { run as runGetFeedbackCommand } from '../src/commands/get-feedback.js';
 import { run as runAnalyzeClaudeSessions } from '../src/commands/analyze-claude-sessions.js';
 
 function makePending() {
@@ -144,6 +152,8 @@ describe('run', () => {
     (runClaudeCommand as jest.Mock).mockResolvedValue(0);
     (runMonitorCommand as jest.Mock).mockResolvedValue(0);
     (runSearchOptimizationsCommand as jest.Mock).mockResolvedValue(0);
+    (runSearchFeedbackCommand as jest.Mock).mockResolvedValue(0);
+    (runGetFeedbackCommand as jest.Mock).mockResolvedValue(0);
     (runFlushPending as jest.Mock).mockClear().mockResolvedValue(0);
     (spawnBackgroundFlush as jest.Mock).mockClear();
     (confirm as jest.Mock).mockReset().mockResolvedValue(false);
@@ -154,6 +164,8 @@ describe('run', () => {
     (runClaudeCommand as jest.Mock).mockReset();
     (runMonitorCommand as jest.Mock).mockReset();
     (runSearchOptimizationsCommand as jest.Mock).mockReset();
+    (runSearchFeedbackCommand as jest.Mock).mockReset();
+    (runGetFeedbackCommand as jest.Mock).mockReset();
     warnSpy.mockRestore();
   });
 
@@ -371,6 +383,57 @@ describe('run', () => {
 
     expect(confirm).not.toHaveBeenCalled();
     expect(spawnBackgroundFlush).not.toHaveBeenCalled();
+  });
+
+  test('search-feedback dispatches with parsed flags', async () => {
+    const code = await run([
+      'search-feedback',
+      '--sentiment', 'positive',
+      '--matched',
+      '--sort-by', 'created_at',
+      '--page', '2',
+      '--per-page', '10',
+      '--client-id', 'acme',
+    ]);
+    expect(code).toBe(0);
+    expect(runSearchFeedbackCommand).toHaveBeenCalledWith({
+      sentiment: 'positive',
+      matched: true,
+      sortBy: 'created_at',
+      page: 2,
+      perPage: 10,
+      clientId: 'acme',
+    });
+  });
+
+  test('search-feedback rejects an invalid --sentiment value', async () => {
+    const code = await run(['search-feedback', '--sentiment', 'bogus']);
+    expect(code).toBe(1);
+    expect(runSearchFeedbackCommand).not.toHaveBeenCalled();
+  });
+
+  test('search-feedback rejects --matched combined with --unmatched', async () => {
+    const code = await run(['search-feedback', '--matched', '--unmatched']);
+    expect(code).toBe(1);
+    expect(runSearchFeedbackCommand).not.toHaveBeenCalled();
+  });
+
+  test('search-feedback rejects an out-of-range --per-page', async () => {
+    const code = await run(['search-feedback', '--per-page', '101']);
+    expect(code).toBe(1);
+    expect(runSearchFeedbackCommand).not.toHaveBeenCalled();
+  });
+
+  test('get-feedback requires a positional <feedback-id>', async () => {
+    const code = await run(['get-feedback']);
+    expect(code).toBe(1);
+    expect(runGetFeedbackCommand).not.toHaveBeenCalled();
+  });
+
+  test('get-feedback dispatches with the id and flags', async () => {
+    const code = await run(['get-feedback', 'fb-123', '--json', '--client-id', 'acme']);
+    expect(code).toBe(0);
+    expect(runGetFeedbackCommand).toHaveBeenCalledWith({ id: 'fb-123', json: true, clientId: 'acme' });
   });
 
 });
