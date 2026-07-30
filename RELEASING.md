@@ -29,20 +29,14 @@
    git commit -m "Bump version to vX.Y.Z"
    ```
 
-5. **Tag and push**:
+5. **Tag and push** — this is what triggers the release:
 
    ```bash
    git tag vX.Y.Z
    git push origin main --tags
    ```
 
-6. **Publish to npm**:
+   Pushing a `vX.Y.Z` tag runs [`.github/workflows/publish.yml`](./.github/workflows/publish.yml), which lints, type-checks, tests, and builds the package fresh, verifies the tag matches `package.json`'s version (failing the run otherwise), then publishes to npm using [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) with `--provenance` — no `NPM_TOKEN` secret is stored anywhere. Publishing runs in a separate job scoped to the `npm-publish` GitHub Environment, gated behind the build/verify job passing.
 
-   ```bash
-   npm publish
-   ```
-
-   `prepublishOnly` runs `npm run build && npm run lint && npm run typecheck && npm test` — the package is always type-checked, linted, tested, and built fresh before publishing.
-
-For a release candidate, use `npm publish --tag next` and verify on a clean machine with `npx coolhand-cli@next login` before promoting to `latest`.
+   Watch the [Actions tab](https://github.com/Coolhand-Labs/coolhand-cli/actions/workflows/publish.yml) for the run; a failure there (including a tag/version mismatch) means the package was **not** published.
 
