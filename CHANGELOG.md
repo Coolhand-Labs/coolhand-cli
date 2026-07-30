@@ -2,7 +2,7 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
-## [Unreleased]
+## [0.8.0] - 2026-07-30
 
 ### Added
 - `search-feedback` and `get-feedback` commands: search/list and fetch feedback records (`GET /api/v2/llm_request_log_feedbacks`, via coolhand-node's new `Coolhand#searchFeedback`/`getFeedback`). Requires a private API key (`coolhand login --scope private`) — the public key used by `wildcard`/`createFeedback` 401s on these read endpoints. `search-feedback` supports `--sentiment`, `--search`, `--creator-id`, `--workload-id`, `--matched`/`--unmatched`, `--since`, `--sort-by`/`--sort-dir`, and pagination; `get-feedback <id>` prints a human-readable summary including `original_output`/`revised_output`/`feedback_partials`, which list results omit. See [docs/commands.md](./docs/commands.md#feedback). (#71)
