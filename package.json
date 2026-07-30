@@ -59,7 +59,7 @@
     "smoke": "node dist/bin.js --version"
   },
   "dependencies": {
-    "coolhand-node": "github:Coolhand-Labs/coolhand-node#hashid-encode-llm-request-log-id",
+    "coolhand-node": "^0.10.0",
     "mockttp": "^4.2.1"
   },
   "overrides": {
