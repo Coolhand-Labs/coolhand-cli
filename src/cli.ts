@@ -18,6 +18,8 @@ import { run as runListWorkloads } from './commands/list-workloads.js';
 import { run as runGetWorkload } from './commands/get-workload.js';
 import { run as runUpdateWorkload } from './commands/update-workload.js';
 import { run as runFlushPending, spawnBackgroundFlush } from './commands/flush-pending.js';
+import { run as runSearchFeedback } from './commands/search-feedback.js';
+import { run as runGetFeedback } from './commands/get-feedback.js';
 import { countPending, flushFailed } from './pending-store.js';
 import { confirm } from './prompt.js';
 import type {
@@ -35,6 +37,8 @@ import type {
   ListWorkloadsOptions,
   GetWorkloadOptions,
   UpdateWorkloadOptions,
+  SearchFeedbackOptions,
+  GetFeedbackOptions,
 } from './types.js';
 
 interface ParsedArgs {
@@ -51,7 +55,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
 const REPEATABLE_FLAGS = new Set(['project', 'exclude-project']);
@@ -165,6 +169,35 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--agent-name NAME', description: 'Identifier for the calling agent (or set COOLHAND_AGENT_NAME)' },
       { flag: '--thinking TEXT', description: 'Optional reasoning/context that led to the blocker' },
       { flag: '--log-id N', description: 'Optional LLM request log id this blocker relates to' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'search-feedback',
+    oneLiner: 'Search and filter feedback records (requires a private key)',
+    usage: 'coolhand search-feedback [options]',
+    options: [
+      { flag: '--sentiment positive|negative|neutral', description: 'Filter by sentiment' },
+      { flag: '--search TEXT', description: 'Filter by explanation substring' },
+      { flag: '--creator-id ID', description: 'Filter by creator_unique_id' },
+      { flag: '--workload-id ID', description: 'Filter by workload ID' },
+      { flag: '--matched', description: 'Only feedback linked to an LLM request log' },
+      { flag: '--unmatched', description: 'Only feedback not linked to an LLM request log' },
+      { flag: '--since DATE', description: 'Only feedback created at or after DATE' },
+      { flag: '--sort-by created_at|updated_at', description: 'Sort field (default: created_at)' },
+      { flag: '--sort-dir asc|desc', description: 'Sort direction (default: desc)' },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'get-feedback',
+    oneLiner: 'Get a single feedback record by ID (requires a private key)',
+    usage: 'coolhand get-feedback <feedback-id> [options]',
+    options: [
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -728,6 +761,91 @@ function listWorkloadsOptions(parsed: ParsedArgs): ListWorkloadsOptions {
   return opts;
 }
 
+const SENTIMENT_VALUES = new Set(['positive', 'negative', 'neutral']);
+const SORT_BY_VALUES = new Set(['created_at', 'updated_at']);
+const SORT_DIR_VALUES = new Set(['asc', 'desc']);
+
+function searchFeedbackOptions(parsed: ParsedArgs): SearchFeedbackOptions {
+  const opts: SearchFeedbackOptions = {};
+  if (typeof parsed.flags.sentiment === 'string') {
+    if (!SENTIMENT_VALUES.has(parsed.flags.sentiment)) {
+      throw new CliError('INVALID_ARGS', '--sentiment must be one of: positive, negative, neutral');
+    }
+    opts.sentiment = parsed.flags.sentiment as SearchFeedbackOptions['sentiment'];
+  }
+  if (typeof parsed.flags.search === 'string') {
+    opts.search = parsed.flags.search;
+  }
+  if (typeof parsed.flags['creator-id'] === 'string') {
+    opts.creatorId = parsed.flags['creator-id'];
+  }
+  if (typeof parsed.flags['workload-id'] === 'string') {
+    opts.workloadId = parsed.flags['workload-id'];
+  }
+  if (parsed.flags.matched === true && parsed.flags.unmatched === true) {
+    throw new CliError('INVALID_ARGS', '--matched and --unmatched are mutually exclusive');
+  }
+  if (parsed.flags.matched === true) {
+    opts.matched = true;
+  }
+  if (parsed.flags.unmatched === true) {
+    opts.unmatched = true;
+  }
+  if (typeof parsed.flags.since === 'string') {
+    opts.since = parsed.flags.since;
+  }
+  if (typeof parsed.flags['sort-by'] === 'string') {
+    if (!SORT_BY_VALUES.has(parsed.flags['sort-by'])) {
+      throw new CliError('INVALID_ARGS', '--sort-by must be one of: created_at, updated_at');
+    }
+    opts.sortBy = parsed.flags['sort-by'] as SearchFeedbackOptions['sortBy'];
+  }
+  if (typeof parsed.flags['sort-dir'] === 'string') {
+    if (!SORT_DIR_VALUES.has(parsed.flags['sort-dir'])) {
+      throw new CliError('INVALID_ARGS', '--sort-dir must be one of: asc, desc');
+    }
+    opts.sortDir = parsed.flags['sort-dir'] as SearchFeedbackOptions['sortDir'];
+  }
+  if (typeof parsed.flags['page'] === 'string') {
+    const raw = parsed.flags['page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--page must be a positive integer');
+    }
+    opts.page = n;
+  }
+  if (typeof parsed.flags['per-page'] === 'string') {
+    const raw = parsed.flags['per-page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 100) {
+      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
+    }
+    opts.perPage = n;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+function getFeedbackOptions(parsed: ParsedArgs): GetFeedbackOptions {
+  const id = parsed.positional[0];
+  if (!id) {
+    throw new CliError('INVALID_ARGS', 'get-feedback requires a <feedback-id> argument');
+  }
+  const opts: GetFeedbackOptions = { id };
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 function wildcardOptions(parsed: ParsedArgs): ComplaintBoxOptions {
   const complaint = typeof parsed.flags.complaint === 'string' ? parsed.flags.complaint.trim() : '';
   if (!complaint) {
@@ -894,6 +1012,10 @@ export async function run(argv: string[]): Promise<number> {
         return await runUpdateOptimization(updateOptimizationOptions(parsed));
       case 'wildcard':
         return await runWildcard(wildcardOptions(parsed));
+      case 'search-feedback':
+        return await runSearchFeedback(searchFeedbackOptions(parsed));
+      case 'get-feedback':
+        return await runGetFeedback(getFeedbackOptions(parsed));
       case 'analyze-claude-sessions':
         return await runAnalyzeClaudeSessions(analyzeClaudeSessionsOptions(parsed));
       case 'list-workloads':

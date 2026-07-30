@@ -293,6 +293,55 @@ Closes an optimization. The reason is a free-text positional argument (quote it 
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
+## Feedback
+
+Search and inspect feedback records (the same records `wildcard` and the Coolhand SDKs create). Both commands require a **private** API key (`coolhand login --scope private`) — the public key is write-only for this resource and gets a 401.
+
+### search-feedback
+
+```bash
+coolhand search-feedback [--sentiment positive|negative|neutral] [--search TEXT]
+                          [--creator-id ID] [--workload-id ID]
+                          [--matched] [--unmatched] [--since DATE]
+                          [--sort-by created_at|updated_at] [--sort-dir asc|desc]
+                          [--page N] [--per-page N] [--client-id ID] [--json]
+```
+
+Lists feedback records with optional filtering, sorting, and pagination. List items omit `original_output`/`revised_output` (each can hold up to 1GB) — use `get-feedback` to fetch those for a specific record.
+
+| Flag | Description |
+|------|-------------|
+| `--sentiment positive\|negative\|neutral` | Filter by sentiment |
+| `--search TEXT` | Filter by explanation substring |
+| `--creator-id ID` | Filter by `creator_unique_id` |
+| `--workload-id ID` | Filter by workload ID |
+| `--matched` | Only feedback linked to an LLM request log |
+| `--unmatched` | Only feedback not linked to an LLM request log |
+| `--since DATE` | Only feedback created at or after DATE |
+| `--sort-by created_at\|updated_at` | Sort field (default: `created_at`) |
+| `--sort-dir asc\|desc` | Sort direction (default: `desc`) |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 25, max: 100) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+Human-readable output includes a pagination hint: `Page N of M (X total) — use --page N to navigate`.
+
+`--matched`/`--unmatched` and the other flags above are the full set the backend currently supports filtering on. Filtering by whether a record has a revision (`revised_output`), or whether it's linked to an optimization, isn't offered here because the API doesn't expose those as filterable — `revised_output` is excluded from the server's search-whitelist entirely (unbounded text, same reason list items omit it), and optimization-linkage isn't a searchable field on this endpoint.
+
+### get-feedback
+
+```bash
+coolhand get-feedback <feedback-id> [--client-id ID] [--json]
+```
+
+Fetches a single feedback record by ID, including `original_output`, `revised_output`, and `feedback_partials` (omitted from `search-feedback` list items). Default output is a human-readable summary followed by the explanation, original/revised output, and any feedback partials, when present.
+
+| Flag | Description |
+|------|-------------|
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
 ## Session Analysis
 
 ### analyze-claude-sessions
