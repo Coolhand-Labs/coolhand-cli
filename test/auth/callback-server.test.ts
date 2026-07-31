@@ -103,7 +103,7 @@ describe('startCallbackServer', () => {
     await new Promise((r) => setTimeout(r, 200));
     // After consuming once, either the listener has closed (fetch rejects) or it returns 410.
     // Both satisfy the single-shot invariant; the token must not be re-issued.
-    let secondStatus: number | 'rejected' = 'rejected';
+    let secondStatus: number | 'rejected';
     try {
       const second = await get(handle.port, '/callback?token=t2&state=s&client_name=N&client_id=I');
       secondStatus = second.status;
