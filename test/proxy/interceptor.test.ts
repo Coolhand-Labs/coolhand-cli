@@ -47,6 +47,11 @@ describe('sanitizeHeaders', () => {
     expect(result['x-api-key']).toBe('[REDACTED]');
   });
 
+  test('redacts cf-aig-authorization header', () => {
+    const result = sanitizeHeaders({ 'cf-aig-authorization': 'secret-token' });
+    expect(result['cf-aig-authorization']).toBe('[REDACTED]');
+  });
+
   test('redacts proxy-authorization header', () => {
     const result = sanitizeHeaders({ 'proxy-authorization': 'Basic abc' });
     expect(result['proxy-authorization']).toBe('[REDACTED]');

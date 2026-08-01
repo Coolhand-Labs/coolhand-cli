@@ -49,6 +49,7 @@ export function sanitizeHeaders(
     "cookie",
     "set-cookie",
     "openai-api-key",
+    "cf-aig-authorization",
   ]);
 
   const sanitized: Record<string, string> = {};
