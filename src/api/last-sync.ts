@@ -1,4 +1,5 @@
 import { loadConfig, getClient } from '../config.js';
+import { isAllowedBaseUrlScheme } from '../base-url.js';
 import { DEFAULT_BASE_URL } from '../types.js';
 
 /**
@@ -38,7 +39,7 @@ export async function fetchLastSync(opts: { clientId?: string } = {}): Promise<D
   let url: string;
   try {
     const parsedBaseUrl = new URL(baseUrl);
-    if (parsedBaseUrl.protocol !== 'http:' && parsedBaseUrl.protocol !== 'https:') {
+    if (!isAllowedBaseUrlScheme(parsedBaseUrl)) {
       return null;
     }
     const endpoint = new URL('/api/v2/llm_request_logs', parsedBaseUrl);

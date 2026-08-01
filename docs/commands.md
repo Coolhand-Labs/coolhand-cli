@@ -40,6 +40,8 @@ Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the 
 
 `--timeout-ms MS` overrides how long the CLI waits for the browser callback before giving up (default: 300000, i.e. 5 minutes — see [auth-flow.md](./auth-flow.md)).
 
+`--base-url URL` points the CLI at a non-default Coolhand instance and is stored as the client's `base_url` for all later requests. It must use `https://`; `http://` is only accepted for `localhost`/`127.0.0.1`/`::1`, matching the restriction `coolhand-node` enforces on every other API call — a non-loopback `http://` URL is rejected outright rather than silently stored.
+
 See [auth-flow.md](./auth-flow.md) for the full callback sequence, state machine, and error paths.
 
 ### logout

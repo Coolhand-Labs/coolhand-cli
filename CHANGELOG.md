@@ -2,6 +2,11 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- `coolhand login --base-url` and the `monitor`/`claude` proxy path (`endpointForBaseUrl`) now enforce the same https-except-loopback rule that `fetch-log`/`search-logs`/`search-feedback`/`get-feedback`/`mcp-call` already got for free from the `coolhand-node` SDK. Previously `login --base-url http://some-non-loopback-host` was accepted and silently stored, and the proxy path performed no scheme validation at all — so `monitor`/`claude` would ship captured prompts, completions, and the public API key over cleartext HTTP to a non-loopback host while every other command correctly refused it (#94).
+
 ## [0.9.0] - 2026-08-01
 
 ### Added

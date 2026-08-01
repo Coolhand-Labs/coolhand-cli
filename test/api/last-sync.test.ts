@@ -177,4 +177,9 @@ describe('fetchLastSync', () => {
     await configureClient('file:///etc/passwd');
     expect(await fetchLastSync()).toBeNull();
   });
+
+  test('returns null for an http base url on a non-loopback host', async () => {
+    await configureClient('http://internal-mirror.corp');
+    expect(await fetchLastSync()).toBeNull();
+  });
 });
