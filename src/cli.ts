@@ -17,6 +17,8 @@ import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessi
 import { run as runListWorkloads } from './commands/list-workloads.js';
 import { run as runGetWorkload } from './commands/get-workload.js';
 import { run as runUpdateWorkload } from './commands/update-workload.js';
+import { run as runFetchLog } from './commands/fetch-log.js';
+import { run as runSearchLogs } from './commands/search-logs.js';
 import { run as runFlushPending, spawnBackgroundFlush } from './commands/flush-pending.js';
 import { run as runSearchFeedback } from './commands/search-feedback.js';
 import { run as runGetFeedback } from './commands/get-feedback.js';
@@ -39,6 +41,8 @@ import type {
   UpdateWorkloadOptions,
   SearchFeedbackOptions,
   GetFeedbackOptions,
+  FetchLogOptions,
+  SearchLogsOptions,
 } from './types.js';
 
 interface ParsedArgs {
@@ -55,7 +59,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
 const REPEATABLE_FLAGS = new Set(['project', 'exclude-project']);
@@ -70,6 +74,7 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--scope private', description: 'Request a private key alongside the public key' },
       { flag: '--write-env PATH', description: 'Idempotently set COOLHAND_API_KEY (and COOLHAND_PRIVATE_KEY if --scope private) in PATH' },
       { flag: '--client-id ID', description: 'Hint to the server about which client to select' },
+      { flag: '--timeout-ms MS', description: 'How long to wait for the browser callback (default: 300000, i.e. 5 minutes)' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
   },
@@ -80,6 +85,7 @@ const COMMANDS: CommandMeta[] = [
     options: [
       { flag: '--client-id ID', description: 'Remove a specific client' },
       { flag: '--all', description: 'Remove every stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
   },
   {
@@ -271,6 +277,41 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--id ID', description: 'Workload ID (required)' },
       { flag: '--name VALUE', description: 'New name (not allowed for system workloads)' },
       { flag: '--description VALUE', description: 'New description' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'fetch-log',
+    oneLiner: 'Fetch the input/output content of a single LLM request log',
+    usage: 'coolhand fetch-log <log-id> [options]',
+    options: [
+      { flag: '--section VALUE', description: 'Which part of each content field to return: full (default), beginning, or end' },
+      { flag: '--max-chars N', description: 'Maximum characters to return per content field' },
+      { flag: '--search-query TEXT', description: 'Search within the log content instead of returning raw content (cannot combine with --section/--max-chars)' },
+      { flag: '--include-thinking', description: 'Include thinking/reasoning response content' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'search-logs',
+    oneLiner: 'Search LLM request logs with flexible filters',
+    usage: 'coolhand search-logs [options]',
+    options: [
+      { flag: '--template-id ID', description: 'Filter by template hashid' },
+      { flag: '--workload-id ID', description: 'Filter by workload hashid (matches all templates in that workload)' },
+      { flag: '--system-prompt-contains TEXT', description: 'Case-insensitive substring to match in the system prompt' },
+      { flag: '--user-prompt-contains TEXT', description: 'Case-insensitive substring to match in the user prompt' },
+      { flag: '--model VALUE', description: "Filter by model name (e.g. 'gpt-4o', 'claude-3-5-sonnet')" },
+      { flag: '--source-api VALUE', description: "Filter by source API (e.g. 'openai', 'anthropic', 'vertex')" },
+      { flag: '--source-api-result VALUE', description: 'Filter by result status: success, failed, operational, unmatched' },
+      { flag: '--unmatched-only', description: 'Only return logs with no assigned template' },
+      { flag: '--days-back N', description: 'Limit to logs created in the last N days (unrestricted if omitted)' },
+      { flag: '--include-prompts', description: 'Include system_prompt and user_prompt in results (may be large)' },
+      { flag: '--sort VALUE', description: "Sort expression, e.g. 'created_at desc' (default: newest first)" },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -541,12 +582,20 @@ function searchOptimizationsOptions(parsed: ParsedArgs): SearchOptimizationsOpti
     opts.to = parsed.flags.to;
   }
   if (typeof parsed.flags['page'] === 'string') {
-    const n = parseInt(parsed.flags['page'], 10);
-    if (!isNaN(n)) { opts.page = n; }
+    const raw = parsed.flags['page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--page must be a positive integer');
+    }
+    opts.page = n;
   }
   if (typeof parsed.flags['per-page'] === 'string') {
-    const n = parseInt(parsed.flags['per-page'], 10);
-    if (!isNaN(n)) { opts.perPage = n; }
+    const raw = parsed.flags['per-page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 50) {
+      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 50');
+    }
+    opts.perPage = n;
   }
   if (typeof parsed.flags['template-id'] === 'string') {
     opts.templateId = parsed.flags['template-id'];
@@ -715,6 +764,112 @@ function updateWorkloadOptions(parsed: ParsedArgs): UpdateWorkloadOptions {
   }
   if (opts.name === undefined && opts.description === undefined) {
     throw new CliError('INVALID_ARGS', 'update-workload requires at least one of --name or --description');
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+const LOG_SECTIONS = new Set(['full', 'beginning', 'end']);
+
+function fetchLogOptions(parsed: ParsedArgs): FetchLogOptions {
+  const logId = parsed.positional[0];
+  if (!logId) {
+    throw new CliError('INVALID_ARGS', 'fetch-log requires a <log-id> argument');
+  }
+  const opts: FetchLogOptions = { logId };
+  if (typeof parsed.flags['section'] === 'string') {
+    const section = parsed.flags['section'];
+    if (!LOG_SECTIONS.has(section)) {
+      throw new CliError('INVALID_ARGS', '--section must be one of: full, beginning, end');
+    }
+    opts.section = section as FetchLogOptions['section'];
+  }
+  if (typeof parsed.flags['max-chars'] === 'string') {
+    const raw = parsed.flags['max-chars'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--max-chars must be a positive integer');
+    }
+    opts.maxChars = n;
+  }
+  if (typeof parsed.flags['search-query'] === 'string') {
+    opts.searchQuery = parsed.flags['search-query'];
+  }
+  if (opts.searchQuery !== undefined && (opts.section !== undefined || opts.maxChars !== undefined)) {
+    throw new CliError('INVALID_ARGS', '--search-query cannot be combined with --section or --max-chars');
+  }
+  if (parsed.flags['include-thinking'] === true) {
+    opts.includeThinking = true;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+function searchLogsOptions(parsed: ParsedArgs): SearchLogsOptions {
+  const opts: SearchLogsOptions = {};
+  if (typeof parsed.flags['template-id'] === 'string') {
+    opts.templateId = parsed.flags['template-id'];
+  }
+  if (typeof parsed.flags['workload-id'] === 'string') {
+    opts.workloadId = parsed.flags['workload-id'];
+  }
+  if (typeof parsed.flags['system-prompt-contains'] === 'string') {
+    opts.systemPromptContains = parsed.flags['system-prompt-contains'];
+  }
+  if (typeof parsed.flags['user-prompt-contains'] === 'string') {
+    opts.userPromptContains = parsed.flags['user-prompt-contains'];
+  }
+  if (typeof parsed.flags['model'] === 'string') {
+    opts.model = parsed.flags['model'];
+  }
+  if (typeof parsed.flags['source-api'] === 'string') {
+    opts.sourceApi = parsed.flags['source-api'];
+  }
+  if (typeof parsed.flags['source-api-result'] === 'string') {
+    opts.sourceApiResult = parsed.flags['source-api-result'];
+  }
+  if (parsed.flags['unmatched-only'] === true) {
+    opts.unmatchedOnly = true;
+  }
+  if (typeof parsed.flags['days-back'] === 'string') {
+    const raw = parsed.flags['days-back'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--days-back must be a positive integer');
+    }
+    opts.daysBack = n;
+  }
+  if (parsed.flags['include-prompts'] === true) {
+    opts.includePrompts = true;
+  }
+  if (typeof parsed.flags['sort'] === 'string') {
+    opts.sort = parsed.flags['sort'];
+  }
+  if (typeof parsed.flags['page'] === 'string') {
+    const raw = parsed.flags['page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--page must be a positive integer');
+    }
+    opts.page = n;
+  }
+  if (typeof parsed.flags['per-page'] === 'string') {
+    const raw = parsed.flags['per-page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 100) {
+      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
+    }
+    opts.perPage = n;
   }
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
@@ -1027,6 +1182,10 @@ export async function run(argv: string[]): Promise<number> {
         return await runGetWorkload(getWorkloadOptions(parsed));
       case 'update-workload':
         return await runUpdateWorkload(updateWorkloadOptions(parsed));
+      case 'fetch-log':
+        return await runFetchLog(fetchLogOptions(parsed));
+      case 'search-logs':
+        return await runSearchLogs(searchLogsOptions(parsed));
       default:
         logger.info(`Unknown command: ${parsed.command}`);
         logger.info(buildSummaryHelp());

@@ -85,6 +85,34 @@ export interface UpdateWorkloadOptions {
   clientId?: string;
 }
 
+export interface FetchLogOptions {
+  logId: string;
+  section?: 'full' | 'beginning' | 'end';
+  maxChars?: number;
+  searchQuery?: string;
+  includeThinking?: boolean;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface SearchLogsOptions {
+  templateId?: string;
+  workloadId?: string;
+  systemPromptContains?: string;
+  userPromptContains?: string;
+  model?: string;
+  sourceApi?: string;
+  sourceApiResult?: string;
+  unmatchedOnly?: boolean;
+  daysBack?: number;
+  includePrompts?: boolean;
+  sort?: string;
+  page?: number;
+  perPage?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface SearchOptimizationsOptions {
   status?: string;
   type?: string;
