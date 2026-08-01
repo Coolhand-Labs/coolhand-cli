@@ -12,15 +12,18 @@ import { DEFAULT_BASE_URL, type ComplaintBoxOptions } from '../types.js';
 const STOP_GUIDANCE =
   'Do not retry this action or attempt alternative ways to perform it; continue with the rest of your task.';
 
+// Shared opening clause: the blocker is either a capability that genuinely doesn't
+// exist, or a task that would take too long to complete in this environment.
+const BLOCKER_CLAUSE = 'This capability is not available, or the task would take too long to complete, in this environment.';
+
 // Printed when the blocker was successfully recorded server-side.
-const DELOOP_RECORDED =
-  'This capability is not available in this environment. Your feedback has been recorded. ' + STOP_GUIDANCE;
+const DELOOP_RECORDED = `${BLOCKER_CLAUSE} Your feedback has been recorded. ` + STOP_GUIDANCE;
 
 // Printed when the blocker could NOT be recorded (e.g. the server did not confirm).
 // We still de-loop the agent, but stay honest: we never claim a recording happened,
 // and a warning is logged separately so the failure surfaces.
 const DELOOP_UNRECORDED =
-  'This capability is not available in this environment. Your feedback could not be recorded ' +
+  `${BLOCKER_CLAUSE} Your feedback could not be recorded ` +
   '(the server did not confirm — run `coolhand login` to enable reporting). ' +
   STOP_GUIDANCE;
 
@@ -29,17 +32,17 @@ const DELOOP_UNRECORDED =
 // lost: it uploads when credentials are available. The specific reason is already
 // in the logger.warn() call above, so this message stays generic.
 const DELOOP_SAVED =
-  'This capability is not available in this environment. Your feedback was saved locally ' +
+  `${BLOCKER_CLAUSE} Your feedback was saved locally ` +
   'and will be uploaded once a Coolhand account with a public API key is configured. ' +
   STOP_GUIDANCE;
 
 /**
- * Records an agent's free-form "I am blocked, this capability does not exist"
- * complaint as feedback (tagged creator_type: "agent"), then prints a terminal
- * de-loop message and exits 0 so the agent stops and moves on. The de-loop ALWAYS
- * fires — even when the feedback could not be recorded — because the missing
- * capability is real regardless of server state (and a logged-out agent in a
- * sandbox is exactly who this command is for). When recording fails it says so
+ * Records an agent's free-form "I am blocked — a capability doesn't exist, or this
+ * task would take too long" complaint as feedback (tagged creator_type: "agent"),
+ * then prints a terminal de-loop message and exits 0 so the agent stops and moves
+ * on. The de-loop ALWAYS fires — even when the feedback could not be recorded —
+ * because the blocker is real regardless of server state (and a logged-out agent in
+ * a sandbox is exactly who this command is for). When recording fails it says so
  * plainly and logs a warning, so the failure still surfaces without trapping the
  * agent in the retry loop the command exists to break.
  */
@@ -144,13 +147,13 @@ export async function run(opts: ComplaintBoxOptions): Promise<number> {
     if (err instanceof CliError && err.code === 'CLIENT_NOT_FOUND') {
       // Bad --client-id value — not a server or auth failure; give actionable guidance.
       deloopFallback =
-        'This capability is not available in this environment. The specified client was not found ' +
+        `${BLOCKER_CLAUSE} The specified client was not found ` +
         '(pass --client-id with a valid client ID, or run `coolhand clients` to list configured clients). ' +
         STOP_GUIDANCE;
     } else if (err instanceof CliError && err.code === 'INVALID_ARGS') {
       // Client selection prompt timed out or received invalid input — not a server failure.
       deloopFallback =
-        'This capability is not available in this environment. Client selection was not completed ' +
+        `${BLOCKER_CLAUSE} Client selection was not completed ` +
         '(prompt timed out or received invalid input — pass --client-id to select a client directly). ' +
         STOP_GUIDANCE;
     }
