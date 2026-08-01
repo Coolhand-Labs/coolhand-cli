@@ -1,4 +1,5 @@
 import { CliError, ExitCode } from '../errors.js';
+import { isAllowedBaseUrlScheme } from '../base-url.js';
 import { logger, redact } from '../logger.js';
 import { maskToken } from '../mask.js';
 import { upsertClient, configPath } from '../config.js';
@@ -45,8 +46,11 @@ function parseBaseUrl(input: string | undefined): URL {
   } catch {
     throw new CliError('INVALID_BASE_URL', `Invalid --base-url: ${raw}`);
   }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new CliError('INVALID_BASE_URL', `--base-url must be http or https, got: ${parsed.protocol}`);
+  if (!isAllowedBaseUrlScheme(parsed)) {
+    throw new CliError(
+      'INVALID_BASE_URL',
+      `--base-url must use https:// (got: ${raw}). For local dev, http://localhost is allowed.`
+    );
   }
   return parsed;
 }
