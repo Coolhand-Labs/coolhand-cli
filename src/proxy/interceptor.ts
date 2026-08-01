@@ -61,3 +61,33 @@ export function sanitizeHeaders(
   return sanitized;
 }
 
+const SENSITIVE_QUERY_PARAMS = new Set([
+  "key",
+  "api_key",
+  "apikey",
+  "token",
+  "access_token",
+  "secret",
+]);
+
+/**
+ * Sanitize a URL by redacting sensitive query parameter values
+ * (API keys, tokens) while leaving the rest of the URL intact.
+ */
+export function sanitizeURL(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+
+  for (const key of parsed.searchParams.keys()) {
+    if (SENSITIVE_QUERY_PARAMS.has(key.toLowerCase())) {
+      parsed.searchParams.set(key, "[REDACTED]");
+    }
+  }
+
+  return parsed.href;
+}
+
