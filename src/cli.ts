@@ -74,6 +74,7 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--scope private', description: 'Request a private key alongside the public key' },
       { flag: '--write-env PATH', description: 'Idempotently set COOLHAND_API_KEY (and COOLHAND_PRIVATE_KEY if --scope private) in PATH' },
       { flag: '--client-id ID', description: 'Hint to the server about which client to select' },
+      { flag: '--timeout-ms MS', description: 'How long to wait for the browser callback (default: 300000, i.e. 5 minutes)' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
   },
@@ -84,6 +85,7 @@ const COMMANDS: CommandMeta[] = [
     options: [
       { flag: '--client-id ID', description: 'Remove a specific client' },
       { flag: '--all', description: 'Remove every stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
   },
   {
@@ -577,12 +579,20 @@ function searchOptimizationsOptions(parsed: ParsedArgs): SearchOptimizationsOpti
     opts.to = parsed.flags.to;
   }
   if (typeof parsed.flags['page'] === 'string') {
-    const n = parseInt(parsed.flags['page'], 10);
-    if (!isNaN(n)) { opts.page = n; }
+    const raw = parsed.flags['page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--page must be a positive integer');
+    }
+    opts.page = n;
   }
   if (typeof parsed.flags['per-page'] === 'string') {
-    const n = parseInt(parsed.flags['per-page'], 10);
-    if (!isNaN(n)) { opts.perPage = n; }
+    const raw = parsed.flags['per-page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 50) {
+      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 50');
+    }
+    opts.perPage = n;
   }
   if (typeof parsed.flags['template-id'] === 'string') {
     opts.templateId = parsed.flags['template-id'];

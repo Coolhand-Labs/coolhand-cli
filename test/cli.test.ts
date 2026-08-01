@@ -199,6 +199,16 @@ describe('run', () => {
     expect(code).toBe(1);
   });
 
+  test('search-optimizations with non-numeric --page returns exit 1', async () => {
+    const code = await run(['search-optimizations', '--page', 'abc']);
+    expect(code).toBe(1);
+  });
+
+  test('search-optimizations with --per-page over 50 returns exit 1', async () => {
+    const code = await run(['search-optimizations', '--per-page', '51']);
+    expect(code).toBe(1);
+  });
+
   test('close-optimization without id returns exit 1', async () => {
     const code = await run(['close-optimization']);
     expect(code).toBe(1);

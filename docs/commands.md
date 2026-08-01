@@ -29,7 +29,7 @@ Any command that calls `resolveClient` prints `Client: <name> (<id>)` to stderr 
 ### login
 
 ```bash
-coolhand login [--base-url URL] [--scope private] [--write-env PATH] [--client-id ID] [--json]
+coolhand login [--base-url URL] [--scope private] [--write-env PATH] [--client-id ID] [--timeout-ms MS] [--json]
 ```
 
 Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the callback, and stores the granted key(s). The **public** `api_key` is used for LLM capture with `coolhand-node`, `coolhand-python`, and the `coolhand-js` widget.
@@ -37,6 +37,8 @@ Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the 
 `--scope private` requests the **private (MCP) key** in addition to the public key. The user may grant either or both on the consent page; the CLI stores whichever keys are granted and notes if any were withheld.
 
 `--write-env PATH` writes granted keys to the target `.env` file: `COOLHAND_API_KEY=<token>` and/or `COOLHAND_PRIVATE_KEY=<private_token>` (idempotent — replaces existing values rather than appending duplicates).
+
+`--timeout-ms MS` overrides how long the CLI waits for the browser callback before giving up (default: 300000, i.e. 5 minutes — see [auth-flow.md](./auth-flow.md)).
 
 See [auth-flow.md](./auth-flow.md) for the full callback sequence, state machine, and error paths.
 
