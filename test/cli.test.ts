@@ -199,6 +199,16 @@ describe('run', () => {
     expect(code).toBe(1);
   });
 
+  test('search-optimizations with non-numeric --page returns exit 1', async () => {
+    const code = await run(['search-optimizations', '--page', 'abc']);
+    expect(code).toBe(1);
+  });
+
+  test('search-optimizations with --per-page over 50 returns exit 1', async () => {
+    const code = await run(['search-optimizations', '--per-page', '51']);
+    expect(code).toBe(1);
+  });
+
   test('close-optimization without id returns exit 1', async () => {
     const code = await run(['close-optimization']);
     expect(code).toBe(1);
@@ -247,6 +257,46 @@ describe('run', () => {
 
   test('update-workload with empty --name returns exit 1', async () => {
     const code = await run(['update-workload', '--id', 'wl-1', '--name', '']);
+    expect(code).toBe(1);
+  });
+
+  test('fetch-log without <log-id> returns exit 1', async () => {
+    const code = await run(['fetch-log']);
+    expect(code).toBe(1);
+  });
+
+  test('fetch-log with invalid --section returns exit 1', async () => {
+    const code = await run(['fetch-log', 'log-1', '--section', 'middle']);
+    expect(code).toBe(1);
+  });
+
+  test('fetch-log with non-numeric --max-chars returns exit 1', async () => {
+    const code = await run(['fetch-log', 'log-1', '--max-chars', 'lots']);
+    expect(code).toBe(1);
+  });
+
+  test('fetch-log with --search-query and --section returns exit 1', async () => {
+    const code = await run(['fetch-log', 'log-1', '--search-query', 'error', '--section', 'beginning']);
+    expect(code).toBe(1);
+  });
+
+  test('fetch-log with --search-query and --max-chars returns exit 1', async () => {
+    const code = await run(['fetch-log', 'log-1', '--search-query', 'error', '--max-chars', '500']);
+    expect(code).toBe(1);
+  });
+
+  test('search-logs with non-numeric --page returns exit 1', async () => {
+    const code = await run(['search-logs', '--page', 'abc']);
+    expect(code).toBe(1);
+  });
+
+  test('search-logs with --per-page over 100 returns exit 1', async () => {
+    const code = await run(['search-logs', '--per-page', '101']);
+    expect(code).toBe(1);
+  });
+
+  test('search-logs with non-numeric --days-back returns exit 1', async () => {
+    const code = await run(['search-logs', '--days-back', 'abc']);
     expect(code).toBe(1);
   });
 

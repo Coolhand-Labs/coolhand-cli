@@ -2,6 +2,11 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.9.0] - 2026-08-01
+
+### Added
+- `fetch-log` and `search-logs` commands: fetch a single LLM request log's input/output content, or search logs with flexible filters, via `GET /api/v2/llm_request_logs/{id}` / `GET /api/v2/llm_request_logs` (coolhand-node's `Coolhand#getLogContent`/`searchLogs`). Requires a private API key (`coolhand login --scope private`). `fetch-log <log-id>` supports `--section`, `--max-chars`, `--search-query`, and `--include-thinking`; `search-logs` supports `--template-id`, `--workload-id`, `--system-prompt-contains`, `--user-prompt-contains`, `--model`, `--source-api`, `--source-api-result`, `--unmatched-only`, `--days-back`, `--include-prompts`, `--sort`, and pagination. `search-logs`' response is `{ logs, pagination }`, matching `search-feedback`'s shape (pagination totals are a conservative lower-bound estimate until the backend exposes exact totals; see [Coolhand-Labs/coolhand-cli#90](https://github.com/Coolhand-Labs/coolhand-cli/issues/90)). See [docs/commands.md](./docs/commands.md#log-access). (#70, coolhand-node#108)
+
 ## [0.8.0] - 2026-07-30
 
 ### Added
