@@ -342,6 +342,62 @@ Fetches a single feedback record by ID, including `original_output`, `revised_ou
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
+## Log Access
+
+### fetch-log
+
+```bash
+coolhand fetch-log <log-id> [--section full|beginning|end] [--max-chars N] [--search-query TEXT] [--include-thinking] [--client-id ID] [--json]
+```
+
+Fetches the input/output content of a single LLM request log. By default returns the full
+content of `system_prompt`, `user_prompt`, and `output`. For large logs, use `--section` and
+`--max-chars` to retrieve only the part you need, or `--search-query` to find matching snippets
+without loading the full log (returns up to 5 snippets per field with surrounding context;
+cannot be combined with `--section`/`--max-chars`). When partial retrieval is used, the response
+includes `truncated: true` and `total_chars` per field.
+
+| Flag | Description |
+|------|-------------|
+| `--section VALUE` | Which part of each content field to return: `full` (default), `beginning`, or `end` |
+| `--max-chars N` | Maximum characters to return per content field |
+| `--search-query TEXT` | Search within the log content instead of returning raw content |
+| `--include-thinking` | Include thinking/reasoning response content |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+### search-logs
+
+```bash
+coolhand search-logs [--template-id ID] [--workload-id ID] [--system-prompt-contains TEXT] [--user-prompt-contains TEXT] [--model VALUE] [--source-api VALUE] [--source-api-result VALUE] [--unmatched-only] [--days-back N] [--include-prompts] [--sort VALUE] [--page N] [--per-page N] [--client-id ID] [--json]
+```
+
+Searches LLM request logs for the resolved client with flexible filters — useful for
+investigating whether a template regex is matching the right logs or casting too wide a net.
+`system_prompt_contains`/`user_prompt_contains` are case-insensitive substring matches. Prompt
+content is omitted from results unless `--include-prompts` is passed. The response is
+`{ logs: [...], pagination: {...} }`, matching `search-feedback`'s shape — the backing REST
+endpoint renders `logs` as a bare array on the wire and exposes pagination via response headers
+instead of a body envelope, but the SDK reads those headers and assembles the same shape for you.
+
+| Flag | Description |
+|------|-------------|
+| `--template-id ID` | Filter by template hashid |
+| `--workload-id ID` | Filter by workload hashid (matches all templates in that workload) |
+| `--system-prompt-contains TEXT` | Case-insensitive substring to match in the system prompt |
+| `--user-prompt-contains TEXT` | Case-insensitive substring to match in the user prompt |
+| `--model VALUE` | Filter by model name (e.g. `gpt-4o`, `claude-3-5-sonnet`) |
+| `--source-api VALUE` | Filter by source API (e.g. `openai`, `anthropic`, `vertex`) |
+| `--source-api-result VALUE` | Filter by result status: `success`, `failed`, `operational`, `unmatched` |
+| `--unmatched-only` | Only return logs with no assigned template |
+| `--days-back N` | Limit to logs created in the last N days (unrestricted if omitted) |
+| `--include-prompts` | Include `system_prompt` and `user_prompt` in results (may be large) |
+| `--sort VALUE` | Sort expression, e.g. `created_at desc` (default: newest first) |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 25, max: 100) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
 ## Session Analysis
 
 ### analyze-claude-sessions
