@@ -168,10 +168,13 @@ const COMMANDS: CommandMeta[] = [
   {
     name: 'wildcard',
     aliases: ['complaint-box', 'report-blocker'],
-    oneLiner: 'Agent complaint box: report an unavailable capability and stop',
+    oneLiner: 'Agent complaint box: report a missing capability or a task that would take too long, and stop',
     usage: 'coolhand wildcard --complaint "<what is blocking you>" --agent-name <name> [options]',
     options: [
-      { flag: '--complaint TEXT', description: 'What capability is missing or blocking you (required)' },
+      {
+        flag: '--complaint TEXT',
+        description: 'What capability is missing, or why the task would take too long (required)',
+      },
       { flag: '--agent-name NAME', description: 'Identifier for the calling agent (or set COOLHAND_AGENT_NAME)' },
       { flag: '--thinking TEXT', description: 'Optional reasoning/context that led to the blocker' },
       { flag: '--log-id N', description: 'Optional LLM request log id this blocker relates to' },
