@@ -1,6 +1,6 @@
 import * as mockttp from "mockttp";
 import type { CompletedRequest, CompletedResponse, AbortedRequest } from "mockttp";
-import { shouldCapture, sanitizeHeaders, flattenHeaders } from "./interceptor.js";
+import { shouldCapture, sanitizeHeaders, sanitizeURL, flattenHeaders } from "./interceptor.js";
 import { sendToCoolhand, type CapturedInteraction } from "./sender.js";
 import type { CACredentials } from "./certs.js";
 
@@ -79,10 +79,11 @@ export async function startProxy(
     // when the request arrived and is likely already settled by the time the
     // response handler fires, so Promise.all adds no extra latency.
     const send = Promise.all([res.body.getText(), req.bodyPromise]).then(([responseBodyText, requestBodyText]) => {
+      const sanitizedUrl = sanitizeURL(req.url);
       const captured: CapturedInteraction = {
         request: {
           method: req.method,
-          url: req.url,
+          url: sanitizedUrl,
           headers: sanitizeHeaders(req.headers),
           body: requestBodyText,
         },
@@ -96,7 +97,7 @@ export async function startProxy(
 
       if (!options.silent) {
         console.error(
-          `[coolhand-proxy] Captured ${req.method} ${req.url} -> ${res.statusCode} (${Math.round(durationMs)}ms)`
+          `[coolhand-proxy] Captured ${req.method} ${sanitizedUrl} -> ${res.statusCode} (${Math.round(durationMs)}ms)`
         );
       }
 

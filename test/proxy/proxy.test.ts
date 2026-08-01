@@ -2,6 +2,7 @@ jest.mock('mockttp', () => ({ getLocal: jest.fn() }));
 jest.mock('../../src/proxy/interceptor.js', () => ({
   shouldCapture: jest.fn().mockReturnValue(false),
   sanitizeHeaders: jest.fn((h: Record<string, string>) => h),
+  sanitizeURL: jest.fn((u: string) => u),
   flattenHeaders: jest.fn((h: unknown) => h),
 }));
 jest.mock('../../src/proxy/sender.js', () => ({
@@ -10,7 +11,7 @@ jest.mock('../../src/proxy/sender.js', () => ({
 
 import * as mockttp from 'mockttp';
 import { startProxy } from '../../src/proxy/proxy.js';
-import { shouldCapture } from '../../src/proxy/interceptor.js';
+import { shouldCapture, sanitizeURL } from '../../src/proxy/interceptor.js';
 import { sendToCoolhand } from '../../src/proxy/sender.js';
 
 const CA = { key: 'fake-key', cert: 'fake-cert' };
@@ -36,6 +37,7 @@ beforeEach(() => {
   };
   (mockttp.getLocal as jest.Mock).mockReturnValue(mockServer);
   (shouldCapture as jest.Mock).mockReturnValue(false);
+  (sanitizeURL as jest.Mock).mockImplementation((u: string) => u);
   (sendToCoolhand as jest.Mock).mockResolvedValue(undefined);
 });
 
@@ -188,6 +190,23 @@ describe('startProxy', () => {
     expect(sendToCoolhand).toHaveBeenCalledTimes(1);
     const [, sendOpts] = (sendToCoolhand as jest.Mock).mock.calls[0];
     expect(sendOpts.collector).toBe('coolhand-cli-0.7.0/kimi');
+  });
+
+  test('captured interaction uses the sanitizeURL return value, not the raw request URL', async () => {
+    (shouldCapture as jest.Mock).mockReturnValue(true);
+    (sanitizeURL as jest.Mock).mockImplementation(
+      (u: string) => u.replace(/key=[^&]+/, 'key=[REDACTED]')
+    );
+    await startProxy(CA, { apiKey: 'key', silent: true });
+
+    registeredHandlers.request(makeReq('r7', 'https://generativelanguage.googleapis.com/v1/models?key=super-secret'));
+    registeredHandlers.response(makeRes('r7'));
+
+    await flush();
+
+    expect(sanitizeURL).toHaveBeenCalledWith('https://generativelanguage.googleapis.com/v1/models?key=super-secret');
+    const [interaction] = (sendToCoolhand as jest.Mock).mock.calls[0];
+    expect(interaction.request.url).toBe('https://generativelanguage.googleapis.com/v1/models?key=[REDACTED]');
   });
 
   test('response for unknown request id is silently ignored', async () => {
