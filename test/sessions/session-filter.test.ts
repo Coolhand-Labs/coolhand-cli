@@ -44,8 +44,13 @@ describe('buildSessionFilter', () => {
     expect(filter(meta({ project: 'C--Users-Mubar-other-repo' }))).toBe(true);
   });
 
-  test('excludeProjects does not drop projectless sessions', () => {
+  test('excludeProjects drops projectless sessions (Cowork), failing closed', () => {
     const filter = buildSessionFilter({ excludeProjects: ['coolhand-cli'] });
+    expect(filter(meta({ project: null, source: 'cowork' }))).toBe(false);
+  });
+
+  test('excludeProjects unset leaves projectless sessions (Cowork) unaffected', () => {
+    const filter = buildSessionFilter({});
     expect(filter(meta({ project: null, source: 'cowork' }))).toBe(true);
   });
 

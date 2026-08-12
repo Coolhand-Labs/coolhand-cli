@@ -4,8 +4,16 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+- Client names and feedback explanations printed to the terminal (`status`, `whoami`, `clients`, `get-feedback`, etc.) are now stripped of ANSI/VT100 escape sequences before printing, closing a terminal-control-sequence injection vector via server-controlled text — e.g. a `client_name` set via the OAuth callback, or a feedback `explanation` writable via `coolhand wildcard` using only a public key (#95).
+- The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now also excludes coolhand-node's `DEFAULT_EXCLUDE_API_PATTERNS` (e.g. batch-prediction-job status polling) from capture, matching upstream SDK behavior (#95).
+
 ### Fixed
+- Pinned the transitive `ip-address` dependency (pulled in by `mockttp` via `socks-proxy-agent`/`socks`) to `^10.4.0` via `overrides`, resolving a high-severity SSRF/trust-boundary-bypass advisory (`ip-address` `<=10.3.0`) flagged by `npm audit --omit=dev --audit-level=high` in CI.
+- Pinned the transitive `get-port` dependency (pulled in by `mockttp`) to `^5.1.1` via `overrides`. `mockttp`'s CommonJS build does a top-level `require("get-port")`, but `get-port@6+` is ESM-only, so every invocation — including `coolhand-cli --help` — crashed with `ERR_REQUIRE_ESM` on Node 22 before any command parsing happened (#108).
 - `coolhand login --base-url` and the `monitor`/`claude` proxy path (`endpointForBaseUrl`) now enforce the same https-except-loopback rule that `fetch-log`/`search-logs`/`search-feedback`/`get-feedback`/`mcp-call` already got for free from the `coolhand-node` SDK. Previously `login --base-url http://some-non-loopback-host` was accepted and silently stored, and the proxy path performed no scheme validation at all — so `monitor`/`claude` would ship captured prompts, completions, and the public API key over cleartext HTTP to a non-loopback host while every other command correctly refused it (#94).
+- `analyze-claude-sessions --exclude-project` now applies to Cowork sessions. Previously it was silently a no-op for them since Cowork sessions have no project folder to compare against; the filter now fails closed and excludes them, mirroring how `--project` already treats them (#95).
+- Windows: `resolveWrapSpawn` (used by `coolhand claude`/`coolhand monitor`) now escapes the spawned command token the same way it already escaped each argument, closing a quoting inconsistency that could let an embedded `"` in the command break out of the quoted `cmd.exe` invocation (#95).
 
 ## [0.9.0] - 2026-08-01
 

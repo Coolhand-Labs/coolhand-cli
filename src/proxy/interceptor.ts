@@ -1,4 +1,4 @@
-import { PatternMatchingService } from "coolhand-node";
+import { PatternMatchingService, DEFAULT_EXCLUDE_API_PATTERNS } from "coolhand-node";
 
 // Lazily instantiated so a constructor error surfaces at shouldCapture() call
 // time rather than at module load time. The proxy request handler wraps
@@ -11,12 +11,17 @@ function getPatternService(): PatternMatchingService {
 }
 
 /**
- * Check if a URL matches a known AI API pattern.
+ * Check if a URL matches a known AI API pattern and isn't on coolhand-node's own
+ * exclude list (e.g. batch-prediction-job status polling) — mirrors the filtering
+ * coolhand-node's SDK applies before treating a request as an inference call.
  * Uses coolhand-node's PatternMatchingService which covers
  * OpenAI, Anthropic, Google AI, Cohere, Hugging Face, etc.
  */
 export function shouldCapture(url: string): boolean {
-  return getPatternService().matchesAPIPatternFromURL(url) !== null;
+  if (getPatternService().matchesAPIPatternFromURL(url) === null) {
+    return false;
+  }
+  return !DEFAULT_EXCLUDE_API_PATTERNS.some((pattern) => url.includes(pattern));
 }
 
 /**
