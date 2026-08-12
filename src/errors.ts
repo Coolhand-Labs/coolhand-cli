@@ -22,7 +22,8 @@ export type ErrorCode =
   | 'MCP_ERROR'
   | 'INGEST_ERROR'
   | 'FEEDBACK_ERROR'
-  | 'LOG_ERROR';
+  | 'LOG_ERROR'
+  | 'CERT_FILE_INSECURE';
 
 export class CliError extends Error {
   public readonly code: ErrorCode;

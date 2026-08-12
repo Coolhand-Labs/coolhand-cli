@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import * as mockttp from 'mockttp';
 import { getOrCreateCA, getCertPath } from '../../src/proxy/certs.js';
 
@@ -105,6 +106,123 @@ describe('getOrCreateCA', () => {
     const files = fs.readdirSync(tmpDir);
     expect(files).not.toContain('ca-key.pem.tmp');
     expect(files).not.toContain('ca-cert.pem.tmp');
+  });
+
+  test('directory that pre-exists with loose permissions is chmod-tightened', async () => {
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.chmodSync(tmpDir, 0o755);
+
+    await getOrCreateCA(tmpDir);
+
+    if (process.platform !== 'win32') {
+      const stat = fs.statSync(tmpDir);
+      expect(stat.mode & 0o777).toBe(0o700);
+    }
+  });
+
+  // These checks are POSIX-only no-ops on win32 (no comparable uid/mode semantics).
+  (process.platform === 'win32' ? describe.skip : describe)('insecure existing cert files', () => {
+    test('rejects a key file that is group/world-readable', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'ca-key.pem'), '---existing-key---', { mode: 0o644 });
+      fs.writeFileSync(path.join(tmpDir, 'ca-cert.pem'), '---existing-cert---', { mode: 0o644 });
+
+      await expect(getOrCreateCA(tmpDir)).rejects.toMatchObject({
+        code: 'CERT_FILE_INSECURE',
+      });
+      expect(mockttp.generateCACertificate).not.toHaveBeenCalled();
+    });
+
+    test('rejects a key/cert pair owned by a different user', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'ca-key.pem'), '---existing-key---', { mode: 0o600 });
+      fs.writeFileSync(path.join(tmpDir, 'ca-cert.pem'), '---existing-cert---', { mode: 0o644 });
+
+      const realUid = process.getuid!();
+      jest.spyOn(process, 'getuid').mockReturnValue(realUid + 1);
+
+      try {
+        await expect(getOrCreateCA(tmpDir)).rejects.toMatchObject({
+          code: 'CERT_FILE_INSECURE',
+        });
+        expect(mockttp.generateCACertificate).not.toHaveBeenCalled();
+      } finally {
+        (process.getuid as jest.Mock).mockRestore();
+      }
+    });
+
+    test('rejects a key file that is a symlink instead of a regular file', async () => {
+      const outsideTarget = path.join(tmpDir, 'unrelated-secret.pem');
+      fs.writeFileSync(outsideTarget, '---someone-elses-private-key---', { mode: 0o600 });
+      fs.symlinkSync(outsideTarget, path.join(tmpDir, 'ca-key.pem'));
+      fs.writeFileSync(path.join(tmpDir, 'ca-cert.pem'), '---existing-cert---', { mode: 0o644 });
+
+      await expect(getOrCreateCA(tmpDir)).rejects.toMatchObject({
+        code: 'CERT_FILE_INSECURE',
+      });
+      expect(mockttp.generateCACertificate).not.toHaveBeenCalled();
+    });
+
+    test('rejects a cert file that is a symlink instead of a regular file', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'ca-key.pem'), '---existing-key---', { mode: 0o600 });
+      const outsideTarget = path.join(tmpDir, 'unrelated-cert.pem');
+      fs.writeFileSync(outsideTarget, '---some-other-cert---', { mode: 0o644 });
+      fs.symlinkSync(outsideTarget, path.join(tmpDir, 'ca-cert.pem'));
+
+      await expect(getOrCreateCA(tmpDir)).rejects.toMatchObject({
+        code: 'CERT_FILE_INSECURE',
+      });
+      expect(mockttp.generateCACertificate).not.toHaveBeenCalled();
+    });
+
+    test('rejects a key file that is a FIFO rather than a regular file, without hanging', async () => {
+      const keyFifoPath = path.join(tmpDir, 'ca-key.pem');
+      execFileSync('mkfifo', [keyFifoPath]);
+      fs.chmodSync(keyFifoPath, 0o600);
+      fs.writeFileSync(path.join(tmpDir, 'ca-cert.pem'), '---existing-cert---', { mode: 0o644 });
+
+      await expect(getOrCreateCA(tmpDir)).rejects.toMatchObject({
+        code: 'CERT_FILE_INSECURE',
+      });
+      expect(mockttp.generateCACertificate).not.toHaveBeenCalled();
+    });
+
+    test('rejects a cert directory path that exists as a plain file', async () => {
+      const certDirPath = path.join(tmpDir, 'not-a-directory');
+      fs.writeFileSync(certDirPath, 'not a directory', { mode: 0o600 });
+
+      await expect(getOrCreateCA(certDirPath)).rejects.toMatchObject({
+        code: 'CERT_FILE_INSECURE',
+      });
+      expect(mockttp.generateCACertificate).not.toHaveBeenCalled();
+    });
+
+    test('rejects a cert directory that is a symlink', async () => {
+      const realDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coolhand-certs-real-'));
+      const certDirLink = path.join(tmpDir, 'proxy-link');
+      fs.symlinkSync(realDir, certDirLink);
+
+      try {
+        await expect(getOrCreateCA(certDirLink)).rejects.toMatchObject({
+          code: 'CERT_FILE_INSECURE',
+        });
+        expect(mockttp.generateCACertificate).not.toHaveBeenCalled();
+      } finally {
+        fs.rmSync(realDir, { recursive: true, force: true });
+      }
+    });
+
+    test('rejects a cert directory owned by a different user', async () => {
+      const realUid = process.getuid!();
+      jest.spyOn(process, 'getuid').mockReturnValue(realUid + 1);
+
+      try {
+        await expect(getOrCreateCA(tmpDir)).rejects.toMatchObject({
+          code: 'CERT_FILE_INSECURE',
+        });
+        expect(mockttp.generateCACertificate).not.toHaveBeenCalled();
+      } finally {
+        (process.getuid as jest.Mock).mockRestore();
+      }
+    });
   });
 });
 
