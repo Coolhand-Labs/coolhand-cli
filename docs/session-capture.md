@@ -91,7 +91,10 @@ coolhand analyze-claude-sessions --projects-dir D:/exports/claude-projects
 
 `--project`/`--exclude-project` repeat (`--project a --project b`) or take comma lists
 (`--project a,b`) and match project folder names as case-insensitive substrings. Cowork
-sessions have no project folder, so an include filter (`--project`) excludes them.
+sessions have no project folder, so both directions fail closed for them: an include filter
+(`--project`) excludes all Cowork sessions (they can't match anything to include), and
+`--exclude-project` also skips all Cowork sessions (there's no project identity to compare
+against, so they're treated as excluded rather than silently passed through).
 Combine any of these with `--dry-run` first to preview the effect; the summary reports how
 many sessions `--until`, `--project`, and `--exclude-project` excluded (the "filtered out"
 count). `--since` uses the same mtime cutoff as the routine incremental scan, so its

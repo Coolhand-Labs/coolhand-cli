@@ -49,6 +49,15 @@ describe('resolveWrapSpawn', () => {
     expect(cmdStr).toContain('"--resume"');
     expect(cmdStr).toContain('"foo"');
   });
+
+  test('escapes embedded quotes in the command itself on win32, not just in args', () => {
+    const result = resolveWrapSpawn('ki"mi', [], 'win32');
+    const cmdStr = result.spawnArgs[3];
+    // The command must have its embedded quote doubled like an arg would, not passed through
+    // raw — a raw `"` would let the command string break out of its quoted region.
+    expect(cmdStr).toContain('"ki""mi"');
+    expect(cmdStr).not.toContain('"ki"mi"');
+  });
 });
 
 describe('monitor command', () => {

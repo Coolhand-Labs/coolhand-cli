@@ -13,6 +13,14 @@ describe('shouldCapture', () => {
     expect(shouldCapture('https://example.com/api/data')).toBe(false);
     expect(shouldCapture('https://google.com')).toBe(false);
   });
+
+  test('returns false for batch-prediction-job status polling on an otherwise-matched host', () => {
+    expect(shouldCapture('https://api.anthropic.com/v1/batchPredictionJobs/abc123')).toBe(false);
+  });
+
+  test('still returns true for a normal inference call on the same host', () => {
+    expect(shouldCapture('https://api.anthropic.com/v1/messages')).toBe(true);
+  });
 });
 
 describe('flattenHeaders', () => {
