@@ -1,7 +1,9 @@
 /**
  * Pure, pre-read session filtering. The predicate built here runs on metadata knowable
  * BEFORE a transcript is read (filename, project folder, file mtime) so excluded sessions
- * are never loaded from disk — the compliance guarantee behind --project/--until.
+ * are never loaded from disk — the compliance guarantee behind --project/--exclude-project/--until.
+ * Cowork sessions have no project-folder concept (project: null); both --project (include) and
+ * --exclude-project fail closed for them — see the comments in buildSessionFilter below.
  */
 
 /** What a scanner knows about a session file before reading its content. */
@@ -44,8 +46,12 @@ export function buildSessionFilter(criteria: FilterCriteria): (meta: SessionFile
       }
     }
 
-    if (projectKey !== null && excludes.some((needle) => projectKey.includes(needle))) {
-      return false;
+    if (excludes.length > 0) {
+      // A session with no project (Cowork) has nothing to compare against an exclude
+      // list — fail closed and treat it as excluded, mirroring the include-side above.
+      if (projectKey === null || excludes.some((needle) => projectKey.includes(needle))) {
+        return false;
+      }
     }
 
     if (criteria.sinceMs !== undefined && meta.mtimeMs < criteria.sinceMs) {

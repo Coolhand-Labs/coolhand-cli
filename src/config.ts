@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { CliError } from './errors.js';
-import { logger } from './logger.js';
+import { logger, stripAnsiEscapes } from './logger.js';
 import type { ClientEntry, ConfigFile } from './types.js';
 
 const CONFIG_FILENAME = 'config.json';
@@ -158,7 +158,7 @@ const PROMPT_TIMEOUT_MS = 30_000;
 
 async function promptClientSelection(clients: ClientEntry[]): Promise<ClientEntry> {
   return new Promise<ClientEntry>((resolve, reject) => {
-    const lines = clients.map((c, i) => `  ${i + 1}. ${c.client_name} (${c.client_id})`).join('\n');
+    const lines = clients.map((c, i) => `  ${i + 1}. ${stripAnsiEscapes(c.client_name)} (${c.client_id})`).join('\n');
     process.stderr.write(`Multiple clients configured — which one?\n${lines}\nEnter number: `);
     const rl = createInterface({ input: process.stdin, output: process.stderr });
     let settled = false;
@@ -213,7 +213,7 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
     if (!entry) {
       throw new CliError('CLIENT_NOT_FOUND', `No client "${clientId}" is configured.`);
     }
-    process.stderr.write(`Client: ${entry.client_name} (${entry.client_id})\n`);
+    process.stderr.write(`Client: ${stripAnsiEscapes(entry.client_name)} (${entry.client_id})\n`);
     return entry;
   }
 
@@ -231,7 +231,7 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
         `COOLHAND_CLIENT_ID="${envClientId}" does not match any configured client.`
       );
     }
-    process.stderr.write(`Client: ${entry.client_name} (${entry.client_id})\n`);
+    process.stderr.write(`Client: ${stripAnsiEscapes(entry.client_name)} (${entry.client_id})\n`);
     return entry;
   }
 
@@ -239,7 +239,7 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
   if (cfg.default_client_id) {
     const entry = cfg.clients[cfg.default_client_id];
     if (entry) {
-      process.stderr.write(`Client: ${entry.client_name} (${entry.client_id})\n`);
+      process.stderr.write(`Client: ${stripAnsiEscapes(entry.client_name)} (${entry.client_id})\n`);
       return entry;
     }
     logger.warn(
@@ -257,7 +257,7 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
   // 5. Exactly one client — auto-pick without prompting
   if (clients.length === 1) {
     const entry = clients[0];
-    process.stderr.write(`Client: ${entry.client_name} (${entry.client_id})\n`);
+    process.stderr.write(`Client: ${stripAnsiEscapes(entry.client_name)} (${entry.client_id})\n`);
     return entry;
   }
 
@@ -267,11 +267,11 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
   //    cannot type a selection, so the descriptive error path is cleaner.
   if (process.stdin.isTTY && process.stderr.isTTY) {
     const entry = await promptClientSelection(clients);
-    process.stderr.write(`Client: ${entry.client_name} (${entry.client_id})\n`);
+    process.stderr.write(`Client: ${stripAnsiEscapes(entry.client_name)} (${entry.client_id})\n`);
     return entry;
   }
 
-  const list = clients.map((c) => `  ${c.client_id}  ${c.client_name}`).join('\n');
+  const list = clients.map((c) => `  ${c.client_id}  ${stripAnsiEscapes(c.client_name)}`).join('\n');
   throw new CliError(
     'NOT_CONFIGURED',
     `Multiple clients configured but no default is set.\n\nConfigured clients:\n${list}\n\nRun \`coolhand clients use <id>\` to set a default, or pass --client-id.`
