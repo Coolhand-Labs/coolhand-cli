@@ -29,7 +29,7 @@ Any command that calls `resolveClient` prints `Client: <name> (<id>)` to stderr 
 ### login
 
 ```bash
-coolhand login [--base-url URL] [--scope private] [--write-env PATH] [--client-id ID] [--json]
+coolhand login [--base-url URL] [--scope private] [--write-env PATH] [--client-id ID] [--timeout-ms MS] [--json]
 ```
 
 Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the callback, and stores the granted key(s). The **public** `api_key` is used for LLM capture with `coolhand-node`, `coolhand-python`, and the `coolhand-js` widget.
@@ -37,6 +37,10 @@ Opens your browser to the Coolhand consent page, listens on `127.0.0.1` for the 
 `--scope private` requests the **private (MCP) key** in addition to the public key. The user may grant either or both on the consent page; the CLI stores whichever keys are granted and notes if any were withheld.
 
 `--write-env PATH` writes granted keys to the target `.env` file: `COOLHAND_API_KEY=<token>` and/or `COOLHAND_PRIVATE_KEY=<private_token>` (idempotent — replaces existing values rather than appending duplicates).
+
+`--timeout-ms MS` overrides how long the CLI waits for the browser callback before giving up (default: 300000, i.e. 5 minutes — see [auth-flow.md](./auth-flow.md)).
+
+`--base-url URL` points the CLI at a non-default Coolhand instance and is stored as the client's `base_url` for all later requests. It must use `https://`; `http://` is only accepted for `localhost`/`127.0.0.1`/`::1`, matching the restriction `coolhand-node` enforces on every other API call — a non-loopback `http://` URL is rejected outright rather than silently stored.
 
 See [auth-flow.md](./auth-flow.md) for the full callback sequence, state machine, and error paths.
 
@@ -293,12 +297,117 @@ Closes an optimization. The reason is a free-text positional argument (quote it 
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
+## Feedback
+
+Search and inspect feedback records (the same records `wildcard` and the Coolhand SDKs create). Both commands require a **private** API key (`coolhand login --scope private`) — the public key is write-only for this resource and gets a 401.
+
+### search-feedback
+
+```bash
+coolhand search-feedback [--sentiment positive|negative|neutral] [--search TEXT]
+                          [--creator-id ID] [--workload-id ID]
+                          [--matched] [--unmatched] [--since DATE]
+                          [--sort-by created_at|updated_at] [--sort-dir asc|desc]
+                          [--page N] [--per-page N] [--client-id ID] [--json]
+```
+
+Lists feedback records with optional filtering, sorting, and pagination. List items omit `original_output`/`revised_output` (each can hold up to 1GB) — use `get-feedback` to fetch those for a specific record.
+
+| Flag | Description |
+|------|-------------|
+| `--sentiment positive\|negative\|neutral` | Filter by sentiment |
+| `--search TEXT` | Filter by explanation substring |
+| `--creator-id ID` | Filter by `creator_unique_id` |
+| `--workload-id ID` | Filter by workload ID |
+| `--matched` | Only feedback linked to an LLM request log |
+| `--unmatched` | Only feedback not linked to an LLM request log |
+| `--since DATE` | Only feedback created at or after DATE |
+| `--sort-by created_at\|updated_at` | Sort field (default: `created_at`) |
+| `--sort-dir asc\|desc` | Sort direction (default: `desc`) |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 25, max: 100) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+Human-readable output includes a pagination hint: `Page N of M (X total) — use --page N to navigate`.
+
+`--matched`/`--unmatched` and the other flags above are the full set the backend currently supports filtering on. Filtering by whether a record has a revision (`revised_output`), or whether it's linked to an optimization, isn't offered here because the API doesn't expose those as filterable — `revised_output` is excluded from the server's search-whitelist entirely (unbounded text, same reason list items omit it), and optimization-linkage isn't a searchable field on this endpoint.
+
+### get-feedback
+
+```bash
+coolhand get-feedback <feedback-id> [--client-id ID] [--json]
+```
+
+Fetches a single feedback record by ID, including `original_output`, `revised_output`, and `feedback_partials` (omitted from `search-feedback` list items). Default output is a human-readable summary followed by the explanation, original/revised output, and any feedback partials, when present.
+
+| Flag | Description |
+|------|-------------|
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+## Log Access
+
+### fetch-log
+
+```bash
+coolhand fetch-log <log-id> [--section full|beginning|end] [--max-chars N] [--search-query TEXT] [--include-thinking] [--client-id ID] [--json]
+```
+
+Fetches the input/output content of a single LLM request log. By default returns the full
+content of `system_prompt`, `user_prompt`, and `output`. For large logs, use `--section` and
+`--max-chars` to retrieve only the part you need, or `--search-query` to find matching snippets
+without loading the full log (returns up to 5 snippets per field with surrounding context;
+cannot be combined with `--section`/`--max-chars`). When partial retrieval is used, the response
+includes `truncated: true` and `total_chars` per field.
+
+| Flag | Description |
+|------|-------------|
+| `--section VALUE` | Which part of each content field to return: `full` (default), `beginning`, or `end` |
+| `--max-chars N` | Maximum characters to return per content field |
+| `--search-query TEXT` | Search within the log content instead of returning raw content |
+| `--include-thinking` | Include thinking/reasoning response content |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+### search-logs
+
+```bash
+coolhand search-logs [--template-id ID] [--workload-id ID] [--system-prompt-contains TEXT] [--user-prompt-contains TEXT] [--model VALUE] [--source-api VALUE] [--source-api-result VALUE] [--unmatched-only] [--days-back N] [--include-prompts] [--sort VALUE] [--page N] [--per-page N] [--client-id ID] [--json]
+```
+
+Searches LLM request logs for the resolved client with flexible filters — useful for
+investigating whether a template regex is matching the right logs or casting too wide a net.
+`system_prompt_contains`/`user_prompt_contains` are case-insensitive substring matches. Prompt
+content is omitted from results unless `--include-prompts` is passed. The response is
+`{ logs: [...], pagination: {...} }`, matching `search-feedback`'s shape — the backing REST
+endpoint renders `logs` as a bare array on the wire and exposes pagination via response headers
+instead of a body envelope, but the SDK reads those headers and assembles the same shape for you.
+
+| Flag | Description |
+|------|-------------|
+| `--template-id ID` | Filter by template hashid |
+| `--workload-id ID` | Filter by workload hashid (matches all templates in that workload) |
+| `--system-prompt-contains TEXT` | Case-insensitive substring to match in the system prompt |
+| `--user-prompt-contains TEXT` | Case-insensitive substring to match in the user prompt |
+| `--model VALUE` | Filter by model name (e.g. `gpt-4o`, `claude-3-5-sonnet`) |
+| `--source-api VALUE` | Filter by source API (e.g. `openai`, `anthropic`, `vertex`) |
+| `--source-api-result VALUE` | Filter by result status: `success`, `failed`, `operational`, `unmatched` |
+| `--unmatched-only` | Only return logs with no assigned template |
+| `--days-back N` | Limit to logs created in the last N days (unrestricted if omitted) |
+| `--include-prompts` | Include `system_prompt` and `user_prompt` in results (may be large) |
+| `--sort VALUE` | Sort expression, e.g. `created_at desc` (default: newest first) |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 25, max: 100) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
 ## Session Analysis
 
 ### analyze-claude-sessions
 
 ```bash
-coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json]
+coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json] [filter options]
 ```
 
 Submits historical Claude Code sessions to Coolhand for pattern and cost analysis. Use `--dry-run` to preview what would be sent without submitting anything.
@@ -308,6 +417,13 @@ Submits historical Claude Code sessions to Coolhand for pattern and cost analysi
 | `--dry-run` | Scan and report without submitting anything |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
+| `--since WHEN` | Only sessions modified at or after WHEN |
+| `--until WHEN` | Only sessions modified at or before WHEN (a plain date means its whole day) |
+| `--projects-dir PATH` | Scan PATH instead of `~/.claude/projects`; also skips Cowork sessions, which have no equivalent override |
+| `--project NAME` | Only sessions from project folders matching NAME (repeatable; comma-separable) |
+| `--exclude-project NAME` | Skip sessions from project folders matching NAME (repeatable; comma-separable) |
+
+`WHEN` accepts `YYYY-MM-DD`, a full ISO datetime, or a duration shorthand relative to now: `12h`, `7d`, `2w`. Project names match as substrings, case-insensitively, against the encoded folder names under `~/.claude/projects` (so `--project coolhand-cli` matches the folder for any checkout of that repo). Sessions rejected by a filter are never read from disk, and a filtered run never advances the incremental sync cutoff — see [session-capture.md](./session-capture.md#choosing-what-gets-uploaded).
 
 See [session-capture.md](./session-capture.md) for scan logic, duplicate-avoidance details, and envelope format.
 
@@ -321,11 +437,11 @@ coolhand wildcard --complaint "..." --agent-name "..." [--thinking "..."] [--log
 
 `complaint-box` and `report-blocker` are aliases for `wildcard`.
 
-When an agent is blocked because a capability does not exist in its environment, it can record the blocker and receive an unambiguous "stop and move on" response. The de-loop message always fires — even if recording fails — because the missing capability is real regardless of whether the server is reachable. Recording is best-effort: if no client can be resolved (not logged in, no default set in non-interactive mode, or a private-only login with no public API key), the complaint is saved locally and uploaded once credentials are available.
+When an agent is blocked — because a capability does not exist in its environment, or because a task would take too long to complete — it can record the blocker and receive an unambiguous "stop and move on" response. The de-loop message always fires — even if recording fails — because the blocker is real regardless of whether the server is reachable. Recording is best-effort: if no client can be resolved (not logged in, no default set in non-interactive mode, or a private-only login with no public API key), the complaint is saved locally and uploaded once credentials are available.
 
 | Flag | Description |
 |------|-------------|
-| `--complaint` | Required. Description of what the agent cannot do |
+| `--complaint` | Required. Description of what the agent cannot do, or why the task would take too long |
 | `--agent-name` | Required (or set `COOLHAND_AGENT_NAME`). Name of the calling agent |
 | `--thinking` | Optional. Reasoning that led to the blocker |
 | `--log-id ID` | Optional. Ties the complaint to a specific LLM request log |

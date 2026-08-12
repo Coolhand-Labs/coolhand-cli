@@ -20,7 +20,10 @@ export type ErrorCode =
   | 'CLIENT_NOT_FOUND'
   | 'NO_PRIVATE_KEY'
   | 'MCP_ERROR'
-  | 'INGEST_ERROR';
+  | 'INGEST_ERROR'
+  | 'FEEDBACK_ERROR'
+  | 'LOG_ERROR'
+  | 'CERT_FILE_INSECURE';
 
 export class CliError extends Error {
   public readonly code: ErrorCode;

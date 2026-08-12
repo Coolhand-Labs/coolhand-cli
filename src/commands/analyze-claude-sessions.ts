@@ -1,6 +1,6 @@
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
-import { scanSessions, sessionIdOf, type CaptureEnvelope } from '../sessions/claude-scanner.js';
+import { scanSessions, sessionIdOf, type CaptureEnvelope, type ScanResult } from '../sessions/claude-scanner.js';
 import { scanCoworkSessions } from '../sessions/cowork-scanner.js';
 import {
   loadCaptureState,
@@ -13,6 +13,8 @@ import {
 import { fetchLastSync } from '../api/last-sync.js';
 import { loadConfig, resolveClient } from '../config.js';
 import { logRequest } from '../log-request.js';
+import { parseWhen } from '../parse-when.js';
+import { buildSessionFilter } from '../sessions/session-filter.js';
 import type { AnalyzeClaudeSessionsOptions } from '../types.js';
 
 /** Errors that apply to every session (auth/config), so the run should abort, not keep retrying. */
@@ -42,6 +44,21 @@ function resolveReferenceTime(serverTime: Date | null, state: CaptureState): Dat
     return serverTime;
   }
   return new Date(0);
+}
+
+/**
+ * True when any per-run filter flag narrowed this scan. A narrowed run must NOT advance the
+ * sync cutoffs: sessions excluded this run would otherwise fall behind the new cutoff and be
+ * skipped by every future default run — silently and permanently.
+ */
+export function isNarrowingRun(opts: AnalyzeClaudeSessionsOptions): boolean {
+  return Boolean(
+    opts.since ||
+      opts.until ||
+      opts.projectsDir ||
+      (opts.projects && opts.projects.length > 0) ||
+      (opts.excludeProjects && opts.excludeProjects.length > 0)
+  );
 }
 
 export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
@@ -99,12 +116,45 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
     // never-submitted Cowork history on a reset or second-machine scenario.
     const coworkSinceTime = state.coworkLastSyncAt ? new Date(state.coworkLastSyncAt) : new Date(0);
 
+    // An explicit --since replaces BOTH incremental cutoffs: the user is asking for a window, and
+    // the turn-count guard still prevents duplicate uploads when that window revisits old sessions.
+    const sinceOverride = opts.since ? parseWhen(opts.since, { now: runStartedAt, boundary: 'start' }) : null;
+    const untilTime = opts.until ? parseWhen(opts.until, { now: runStartedAt, boundary: 'end' }) : null;
+    if (sinceOverride && untilTime && sinceOverride.getTime() > untilTime.getTime()) {
+      throw new CliError('INVALID_ARGS', `--since (${opts.since}) is after --until (${opts.until}).`);
+    }
+
+    // Everything below runs on metadata only (folder, mtime) — a session rejected here is
+    // counted as filtered and its transcript is never read from disk.
+    const hasContentFilter =
+      untilTime !== null ||
+      (opts.projects?.length ?? 0) > 0 ||
+      (opts.excludeProjects?.length ?? 0) > 0;
+    const preFilter = hasContentFilter
+      ? buildSessionFilter({
+          untilMs: untilTime?.getTime(),
+          includeProjects: opts.projects,
+          excludeProjects: opts.excludeProjects,
+        })
+      : undefined;
+
+    // --projects-dir redirects the scan to a caller-chosen directory (e.g. a curated export for
+    // a compliance-scoped run); Cowork sessions live under a separate, fixed macOS path that has
+    // no equivalent override, so skip Cowork entirely rather than silently including sessions
+    // from the default location alongside the redirected Claude Code scan.
     const [claudeResult, coworkResult] = await Promise.all([
-      scanSessions({ sinceTime: referenceTime }),
-      scanCoworkSessions({ sinceTime: coworkSinceTime }),
+      scanSessions({
+        projectsDir: opts.projectsDir,
+        sinceTime: sinceOverride ?? referenceTime,
+        preFilter,
+      }),
+      opts.projectsDir
+        ? Promise.resolve<ScanResult>({ envelopes: [], sessionCount: 0, filteredOut: 0, ok: true })
+        : scanCoworkSessions({ sinceTime: sinceOverride ?? coworkSinceTime, preFilter }),
     ]);
     const envelopes = [...claudeResult.envelopes, ...coworkResult.envelopes];
     const sessionCount = claudeResult.sessionCount + coworkResult.sessionCount;
+    const filteredCount = claudeResult.filteredOut + coworkResult.filteredOut;
 
     // (4) Classify each examined session as new / updated / unchanged by comparing its current turn
     // count against what we last submitted. The turn-count guard — not the mtime filter — is what
@@ -138,15 +188,17 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
           ok: true,
           dryRun: true,
           scanned: sessionCount,
+          filtered: filteredCount,
           new: newCount,
           updated: updatedCount,
           unchanged: unchangedCount,
           toSubmit: toSubmit.length,
         });
       } else {
+        const filteredNote = filteredCount > 0 ? `, ${filteredCount} filtered out` : '';
         logger.info(
           `Dry run: ${newCount} new session(s), ${updatedCount} updated, ` +
-            `${unchangedCount} unchanged (${sessionCount} scanned). Nothing sent.`
+            `${unchangedCount} unchanged (${sessionCount} scanned${filteredNote}). Nothing sent.`
         );
       }
       return ExitCode.OK;
@@ -177,11 +229,13 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
           logger.warn(`Failed to submit session: ${redact((err as Error).message)}`);
         }
       }
-      // Advance the local cutoff ONLY when nothing failed. A failed-but-grown session keeps its
-      // older mtime; if we moved the cutoff past it, the next run's mtime filter would skip it and
-      // the growth would be lost. Use runStartedAt (captured before scanSessions) so any transcript
-      // written during the submit loop has mtime >= runStartedAt and is caught by the next run.
-      if (failed === 0) {
+      // Advance the local cutoff ONLY when nothing failed AND no filter narrowed the run. A
+      // failed-but-grown session keeps its older mtime; if we moved the cutoff past it, the next
+      // run's mtime filter would skip it and the growth would be lost. The same applies to any
+      // session a filter excluded this run — advancing would hide it from every future default
+      // run. Use runStartedAt (captured before scanSessions) so any transcript written during the
+      // submit loop has mtime >= runStartedAt and is caught by the next run.
+      if (failed === 0 && !isNarrowingRun(opts)) {
         state.lastSyncAt = runStartedAt.toISOString();
         // Only advance Cowork's cutoff when the scan actually read the directory. A swallowed
         // readdir error returns ok:false; advancing the cutoff in that case would permanently hide
@@ -202,6 +256,7 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
       logger.json({
         ok: failed === 0,
         scanned: sessionCount,
+        filtered: filteredCount,
         new: submittedNew,
         updated: submittedUpdated,
         unchanged: unchangedCount,
@@ -209,9 +264,11 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
       });
     } else {
       const failureNote = failed > 0 ? `, ${failed} failed` : '';
+      const filteredNote = filteredCount > 0 ? `, ${filteredCount} filtered out` : '';
+      const narrowingNote = isNarrowingRun(opts) ? ' (sync cutoff not advanced — filters active)' : '';
       logger.info(
         `Submitted ${submittedNew} new, ${submittedUpdated} updated, ` +
-          `${unchangedCount} unchanged (${sessionCount} scanned)${failureNote}.`
+          `${unchangedCount} unchanged (${sessionCount} scanned${filteredNote})${failureNote}.${narrowingNote}`
       );
     }
 

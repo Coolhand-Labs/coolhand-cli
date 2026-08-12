@@ -22,7 +22,7 @@ Requires Node 20 or newer.
 ## Analyze Claude sessions
 
 ```bash
-coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json]
+coolhand analyze-claude-sessions [--dry-run] [--client-id ID] [--json] [filter options]
 ```
 
 Upload your historical Claude Code session transcripts to your Coolhand account for analysis. Coolhand analyzes the uploaded conversations to surface:
@@ -31,13 +31,13 @@ Upload your historical Claude Code session transcripts to your Coolhand account 
 - **Efficiency gaps** — workflows with unnecessary back-and-forth or redundant steps
 - **Cost insights** — sessions with high token usage relative to their outcome
 
-> **What gets uploaded**: The conversation transcripts stored in `~/.claude/projects/` — the messages exchanged between you and Claude, including any code or context you shared in those conversations. Use `--dry-run` to preview exactly what would be sent before submitting anything.
+> **What gets uploaded**: The conversation transcripts stored in `~/.claude/projects/` — the messages exchanged between you and Claude, including any code or context you shared in those conversations. Use `--dry-run` to preview exactly what would be sent before submitting anything. You control the scope: `--since`/`--until` bound the time period, and `--project`/`--exclude-project`/`--projects-dir` choose which folders are uploaded from — excluded sessions are never even read from disk.
 
 See [Session capture](./docs/session-capture.md) for capture logic, duplicate-avoidance details, and the full flag reference.
 
 ## Wildcard (agent complaint box)
 
-When an agent is blocked because a capability does not exist in its environment, it can record the blocker and get back an unambiguous "stop and move on" response:
+When an agent is blocked — because a capability does not exist in its environment, or because a task would take too long to complete — it can record the blocker and get back an unambiguous "stop and move on" response:
 
 ```bash
 coolhand wildcard \
@@ -46,7 +46,7 @@ coolhand wildcard \
   --thinking "I attempted to connect to localhost:5432 but got connection refused. I checked for a running postgres process and found none. Without a live database I cannot apply or validate the migration."
 ```
 
-The command records the complaint as feedback tagged `creator_type: agent`, prints a terminal de-loop message, and exits `0` so the agent stops and moves on. The de-loop always fires — even if the feedback could not be recorded (not logged in or a server error) — because the missing capability is real regardless of whether the server was reachable, and a logged-out agent in a sandbox is exactly who this command is for. When recording fails the message says so plainly and a warning is logged, so the failure still surfaces without trapping the agent in the retry loop the command exists to break. When no API key is available, the feedback is saved locally to `~/.coolhand/pending/` and will be uploaded automatically the next time you run `coolhand login`.
+The command records the complaint as feedback tagged `creator_type: agent`, prints a terminal de-loop message, and exits `0` so the agent stops and moves on. The de-loop always fires — even if the feedback could not be recorded (not logged in or a server error) — because the blocker (a missing capability, or a task that would take too long) is real regardless of whether the server was reachable, and a logged-out agent in a sandbox is exactly who this command is for. When recording fails the message says so plainly and a warning is logged, so the failure still surfaces without trapping the agent in the retry loop the command exists to break. When no API key is available, the feedback is saved locally to `~/.coolhand/pending/` and will be uploaded automatically the next time you run `coolhand login`.
 
 Set `COOLHAND_AGENT_NAME` to avoid passing `--agent-name` on every call. Optional `--thinking` attaches the reasoning that led to the blocker; `--log-id` ties it to a specific LLM request log.
 
@@ -87,6 +87,10 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand get-optimization` | Fetch a single optimization by ID |
 | `coolhand update-optimization` | Update an optimization's fields |
 | `coolhand close-optimization` | Close an optimization with a reason |
+| `coolhand search-feedback` | Search and filter feedback records |
+| `coolhand get-feedback` | Fetch a single feedback record by ID |
+| `coolhand fetch-log` | Fetch the input/output content of a single LLM request log |
+| `coolhand search-logs` | Search LLM request logs with flexible filters |
 | `coolhand analyze-claude-sessions` | Submit Claude sessions for pattern and cost analysis |
 | `coolhand wildcard` | Record an agent blocker and exit cleanly |
 

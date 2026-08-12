@@ -58,6 +58,7 @@ describe('fetchLastSync', () => {
       client_id: 'c1',
       client_name: 'Test',
       api_key: 'pub-key-123',
+      private_key: 'priv-key-456',
       base_url: baseUrl,
       saved_at: new Date('2026-01-01T00:00:00.000Z').toISOString(),
     });
@@ -66,23 +67,32 @@ describe('fetchLastSync', () => {
   test('returns the Date from a 200 response', async () => {
     const server = await startServer(() => ({
       status: 200,
-      body: JSON.stringify({ last_created_at: '2026-06-10T14:23:00.000Z' }),
+      body: JSON.stringify([
+        {
+          id: 42,
+          collector: 'coolhand-cli-0.7.0/claude-code',
+          source_api: 'claude_code',
+          created_at: '2026-06-10T14:23:00Z',
+          updated_at: '2026-06-10T14:23:00Z',
+        },
+      ]),
     }));
     try {
       await configureClient(server.url);
       const result = await fetchLastSync();
       expect(result?.toISOString()).toBe('2026-06-10T14:23:00.000Z');
-      expect(server.requests[0].path).toMatch(
-        /^\/api\/v2\/llm_request_logs\/last_sync\?collector=coolhand-cli-[\d.]+%2Fclaude-code$/
+      // Newest claude_code row only; the sort is explicit because the server has no default order.
+      expect(server.requests[0].path).toBe(
+        '/api/v2/llm_request_logs?q%5Bsource_api_in%5D%5B%5D=claude_code&q%5Bs%5D=created_at+desc&per=1'
       );
-      expect(server.requests[0].apiKey).toBe('pub-key-123');
+      expect(server.requests[0].apiKey).toBe('priv-key-456');
     } finally {
       await server.close();
     }
   });
 
-  test('returns null when last_created_at is null', async () => {
-    const server = await startServer(() => ({ status: 200, body: JSON.stringify({ last_created_at: null }) }));
+  test('returns null when the newest row has no usable created_at', async () => {
+    const server = await startServer(() => ({ status: 200, body: JSON.stringify([{ id: 42 }]) }));
     try {
       await configureClient(server.url);
       expect(await fetchLastSync()).toBeNull();
@@ -91,8 +101,38 @@ describe('fetchLastSync', () => {
     }
   });
 
-  test('returns null on a 404 (endpoint not built yet)', async () => {
-    const server = await startServer(() => ({ status: 404, body: 'not found' }));
+  test('returns null on an empty result set (no logs on the server yet)', async () => {
+    const server = await startServer(() => ({ status: 200, body: '[]' }));
+    try {
+      await configureClient(server.url);
+      expect(await fetchLastSync()).toBeNull();
+    } finally {
+      await server.close();
+    }
+  });
+
+  test('returns null when the array contains a null element', async () => {
+    const server = await startServer(() => ({ status: 200, body: '[null]' }));
+    try {
+      await configureClient(server.url);
+      expect(await fetchLastSync()).toBeNull();
+    } finally {
+      await server.close();
+    }
+  });
+
+  test('returns null when the body is a JSON object instead of an array', async () => {
+    const server = await startServer(() => ({ status: 200, body: '{}' }));
+    try {
+      await configureClient(server.url);
+      expect(await fetchLastSync()).toBeNull();
+    } finally {
+      await server.close();
+    }
+  });
+
+  test('returns null on a non-2xx response (e.g. 401 when the key lacks read access)', async () => {
+    const server = await startServer(() => ({ status: 401, body: JSON.stringify({ error: 'Invalid API key' }) }));
     try {
       await configureClient(server.url);
       expect(await fetchLastSync()).toBeNull();
@@ -120,21 +160,26 @@ describe('fetchLastSync', () => {
     await expect(fetchLastSync()).resolves.toBeNull();
   });
 
-  test('returns null when no api key is configured', async () => {
-    // No client configured and no COOLHAND_API_KEY env → nothing to authenticate with.
-    const prevKey = process.env.COOLHAND_API_KEY;
-    delete process.env.COOLHAND_API_KEY;
+  test('returns null when no private key is configured', async () => {
+    // No client configured and no COOLHAND_PRIVATE_KEY env → nothing to authenticate with.
+    const prevKey = process.env.COOLHAND_PRIVATE_KEY;
+    delete process.env.COOLHAND_PRIVATE_KEY;
     try {
       expect(await fetchLastSync()).toBeNull();
     } finally {
       if (prevKey !== undefined) {
-        process.env.COOLHAND_API_KEY = prevKey;
+        process.env.COOLHAND_PRIVATE_KEY = prevKey;
       }
     }
   });
 
   test('returns null for a non-http base url', async () => {
     await configureClient('file:///etc/passwd');
+    expect(await fetchLastSync()).toBeNull();
+  });
+
+  test('returns null for an http base url on a non-loopback host', async () => {
+    await configureClient('http://internal-mirror.corp');
     expect(await fetchLastSync()).toBeNull();
   });
 });

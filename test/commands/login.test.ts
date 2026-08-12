@@ -142,6 +142,11 @@ describe('login command', () => {
     expect(code).not.toBe(0);
   });
 
+  test('rejects http baseUrl for a non-loopback host', async () => {
+    const code = await runLogin({ baseUrl: 'http://internal-mirror.corp', timeoutMs: 100 });
+    expect(code).not.toBe(0);
+  });
+
   test('--scope private stores private_key in config', async () => {
     rails = await startFakeRails(({ state }) => ({
       token: 'ch_pub_SCOPEPUBTOKEN1234567890',

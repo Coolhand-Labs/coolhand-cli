@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { ExitCode, CliError } from '../errors.js';
+import { isAllowedBaseUrlScheme } from '../base-url.js';
 import { logger, redact } from '../logger.js';
 import { loadConfig, resolveClient } from '../config.js';
 import { DEFAULT_BASE_URL } from '../types.js';
@@ -54,6 +55,18 @@ export function resolveWrapSpawn(
 export function endpointForBaseUrl(baseUrl: string): string | undefined {
   if (!baseUrl || baseUrl === DEFAULT_BASE_URL) {
     return undefined;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new CliError('INVALID_BASE_URL', `Invalid base_url in stored config: ${baseUrl}`);
+  }
+  if (!isAllowedBaseUrlScheme(parsed)) {
+    throw new CliError(
+      'INVALID_BASE_URL',
+      `base_url must use https:// (got: ${baseUrl}). For local dev, http://localhost is allowed.`
+    );
   }
   return `${baseUrl.replace(/\/+$/, '')}/api/v2/llm_request_logs`;
 }

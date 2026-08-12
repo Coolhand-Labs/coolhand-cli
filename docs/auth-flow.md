@@ -56,7 +56,7 @@ This document describes the end-to-end token-acquisition flow used by `coolhand 
 - **One-shot.** The first matched callback consumes the listener. Any subsequent `/callback` hit gets `410 Gone`.
 - **State CSRF.** A fresh 16-byte random state is generated per invocation and verified with `crypto.timingSafeEqual`. A forged callback (e.g. an attacker sending the user a link that points at `https://coolhandlabs.com/cli/auth?redirect_uri=http://127.0.0.1:9999/callback&state=ATTACKER`) cannot recover a token because the state attached to the local listener does not match.
 - **Localhost-only redirect.** The Coolhand server independently validates that `redirect_uri` is `http://localhost` or `http://127.0.0.1` — phishing redirects to attacker-controlled hosts are rejected before any token is issued.
-- **5-minute timeout.** If no callback arrives within 300 s, the CLI exits with `TIMEOUT`. The browser remains open; the user can retry.
+- **5-minute timeout.** If no callback arrives within 300 s, the CLI exits with `TIMEOUT`. The browser remains open; the user can retry. Override with `--timeout-ms MS`.
 
 ## Server contract
 

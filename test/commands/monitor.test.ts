@@ -143,6 +143,21 @@ describe('monitor command', () => {
     expect(proxyOpts.apiEndpoint).toBe('https://staging.coolhandlabs.com/api/v2/llm_request_logs');
   });
 
+  test('refuses a non-loopback http base_url and does not spawn', async () => {
+    (resolveClient as jest.Mock).mockResolvedValue({ ...ENTRY, base_url: 'http://internal-mirror.corp' });
+    const startProxyFn = jest.fn();
+    const spawnFn = jest.fn();
+
+    const code = await run(
+      { command: 'kimi', args: [] },
+      { spawnFn: spawnFn as unknown as Spawn, startProxyFn }
+    );
+
+    expect(code).not.toBe(0);
+    expect(startProxyFn).not.toHaveBeenCalled();
+    expect(spawnFn).not.toHaveBeenCalled();
+  });
+
   test('stops proxy and returns INTERNAL on child error event', async () => {
     const stopFn = jest.fn().mockResolvedValue(undefined);
     const startProxyFn = jest.fn().mockResolvedValue({ port: 9999, stop: stopFn });

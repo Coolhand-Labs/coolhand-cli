@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { scanCoworkSessions } from '../../src/sessions/cowork-scanner.js';
+import type { SessionFileMeta } from '../../src/sessions/session-filter.js';
 
 /** A realistic Cowork audit.jsonl with extra Cowork-only event types that should be ignored. */
 const COWORK_SAMPLE = [
@@ -76,7 +77,7 @@ describe('scanCoworkSessions', () => {
 
   test('returns empty when the sessions dir does not exist', async () => {
     const res = await scanCoworkSessions({ sessionsDir: path.join(dir, 'missing') });
-    expect(res).toEqual({ envelopes: [], sessionCount: 0, ok: false });
+    expect(res).toEqual({ envelopes: [], sessionCount: 0, filteredOut: 0, ok: false });
   });
 
   test('returns empty when the sessions dir is unreadable (does not abort the run)', async () => {
@@ -84,7 +85,7 @@ describe('scanCoworkSessions', () => {
     await fs.chmod(dir, 0o000);
     try {
       const res = await scanCoworkSessions({ sessionsDir: dir });
-      expect(res).toEqual({ envelopes: [], sessionCount: 0, ok: false });
+      expect(res).toEqual({ envelopes: [], sessionCount: 0, filteredOut: 0, ok: false });
     } finally {
       await fs.chmod(dir, 0o755);
     }
@@ -155,5 +156,36 @@ describe('scanCoworkSessions', () => {
 
     const res = await scanCoworkSessions({ sessionsDir: dir, sinceTime: cutoff });
     expect(res.envelopes).toHaveLength(1);
+  });
+
+  test('a rejected file is counted as filteredOut and never read from disk', async () => {
+    await writeCoworkSession(dir, 'ws-1', 'cs-1', 'private-uuid', COWORK_SAMPLE);
+    const readSpy = jest.spyOn(fs, 'readFile');
+    try {
+      const res = await scanCoworkSessions({ sessionsDir: dir, preFilter: () => false });
+      expect(res.envelopes).toHaveLength(0);
+      expect(res.sessionCount).toBe(0);
+      expect(res.filteredOut).toBe(1);
+      expect(readSpy).not.toHaveBeenCalled();
+    } finally {
+      readSpy.mockRestore();
+    }
+  });
+
+  test('preFilter receives a null project, the local uuid, and the cowork source', async () => {
+    await writeCoworkSession(dir, 'ws-1', 'cs-1', 'uuid-xyz', COWORK_SAMPLE);
+    const seen: SessionFileMeta[] = [];
+    await scanCoworkSessions({
+      sessionsDir: dir,
+      preFilter: (meta) => {
+        seen.push(meta);
+        return true;
+      },
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0].sessionId).toBe('uuid-xyz');
+    expect(seen[0].project).toBeNull();
+    expect(seen[0].source).toBe('cowork');
+    expect(seen[0].mtimeMs).toBeGreaterThan(0);
   });
 });

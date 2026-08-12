@@ -14,6 +14,15 @@ jest.mock('../src/commands/monitor.js', () => ({
 jest.mock('../src/commands/search-optimizations.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/search-feedback.js', () => ({
+  run: jest.fn(),
+}));
+jest.mock('../src/commands/get-feedback.js', () => ({
+  run: jest.fn(),
+}));
+jest.mock('../src/commands/analyze-claude-sessions.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
 jest.mock('../src/commands/flush-pending.js', () => ({
   run: jest.fn().mockResolvedValue(0),
   spawnBackgroundFlush: jest.fn(),
@@ -42,6 +51,9 @@ import { createTmpHome, TmpHome } from './helpers/tmp-home.js';
 import { run as runClaudeCommand } from '../src/commands/claude.js';
 import { run as runMonitorCommand } from '../src/commands/monitor.js';
 import { run as runSearchOptimizationsCommand } from '../src/commands/search-optimizations.js';
+import { run as runSearchFeedbackCommand } from '../src/commands/search-feedback.js';
+import { run as runGetFeedbackCommand } from '../src/commands/get-feedback.js';
+import { run as runAnalyzeClaudeSessions } from '../src/commands/analyze-claude-sessions.js';
 import { blockingGroup, visibleCommands, enabledGroups } from '../src/feature-flags.js';
 
 const actualFeatureFlags = jest.requireActual('../src/feature-flags.js') as typeof import('../src/feature-flags.js');
@@ -101,6 +113,50 @@ describe('parseArgs', () => {
     const parsed = parseArgs(['update-workload', '--description=-1 fix']);
     expect(parsed.flags.description).toBe('-1 fix');
   });
+
+  test('a single repeatable flag occurrence stays a string', () => {
+    const parsed = parseArgs(['analyze-claude-sessions', '--project', 'coolhand-cli']);
+    expect(parsed.flags.project).toBe('coolhand-cli');
+  });
+
+  test('repeated --project flags accumulate into an array in order', () => {
+    const parsed = parseArgs(['analyze-claude-sessions', '--project', 'p1', '--project', 'p2', '--project', 'p3']);
+    expect(parsed.flags.project).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  test('repeatable flags accumulate across = and space syntaxes', () => {
+    const parsed = parseArgs(['analyze-claude-sessions', '--exclude-project=p1', '--exclude-project', 'p2']);
+    expect(parsed.flags['exclude-project']).toEqual(['p1', 'p2']);
+  });
+
+  test('a repeated non-repeatable flag still keeps only the last value', () => {
+    const parsed = parseArgs(['login', '--base-url', 'https://a', '--base-url', 'https://b']);
+    expect(parsed.flags['base-url']).toBe('https://b');
+  });
+
+  test('analyze-claude-sessions filter flags are mapped into command options', async () => {
+    (runAnalyzeClaudeSessions as jest.Mock).mockClear();
+    await run([
+      'analyze-claude-sessions',
+      '--dry-run',
+      '--since', '7d',
+      '--until', '2026-06-30',
+      '--projects-dir', 'C:/tmp/projects',
+      '--project', 'alpha',
+      '--project', 'beta,gamma',
+      '--exclude-project', 'secret',
+    ]);
+    expect(runAnalyzeClaudeSessions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dryRun: true,
+        since: '7d',
+        until: '2026-06-30',
+        projectsDir: 'C:/tmp/projects',
+        projects: ['alpha', 'beta', 'gamma'],
+        excludeProjects: ['secret'],
+      })
+    );
+  });
 });
 
 describe('run', () => {
@@ -111,6 +167,8 @@ describe('run', () => {
     (runClaudeCommand as jest.Mock).mockResolvedValue(0);
     (runMonitorCommand as jest.Mock).mockResolvedValue(0);
     (runSearchOptimizationsCommand as jest.Mock).mockResolvedValue(0);
+    (runSearchFeedbackCommand as jest.Mock).mockResolvedValue(0);
+    (runGetFeedbackCommand as jest.Mock).mockResolvedValue(0);
     (runFlushPending as jest.Mock).mockClear().mockResolvedValue(0);
     (spawnBackgroundFlush as jest.Mock).mockClear();
     (confirm as jest.Mock).mockReset().mockResolvedValue(false);
@@ -121,6 +179,8 @@ describe('run', () => {
     (runClaudeCommand as jest.Mock).mockReset();
     (runMonitorCommand as jest.Mock).mockReset();
     (runSearchOptimizationsCommand as jest.Mock).mockReset();
+    (runSearchFeedbackCommand as jest.Mock).mockReset();
+    (runGetFeedbackCommand as jest.Mock).mockReset();
     warnSpy.mockRestore();
   });
 
@@ -151,6 +211,16 @@ describe('run', () => {
 
   test('get-optimization without id returns exit 1', async () => {
     const code = await run(['get-optimization']);
+    expect(code).toBe(1);
+  });
+
+  test('search-optimizations with non-numeric --page returns exit 1', async () => {
+    const code = await run(['search-optimizations', '--page', 'abc']);
+    expect(code).toBe(1);
+  });
+
+  test('search-optimizations with --per-page over 50 returns exit 1', async () => {
+    const code = await run(['search-optimizations', '--per-page', '51']);
     expect(code).toBe(1);
   });
 
@@ -202,6 +272,46 @@ describe('run', () => {
 
   test('update-workload with empty --name returns exit 1', async () => {
     const code = await run(['update-workload', '--id', 'wl-1', '--name', '']);
+    expect(code).toBe(1);
+  });
+
+  test('fetch-log without <log-id> returns exit 1', async () => {
+    const code = await run(['fetch-log']);
+    expect(code).toBe(1);
+  });
+
+  test('fetch-log with invalid --section returns exit 1', async () => {
+    const code = await run(['fetch-log', 'log-1', '--section', 'middle']);
+    expect(code).toBe(1);
+  });
+
+  test('fetch-log with non-numeric --max-chars returns exit 1', async () => {
+    const code = await run(['fetch-log', 'log-1', '--max-chars', 'lots']);
+    expect(code).toBe(1);
+  });
+
+  test('fetch-log with --search-query and --section returns exit 1', async () => {
+    const code = await run(['fetch-log', 'log-1', '--search-query', 'error', '--section', 'beginning']);
+    expect(code).toBe(1);
+  });
+
+  test('fetch-log with --search-query and --max-chars returns exit 1', async () => {
+    const code = await run(['fetch-log', 'log-1', '--search-query', 'error', '--max-chars', '500']);
+    expect(code).toBe(1);
+  });
+
+  test('search-logs with non-numeric --page returns exit 1', async () => {
+    const code = await run(['search-logs', '--page', 'abc']);
+    expect(code).toBe(1);
+  });
+
+  test('search-logs with --per-page over 100 returns exit 1', async () => {
+    const code = await run(['search-logs', '--per-page', '101']);
+    expect(code).toBe(1);
+  });
+
+  test('search-logs with non-numeric --days-back returns exit 1', async () => {
+    const code = await run(['search-logs', '--days-back', 'abc']);
     expect(code).toBe(1);
   });
 
@@ -338,6 +448,57 @@ describe('run', () => {
 
     expect(confirm).not.toHaveBeenCalled();
     expect(spawnBackgroundFlush).not.toHaveBeenCalled();
+  });
+
+  test('search-feedback dispatches with parsed flags', async () => {
+    const code = await run([
+      'search-feedback',
+      '--sentiment', 'positive',
+      '--matched',
+      '--sort-by', 'created_at',
+      '--page', '2',
+      '--per-page', '10',
+      '--client-id', 'acme',
+    ]);
+    expect(code).toBe(0);
+    expect(runSearchFeedbackCommand).toHaveBeenCalledWith({
+      sentiment: 'positive',
+      matched: true,
+      sortBy: 'created_at',
+      page: 2,
+      perPage: 10,
+      clientId: 'acme',
+    });
+  });
+
+  test('search-feedback rejects an invalid --sentiment value', async () => {
+    const code = await run(['search-feedback', '--sentiment', 'bogus']);
+    expect(code).toBe(1);
+    expect(runSearchFeedbackCommand).not.toHaveBeenCalled();
+  });
+
+  test('search-feedback rejects --matched combined with --unmatched', async () => {
+    const code = await run(['search-feedback', '--matched', '--unmatched']);
+    expect(code).toBe(1);
+    expect(runSearchFeedbackCommand).not.toHaveBeenCalled();
+  });
+
+  test('search-feedback rejects an out-of-range --per-page', async () => {
+    const code = await run(['search-feedback', '--per-page', '101']);
+    expect(code).toBe(1);
+    expect(runSearchFeedbackCommand).not.toHaveBeenCalled();
+  });
+
+  test('get-feedback requires a positional <feedback-id>', async () => {
+    const code = await run(['get-feedback']);
+    expect(code).toBe(1);
+    expect(runGetFeedbackCommand).not.toHaveBeenCalled();
+  });
+
+  test('get-feedback dispatches with the id and flags', async () => {
+    const code = await run(['get-feedback', 'fb-123', '--json', '--client-id', 'acme']);
+    expect(code).toBe(0);
+    expect(runGetFeedbackCommand).toHaveBeenCalledWith({ id: 'fb-123', json: true, clientId: 'acme' });
   });
 
 });

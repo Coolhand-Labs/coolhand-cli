@@ -87,6 +87,34 @@ export interface UpdateWorkloadOptions {
   clientId?: string;
 }
 
+export interface FetchLogOptions {
+  logId: string;
+  section?: 'full' | 'beginning' | 'end';
+  maxChars?: number;
+  searchQuery?: string;
+  includeThinking?: boolean;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface SearchLogsOptions {
+  templateId?: string;
+  workloadId?: string;
+  systemPromptContains?: string;
+  userPromptContains?: string;
+  model?: string;
+  sourceApi?: string;
+  sourceApiResult?: string;
+  unmatchedOnly?: boolean;
+  daysBack?: number;
+  includePrompts?: boolean;
+  sort?: string;
+  page?: number;
+  perPage?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface SearchOptimizationsOptions {
   status?: string;
   type?: string;
@@ -131,6 +159,41 @@ export interface AnalyzeClaudeSessionsOptions {
   dryRun?: boolean;
   clientId?: string;
   json?: boolean;
+  /** Raw --since value (date or Nh/Nd/Nw shorthand); parsed in the command so bad input
+   *  surfaces as a CliError rather than a crash in the flag layer. */
+  since?: string;
+  /** Raw --until value, same formats as since. */
+  until?: string;
+  /** Override for the Claude Code scan root (--projects-dir). */
+  projectsDir?: string;
+  /** Only upload sessions whose project folder matches one of these (--project, repeatable). */
+  projects?: string[];
+  /** Never upload sessions whose project folder matches one of these (--exclude-project). */
+  excludeProjects?: string[];
+}
+
+export interface SearchFeedbackOptions {
+  sentiment?: 'positive' | 'negative' | 'neutral';
+  search?: string;
+  creatorId?: string;
+  workloadId?: string;
+  /** Only feedback linked to an LLM request log. Mutually exclusive with `unmatched`. */
+  matched?: boolean;
+  /** Only feedback not linked to an LLM request log. Mutually exclusive with `matched`. */
+  unmatched?: boolean;
+  since?: string;
+  sortBy?: 'created_at' | 'updated_at';
+  sortDir?: 'asc' | 'desc';
+  page?: number;
+  perPage?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface GetFeedbackOptions {
+  id: string;
+  json?: boolean;
+  clientId?: string;
 }
 
 export interface ComplaintBoxOptions {

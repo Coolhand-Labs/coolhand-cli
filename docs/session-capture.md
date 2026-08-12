@@ -22,9 +22,14 @@ the other.
 1. **Scan.** Reads every session transcript from both sources above. A missing directory simply
    yields zero sessions. The tool is general — each user runs it on their own machine and submits
    to their own Coolhand account.
-2. **Assemble.** Turns each transcript into **one** envelope holding the whole conversation: every
-   user and assistant message, in order, in `request_body.messages`; the final assistant turn in
-   `response_body`; and the session's **summed** token usage in `response_body.usage`.
+2. **Assemble.** Turns each transcript into **one** envelope holding the whole conversation in
+   `request_body.messages`: every user and assistant message, in order, with **tool calls and tool
+   results serialised inline** so the actual work — not just the chat — is preserved. Assistant
+   *thinking* is omitted for now, likely secrets (API keys, tokens, `KEY=value` pairs) are redacted,
+   and oversized tool inputs/outputs are truncated. A single assistant turn split across multiple
+   transcript lines is merged into one message, and its token usage (including
+   `cache_creation_input_tokens`) is summed **once**. The final assistant turn goes in
+   `response_body`; the session's summed usage in `response_body.usage`.
 3. **Submit.** POSTs one envelope per session to `POST /api/v2/llm_request_logs`, with the collector
    string `coolhand-cli/claude-code`.
 
@@ -63,10 +68,63 @@ re-checked.
 The command is safe to re-run at any time. Ongoing, real-time capture (each turn as it happens)
 is handled by the Coolhand proxy (`coolhand claude`), which submits turns live with their session id.
 
+## Choosing what gets uploaded
+
+By default every session found under the two sources is a candidate. Teams with private
+projects or compliance constraints can narrow a run to a time window, a scan location, or a
+set of projects:
+
+```bash
+# Only sessions touched in the last week
+coolhand analyze-claude-sessions --since 7d
+
+# A fixed window (dates are whole local days: June, inclusive)
+coolhand analyze-claude-sessions --since 2026-06-01 --until 2026-06-30
+
+# Only sessions from one project's folder; or everything except it
+coolhand analyze-claude-sessions --project coolhand-cli
+coolhand analyze-claude-sessions --exclude-project clients-secret-repo
+
+# Scan a different directory entirely
+coolhand analyze-claude-sessions --projects-dir D:/exports/claude-projects
+```
+
+`--project`/`--exclude-project` repeat (`--project a --project b`) or take comma lists
+(`--project a,b`) and match project folder names as case-insensitive substrings. Cowork
+sessions have no project folder, so an include filter (`--project`) excludes them.
+Combine any of these with `--dry-run` first to preview the effect; the summary reports how
+many sessions `--until`, `--project`, and `--exclude-project` excluded (the "filtered out"
+count). `--since` uses the same mtime cutoff as the routine incremental scan, so its
+exclusions aren't broken out separately — they'd be indistinguishable from the sessions a
+normal run already skips for being unchanged since the last sync.
+
+`--until`, `--project`, and `--exclude-project` narrow *within* the normal incremental window
+— they don't lower it. On a machine that has already synced, sessions older than the last
+successful sync are excluded by that cutoff regardless of these flags. Pair with `--since` to
+reach further back (e.g. `--since 2026-01-01 --until 2026-01-31` for a full window into the
+past).
+
+### Privacy & compliance guarantees
+
+- **Filtered sessions are never read.** Time, project, and location filters run on file
+  metadata (name, folder, modified time) before the transcript is opened — excluded content
+  never leaves disk, let alone the machine.
+- **Filtered runs never advance the sync cutoff.** A normal run records `lastSyncAt` so the
+  next run can skip unchanged files. When any filter narrowed the run, that cutoff is left
+  untouched — otherwise sessions excluded this run would be silently skipped by every future
+  run. The summary says so explicitly: `(sync cutoff not advanced — filters active)`.
+
 ## Flags
 
-| Flag           | Effect                                                              |
-| -------------- | ------------------------------------------------------------------ |
-| `--dry-run`    | Scan and report what would be submitted, without sending anything. |
-| `--client-id`  | Use a specific stored client instead of the default.               |
-| `--json`       | Emit machine-readable JSON output instead of human-readable text.  |
+| Flag                | Effect                                                              |
+| ------------------- | ------------------------------------------------------------------ |
+| `--dry-run`         | Scan and report what would be submitted, without sending anything. |
+| `--client-id`       | Use a specific stored client instead of the default.               |
+| `--json`            | Emit machine-readable JSON output instead of human-readable text.  |
+| `--since WHEN`      | Only sessions modified at or after WHEN (`YYYY-MM-DD`, ISO datetime, or `12h`/`7d`/`2w`). |
+| `--until WHEN`      | Only sessions modified at or before WHEN (a plain date means its whole day). |
+| `--projects-dir`    | Scan a custom directory instead of `~/.claude/projects`; also skips Cowork sessions entirely, since they have no equivalent override. |
+| `--project`         | Only matching project folders (repeatable, comma-separable).       |
+| `--exclude-project` | Skip matching project folders (repeatable, comma-separable).       |
+
+The canonical flag reference lives in [commands.md](./commands.md#analyze-claude-sessions).
