@@ -31,7 +31,8 @@ On Windows, POSIX permission bits are not enforced. The file is still confined t
       "base_url": "https://coolhandlabs.com",
       "saved_at": "2026-05-13T09:22:00.000Z"
     }
-  }
+  },
+  "feature_flags": []
 }
 ```
 
@@ -40,6 +41,7 @@ On Windows, POSIX permission bits are not enforced. The file is still confined t
 | `version`            | `1`                 | Schema version. Currently always `1`.                    |
 | `default_client_id` | `string \| null`    | Which client `whoami`/`status` reports without `--client-id`. |
 | `clients`           | `Record<string, ClientEntry>` | Keyed by `client_id`.                       |
+| `feature_flags`     | `string[]` (optional) | Enabled feature groups. See [Feature flags](#feature-flags). |
 
 ### ClientEntry
 
@@ -57,3 +59,9 @@ On Windows, POSIX permission bits are not enforced. The file is still confined t
 Running `coolhand login` against a different client adds a second entry to `clients` and marks it as the new default. Use `coolhand clients use <id>` to switch back without re-authenticating, or `coolhand status --client-id <id>` to query a specific entry.
 
 `coolhand logout` without flags removes the default client. `coolhand logout --client-id <id>` removes a specific entry. `coolhand logout --all` deletes the file entirely.
+
+## Feature flags
+
+A command tagged with a feature group is hidden from `coolhand help` and reports `Unknown command` when invoked, so it is indistinguishable from a command that does not exist.
+
+List enabled groups in `feature_flags`. `COOLHAND_FEATURE_FLAGS` takes a comma-separated list and overrides the file for that run; an empty value disables every group rather than falling back to the file. Names are case-sensitive. No command ships gated today.
