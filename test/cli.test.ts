@@ -698,4 +698,26 @@ describe('run — feature flag gating (wiring)', () => {
     expect(text).not.toContain(`coolhand ${GATED} —`);
     spy.mockRestore();
   });
+
+  test('blocks the gated claude passthrough before it spawns anything', async () => {
+    (blockingGroup as jest.Mock).mockImplementation((cmd) => (cmd?.name === 'claude' ? 'passthroughs' : null));
+    (runClaudeCommand as jest.Mock).mockClear().mockResolvedValue(0);
+    const spy = jest.spyOn(logger, 'info').mockImplementation(() => {});
+    const code = await run(['claude', '--resume']);
+    expect(code).toBe(1);
+    expect(output(spy)).toContain('Unknown command: claude');
+    expect(runClaudeCommand).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  test('blocks the gated monitor passthrough before it spawns anything', async () => {
+    (blockingGroup as jest.Mock).mockImplementation((cmd) => (cmd?.name === 'monitor' ? 'passthroughs' : null));
+    (runMonitorCommand as jest.Mock).mockClear().mockResolvedValue(0);
+    const spy = jest.spyOn(logger, 'info').mockImplementation(() => {});
+    const code = await run(['monitor', '--', 'kimi']);
+    expect(code).toBe(1);
+    expect(output(spy)).toContain('Unknown command: monitor');
+    expect(runMonitorCommand).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
 });

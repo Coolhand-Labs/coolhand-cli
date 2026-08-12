@@ -1092,6 +1092,18 @@ export async function run(argv: string[]): Promise<number> {
     // skips parseArgs entirely, so we extract any global --client-id here first.
     const { clientId: globalClientId, rest: argv2 } = peelClientId(argv);
 
+    // The passthroughs below return before the main gating check, so a gated passthrough
+    // would stay runnable while hidden from help unless it is also checked here.
+    if (argv2[0] === 'claude' || argv2[0] === 'monitor') {
+      const passthroughMeta = findCommand(argv2[0]);
+      const passthroughEnabled = await currentEnabledGroups();
+      if (passthroughMeta && blockingGroup(passthroughMeta, passthroughEnabled) !== null) {
+        logger.info(`Unknown command: ${argv2[0]}`);
+        logger.info(buildSummaryHelp(passthroughEnabled));
+        return ExitCode.USER_ERROR;
+      }
+    }
+
     // `claude` is a passthrough wrapper: everything after it goes to the Claude CLI
     // verbatim (e.g. `coolhand claude --resume`), so it must skip the flag parser.
     if (argv2[0] === 'claude') {
