@@ -9,7 +9,7 @@ Run an automated code review + fix loop on the current branch. Keep iterating un
 
 - Effort level: `$ARGUMENTS` (default: `high` if blank)
 - Max iterations: 5
-- Review scope: `git diff origin/main...HEAD`
+- Review scope: `git diff $(git merge-base origin/main HEAD)` — a single-ref diff against the merge-base, so it also picks up uncommitted fixes from prior iterations (`git diff origin/main...HEAD` would not, since three-dot diffs two commits and ignores the working tree)
 
 ## Loop Instructions
 
@@ -17,12 +17,12 @@ Repeat the following cycle up to 5 times:
 
 ### Step 1 — Review (Agent)
 
-Spawn an Agent using the Agent tool with `thinking: "high"` enabled and this prompt (substitute ITERATION_NUM, EFFORT, and PREVIOUS_FIXES):
+Spawn an Agent using the Agent tool with `thinking: EFFORT` enabled and this prompt (substitute ITERATION_NUM, EFFORT, and PREVIOUS_DISPOSITIONS):
 
 ---
 You are a code reviewer doing pass ITERATION_NUM of an automated review loop.
 
-Run `git diff origin/main...HEAD` to get the current branch diff. Review it for:
+Run `git diff $(git merge-base origin/main HEAD)` to get the current branch diff (this includes any uncommitted fixes from prior iterations). Review it for:
 
 **Correctness & quality**
 - Correctness bugs and logic errors
@@ -53,26 +53,32 @@ Run `git diff origin/main...HEAD` to get the current branch diff. Review it for:
 
 Effort: EFFORT
 
-Already fixed in prior iterations — do NOT re-flag these:
-PREVIOUS_FIXES
+Already triaged in prior iterations — do NOT re-flag these unless you have new evidence that changes the call:
+PREVIOUS_DISPOSITIONS
 
-Return a numbered list of issues with file path and line numbers. Be specific about what to fix and why.
-If there are NO issues, respond with exactly: LGTM: No issues found.
+Every finding must be tagged with exactly one severity:
+- `[CRITICAL]` — security vulnerabilities, wrong/broken behavior, performance problems
+- `[NICE-TO-HAVE]` — DRY violations, missing test coverage, code-reuse opportunities
+- `[NITPICK]` — documentation, comments, naming, formatting-adjacent issues
+
+Return a numbered list of issues with file path and line numbers, each prefixed with its severity tag — e.g. `1. [CRITICAL] file:line — problem — fix`. Be specific about what to fix and why.
+If there are NO issues, the first line of your response must be exactly: LGTM: No issues found.
+End your response with a final line: TOKENS_USED: <number> — your best estimate of tokens consumed this pass (approximate, not metered).
 ---
 
 ### Step 2 — Check Result
 
-- If the agent says `LGTM: No issues found.` → exit the loop, go to Final Summary
+- If the first line of the agent's response is exactly `LGTM: No issues found.` → exit the loop, go to Final Summary
 - If iteration count has reached 5 → exit the loop, go to Final Summary (partial)
 - Otherwise → proceed to Step 3
 
 ### Step 3 — Fix
 
-Fix EVERY issue the reviewer raised. Use Edit, Write, and Bash tools to apply fixes directly. Do not skip any finding.
+For each finding, either fix it, or reject it with a one-line reason (false positive / out of scope / disagree with the call). Use Edit, Write, and Bash tools to apply fixes directly. Every finding must get one of these two dispositions — silent skipping is not allowed. Track the fixed count and rejected count, broken out by severity, for this iteration.
 
 ### Step 4 — Log & Continue
 
-Record this iteration in your running log (see format below), then go back to Step 1 with the next iteration number.
+Record this iteration in your running log (see format below). Append this iteration's fixed AND rejected findings (with their reasons) to the running `PREVIOUS_DISPOSITIONS` list — both dispositions must carry forward, or rejected findings will be re-flagged and re-rejected every round and the loop can never reach LGTM. Then go back to Step 1 with the next iteration number.
 
 ## Iteration Log Format
 
@@ -80,12 +86,14 @@ Maintain this log as you work:
 
 ```
 === Iteration 1 ===
-Reviewer found N issues:
-  1. [file:line] description
+Reviewer found N issues (CRITICAL: x, NICE-TO-HAVE: y, NITPICK: z):
+  1. [CRITICAL] [file:line] description
   2. ...
-Fixed:
-  - Applied: [description of fix]
-  - Applied: [description of fix]
+Disposition:
+  - Fixed: [description of fix]
+  - Rejected: [description] — reason: [one-line reason]
+Totals: F fixed, R rejected (CRITICAL: f1/r1, NICE-TO-HAVE: f2/r2, NITPICK: f3/r3)
+Tokens used (reviewer estimate): N
 
 === Iteration 2 ===
 ...
@@ -94,11 +102,43 @@ Fixed:
 [CLEAN after N iterations] or [STOPPED at max iterations — N issues remain]
 ```
 
+## Run Log (CSV)
+
+Once, after the loop exits and before writing the Final Summary, append one row per iteration to `~/loop-review-outputs/coolhand-cli.csv`. Create the directory and file with this header if either is missing:
+
+```
+timestamp,branch,iteration,model,thinking_level,clock_seconds,tokens_used_approx,critical_found,nice_to_have_found,nitpick_found,total_found,issues_addressed,issues_ignored
+```
+
+For each iteration:
+- `timestamp` — `date -u +%Y-%m-%dT%H:%M:%SZ` at write time
+- `branch` — `git branch --show-current`
+- `iteration` — the iteration number
+- `model` — `default` (this command doesn't pin a specific model per round)
+- `thinking_level` — the EFFORT value used for that iteration (from `$ARGUMENTS`, default `high`)
+- `clock_seconds` — wall-clock time for that iteration, bracketed with `date +%s` immediately before spawning the Step 1 agent and immediately after Step 3 fixes complete
+- `tokens_used_approx` — the reviewer's self-reported `TOKENS_USED` value for that iteration
+- `critical_found` / `nice_to_have_found` / `nitpick_found` / `total_found` — counts from that iteration's findings
+- `issues_addressed` — number fixed that iteration
+- `issues_ignored` — number rejected that iteration
+
+Branch names can contain characters that are unsafe to splice directly into a shell heredoc (`$`, backticks, parens) or that would misalign CSV columns (commas). Assign the branch name to a shell variable, strip commas from it, and append the row with `printf` inside a single-quoted format string so no part of the row is re-parsed by the shell:
+
+```bash
+mkdir -p ~/loop-review-outputs
+[ -f ~/loop-review-outputs/coolhand-cli.csv ] || echo "timestamp,branch,iteration,model,thinking_level,clock_seconds,tokens_used_approx,critical_found,nice_to_have_found,nitpick_found,total_found,issues_addressed,issues_ignored" > ~/loop-review-outputs/coolhand-cli.csv
+branch=$(git branch --show-current | tr -d ',')
+printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+  "2026-01-01T00:00:00Z" "$branch" "1" "default" "high" "42" "1234" "1" "2" "0" "3" "3" "0" \
+  >> ~/loop-review-outputs/coolhand-cli.csv
+```
+
 ## Final Summary
 
-After the loop exits, output:
+After the loop exits and the CSV run log has been written, output:
 
 1. **Overall result**: CLEAN (N iterations) or STOPPED (issues remain)
-2. **Per-iteration breakdown**: What was found vs. what was fixed each round
+2. **Per-iteration breakdown**: What was found (by severity) vs. what was fixed and what was rejected (with reasons) each round
 3. **All files modified**: Complete list of files touched across all iterations
 4. **Remaining issues** (if stopped at max): Unresolved items with context on why they're hard to fix automatically
+5. **Run log**: Number of CSV rows appended and the file path (`~/loop-review-outputs/coolhand-cli.csv`)
