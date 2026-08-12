@@ -64,7 +64,8 @@
   },
   "overrides": {
     "js-yaml": "^4.2.0",
-    "get-port": "^5.1.1"
+    "get-port": "^5.1.1",
+    "ip-address": "^10.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

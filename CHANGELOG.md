@@ -5,6 +5,7 @@ All notable changes to `coolhand-cli` will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Pinned the transitive `ip-address` dependency (pulled in by `mockttp` via `socks-proxy-agent`/`socks`) to `^10.4.0` via `overrides`, resolving a high-severity SSRF/trust-boundary-bypass advisory (`ip-address` `<=10.3.0`) flagged by `npm audit --omit=dev --audit-level=high` in CI.
 - Pinned the transitive `get-port` dependency (pulled in by `mockttp`) to `^5.1.1` via `overrides`. `mockttp`'s CommonJS build does a top-level `require("get-port")`, but `get-port@6+` is ESM-only, so every invocation — including `coolhand-cli --help` — crashed with `ERR_REQUIRE_ESM` on Node 22 before any command parsing happened (#108).
 - `coolhand login --base-url` and the `monitor`/`claude` proxy path (`endpointForBaseUrl`) now enforce the same https-except-loopback rule that `fetch-log`/`search-logs`/`search-feedback`/`get-feedback`/`mcp-call` already got for free from the `coolhand-node` SDK. Previously `login --base-url http://some-non-loopback-host` was accepted and silently stored, and the proxy path performed no scheme validation at all — so `monitor`/`claude` would ship captured prompts, completions, and the public API key over cleartext HTTP to a non-loopback host while every other command correctly refused it (#94).
 
