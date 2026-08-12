@@ -63,7 +63,8 @@
     "mockttp": "^4.2.1"
   },
   "overrides": {
-    "js-yaml": "^4.2.0"
+    "js-yaml": "^4.2.0",
+    "get-port": "^5.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
