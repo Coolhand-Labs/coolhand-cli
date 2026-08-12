@@ -271,6 +271,17 @@ describe('resolveClient', () => {
     await expect(resolveClient(cfg({}), 'missing')).rejects.toMatchObject({ code: 'CLIENT_NOT_FOUND' });
   });
 
+  test('strips ANSI escapes from client_name before printing to stderr', async () => {
+    const esc = String.fromCharCode(0x1b);
+    stderrSpy.mockClear();
+    const a = { ...entry('a'), client_name: `${esc}[31mfake${esc}[0m` };
+    const result = await resolveClient(cfg({ a }, 'a'), 'a');
+    expect(result).toEqual(a);
+    const calls = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(calls).not.toContain(esc);
+    expect(calls).toContain('fake');
+  });
+
   test('resolves via COOLHAND_CLIENT_ID env var', async () => {
     process.env.COOLHAND_CLIENT_ID = 'acme';
     const acme = entry('acme');
