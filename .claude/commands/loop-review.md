@@ -9,7 +9,7 @@ Run an automated code review + fix loop on the current branch. Keep iterating un
 
 - Effort level: `$ARGUMENTS` (default: `high` if blank)
 - Max iterations: 5
-- Review scope: `git diff origin/main...HEAD`
+- Review scope: `git diff $(git merge-base origin/main HEAD)` — a single-ref diff against the merge-base, so it also picks up uncommitted fixes from prior iterations (`git diff origin/main...HEAD` would not, since three-dot diffs two commits and ignores the working tree)
 
 ## Loop Instructions
 
@@ -17,12 +17,12 @@ Repeat the following cycle up to 5 times:
 
 ### Step 1 — Review (Agent)
 
-Spawn an Agent using the Agent tool with `thinking: "high"` enabled and this prompt (substitute ITERATION_NUM, EFFORT, and PREVIOUS_FIXES):
+Spawn an Agent using the Agent tool with `thinking: EFFORT` enabled and this prompt (substitute ITERATION_NUM, EFFORT, and PREVIOUS_DISPOSITIONS):
 
 ---
 You are a code reviewer doing pass ITERATION_NUM of an automated review loop.
 
-Run `git diff origin/main...HEAD` to get the current branch diff. Review it for:
+Run `git diff $(git merge-base origin/main HEAD)` to get the current branch diff (this includes any uncommitted fixes from prior iterations). Review it for:
 
 **Correctness & quality**
 - Correctness bugs and logic errors
@@ -53,8 +53,8 @@ Run `git diff origin/main...HEAD` to get the current branch diff. Review it for:
 
 Effort: EFFORT
 
-Already fixed in prior iterations — do NOT re-flag these:
-PREVIOUS_FIXES
+Already triaged in prior iterations — do NOT re-flag these unless you have new evidence that changes the call:
+PREVIOUS_DISPOSITIONS
 
 Every finding must be tagged with exactly one severity:
 - `[CRITICAL]` — security vulnerabilities, wrong/broken behavior, performance problems
@@ -78,7 +78,7 @@ For each finding, either fix it, or reject it with a one-line reason (false posi
 
 ### Step 4 — Log & Continue
 
-Record this iteration in your running log (see format below), then go back to Step 1 with the next iteration number.
+Record this iteration in your running log (see format below). Append this iteration's fixed AND rejected findings (with their reasons) to the running `PREVIOUS_DISPOSITIONS` list — both dispositions must carry forward, or rejected findings will be re-flagged and re-rejected every round and the loop can never reach LGTM. Then go back to Step 1 with the next iteration number.
 
 ## Iteration Log Format
 
@@ -122,14 +122,15 @@ For each iteration:
 - `issues_addressed` — number fixed that iteration
 - `issues_ignored` — number rejected that iteration
 
-All fields are plain identifiers/numbers with no embedded commas, so a plain append is sufficient — no CSV quoting needed:
+Branch names can contain characters that are unsafe to splice directly into a shell heredoc (`$`, backticks, parens) or that would misalign CSV columns (commas). Assign the branch name to a shell variable, strip commas from it, and append the row with `printf` inside a single-quoted format string so no part of the row is re-parsed by the shell:
 
 ```bash
 mkdir -p ~/loop-review-outputs
 [ -f ~/loop-review-outputs/coolhand-cli.csv ] || echo "timestamp,branch,iteration,model,thinking_level,clock_seconds,tokens_used_approx,critical_found,nice_to_have_found,nitpick_found,total_found,issues_addressed,issues_ignored" > ~/loop-review-outputs/coolhand-cli.csv
-cat >> ~/loop-review-outputs/coolhand-cli.csv <<EOF
-2026-01-01T00:00:00Z,branch-name,1,default,high,42,1234,1,2,0,3,3,0
-EOF
+branch=$(git branch --show-current | tr -d ',')
+printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+  "2026-01-01T00:00:00Z" "$branch" "1" "default" "high" "42" "1234" "1" "2" "0" "3" "3" "0" \
+  >> ~/loop-review-outputs/coolhand-cli.csv
 ```
 
 ## Final Summary
