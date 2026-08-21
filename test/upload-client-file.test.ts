@@ -14,7 +14,7 @@ jest.mock('coolhand-node', () => ({
 const fakeClient = {
   client_id: 'c1',
   client_name: 'Test Client',
-  api_key: 'pub_key',
+  private_key: 'priv_key',
   base_url: 'https://coolhandlabs.com',
   saved_at: 'now',
 };
@@ -73,10 +73,10 @@ describe('uploadClientFile (shared core)', () => {
     expect(mockUploadClientFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'report.txt' }));
   });
 
-  test('constructs Coolhand with the client api_key and base_url', async () => {
+  test('constructs Coolhand with the client private_key and base_url', async () => {
     await uploadClientFile({ filePath });
     expect(mockCoolhandCtor).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'pub_key', baseUrl: 'https://coolhandlabs.com' })
+      expect.objectContaining({ apiKey: 'priv_key', baseUrl: 'https://coolhandlabs.com' })
     );
   });
 
@@ -110,9 +110,9 @@ describe('uploadClientFile (shared core)', () => {
     expect(mockUploadClientFile).not.toHaveBeenCalled();
   });
 
-  test('throws NOT_CONFIGURED when the resolved client has no api_key', async () => {
-    (resolveClientForDryRun as jest.Mock).mockResolvedValue({ ...fakeClient, api_key: undefined });
-    await expect(uploadClientFile({ filePath })).rejects.toMatchObject({ code: 'NOT_CONFIGURED' });
+  test('throws NO_PRIVATE_KEY when the resolved client has no private_key', async () => {
+    (resolveClientForDryRun as jest.Mock).mockResolvedValue({ ...fakeClient, private_key: undefined });
+    await expect(uploadClientFile({ filePath })).rejects.toMatchObject({ code: 'NO_PRIVATE_KEY' });
     expect(mockCoolhandCtor).not.toHaveBeenCalled();
   });
 

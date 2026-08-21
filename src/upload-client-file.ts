@@ -27,9 +27,10 @@ export interface UploadClientFileResult {
 
 /**
  * Read a local file and upload it as a Coolhand client file via `Coolhand#uploadClientFile`
- * (public-key tier — same trust tier as log ingestion). Shared core used by both the
- * `upload-client-file` command and `map-claude-projects` (which uploads a generated markdown
- * report through the same path rather than duplicating auth/upload logic).
+ * (private-key tier, like `getLogClient`/`getFeedbackClient` — the public key used by
+ * `logRequest`/`createFeedback` 401s here). Shared core used by both the `upload-client-file`
+ * command and `map-claude-projects` (which uploads a generated markdown report through the same
+ * path rather than duplicating auth/upload logic).
  *
  * Resolution mirrors `log-request.ts`: `resolveClientForDryRun` tolerates "no clients configured
  * at all" only when `opts.dryRun` is set, so `--dry-run` works fully logged-out.
@@ -44,10 +45,10 @@ export async function uploadClientFile(
   if (!entry && !opts.dryRun) {
     throw new CliError('NOT_CONFIGURED', 'Not logged in. Run `coolhand login` to authenticate.');
   }
-  if (entry && !entry.api_key) {
+  if (entry && !entry.private_key) {
     throw new CliError(
-      'NOT_CONFIGURED',
-      'This client has no public API key — file upload requires the public key. Run `coolhand login` to re-authenticate.'
+      'NO_PRIVATE_KEY',
+      "No private key configured. Run 'coolhand login --scope private' first."
     );
   }
 
@@ -75,7 +76,7 @@ export async function uploadClientFile(
 
   let coolhand: Coolhand;
   try {
-    coolhand = new Coolhand({ apiKey: entry.api_key as string, baseUrl: entry.base_url, silent: true, dryRun: opts.dryRun });
+    coolhand = new Coolhand({ apiKey: entry.private_key as string, baseUrl: entry.base_url, silent: true, dryRun: opts.dryRun });
   } catch (err) {
     throw new CliError('INVALID_BASE_URL', `Invalid base_url for client: ${entry.base_url} (${(err as Error).message})`);
   }

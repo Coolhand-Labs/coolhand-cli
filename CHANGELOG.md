@@ -7,17 +7,18 @@ All notable changes to `coolhand-cli` will be documented in this file.
 ### Added
 - `upload-client-file` command: uploads a local file to Coolhand as a client file (via
   coolhand-node's new `Coolhand#uploadClientFile`), with `--name`, `--file-type`,
-  `--description`, `--dry-run`, `--client-id`, and `--json`. A conservative 20MB size cap matches
-  coolhand-node's own documented `uploadClientFile` guidance. See
-  [docs/commands.md](./docs/commands.md#upload-client-file).
+  `--description`, `--dry-run`, `--client-id`, and `--json`. Requires a private API key
+  (`coolhand login --scope private`) — the public key used for LLM capture 401s on
+  `client_files`. A conservative 20MB size cap matches coolhand-node's own documented
+  `uploadClientFile` guidance. See [docs/commands.md](./docs/commands.md#upload-client-file).
 - `map-claude-projects` command: recursively searches the home directory (or `--root`) for every
   folder named `claude`/`Claude`, or `.claude`/`.Claude` (case-insensitive exact match, not a
   substring match), and uploads a single markdown
-  report — via the same shared upload core as `upload-client-file` — listing the full file tree
-  beneath each match with basic metadata (size, extension, created/modified times). Uploads
-  **names and metadata only, never file contents**. No exclusions are applied to the search or
-  the listing. Supports `--root`, `--dry-run`, `--client-id`, and `--json`. See
-  [docs/commands.md](./docs/commands.md#map-claude-projects).
+  report — via the same shared upload core as `upload-client-file` (private key, same as above)
+  — listing the full file tree beneath each match with basic metadata (size, extension,
+  created/modified times). Uploads **names and metadata only, never file contents**. No
+  exclusions are applied to the search or the listing. Supports `--root`, `--dry-run`,
+  `--client-id`, and `--json`. See [docs/commands.md](./docs/commands.md#map-claude-projects).
 - `analyze-claude-sessions` now attaches `metadata.project_path` to submitted Claude Code
   sessions (via coolhand-node's new `logRequest` `metadata` option), taken from the transcript's
   own `cwd`. Cowork sessions never get a guessed `project_path`, since Cowork has no real

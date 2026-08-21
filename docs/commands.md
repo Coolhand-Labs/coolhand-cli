@@ -457,6 +457,9 @@ generated report is capped at coolhand-node's documented 20MB `uploadClientFile`
 tree is larger than that, the command fails with a clear error rather than silently truncating
 the report.
 
+Requires a **private** API key (`coolhand login --scope private`) — the public key used for LLM
+capture (`monitor`/`claude`/`analyze-claude-sessions`) 401s on `client_files`.
+
 ### upload-client-file
 
 ```bash
@@ -479,6 +482,9 @@ The file must be 20MB or smaller, matching coolhand-node's own documented `uploa
 guidance ("File contents, up to 20MB"); the live API docs don't separately document a
 server-enforced limit for this endpoint. Uploads always land as `status: draft` client files —
 see [coolhand-node's client-file-upload docs](https://github.com/Coolhand-Labs/coolhand-node/blob/fd8b3718bfcdfbd1f855c83ba0589b4cbdf6fdb6/docs/client-file-upload.md) for details.
+
+Requires a **private** API key (`coolhand login --scope private`) — the public key used for LLM
+capture (`monitor`/`claude`/`analyze-claude-sessions`) 401s on `client_files`.
 
 ## Agent Integration
 
