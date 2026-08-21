@@ -170,6 +170,28 @@ export interface AnalyzeClaudeSessionsOptions {
   excludeProjects?: string[];
 }
 
+export interface UploadClientFileOptions {
+  /** Local path of the file to upload (positional arg). */
+  filePath: string;
+  clientId?: string;
+  json?: boolean;
+  /** Size and validate the file without uploading. */
+  dryRun?: boolean;
+  /** Display name for the client file; defaults to the file's basename. */
+  name?: string;
+  fileType?: 'slide_deck' | 'report' | 'document';
+  description?: string;
+}
+
+export interface MapClaudeProjectsOptions {
+  clientId?: string;
+  json?: boolean;
+  /** Build and size the map without uploading. */
+  dryRun?: boolean;
+  /** Override for the search root (--root); defaults to the home directory. */
+  root?: string;
+}
+
 export interface SearchFeedbackOptions {
   sentiment?: 'positive' | 'negative' | 'neutral';
   search?: string;

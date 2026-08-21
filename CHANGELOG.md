@@ -4,11 +4,51 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `upload-client-file` command: uploads a local file to Coolhand as a client file (via
+  coolhand-node's new `Coolhand#uploadClientFile`), with `--name`, `--file-type`,
+  `--description`, `--dry-run`, `--client-id`, and `--json`. A conservative 20MB size cap matches
+  coolhand-node's own documented `uploadClientFile` guidance. See
+  [docs/commands.md](./docs/commands.md#upload-client-file).
+- `map-claude-projects` command: recursively searches the home directory (or `--root`) for every
+  folder named `claude`/`Claude`, or `.claude`/`.Claude` (case-insensitive exact match, not a
+  substring match), and uploads a single markdown
+  report — via the same shared upload core as `upload-client-file` — listing the full file tree
+  beneath each match with basic metadata (size, extension, created/modified times). Uploads
+  **names and metadata only, never file contents**. No exclusions are applied to the search or
+  the listing. Supports `--root`, `--dry-run`, `--client-id`, and `--json`. See
+  [docs/commands.md](./docs/commands.md#map-claude-projects).
+- `analyze-claude-sessions` now attaches `metadata.project_path` to submitted Claude Code
+  sessions (via coolhand-node's new `logRequest` `metadata` option), taken from the transcript's
+  own `cwd`. Cowork sessions never get a guessed `project_path`, since Cowork has no real
+  on-disk project concept.
+
+### Changed
+- `coolhand-node` is temporarily pinned to a specific commit on the `mikecarroll/loop-review`
+  branch (`github:Coolhand-Labs/coolhand-node#fd8b3718bfcdfbd1f855c83ba0589b4cbdf6fdb6`, the
+  branch backing [coolhand-node#159](https://github.com/Coolhand-Labs/coolhand-node/pull/159),
+  which adds `logRequest` metadata support and `uploadClientFile`) — a commit SHA rather than the
+  branch name, so `npm install`/`npm update` can't silently pick up new, unreviewed commits pushed
+  to that branch before the PR merges. Swap back to a real published semver range once it ships to
+  npm. Note the backend may not yet have deployed `metadata`/`client_files` support, so live
+  uploads and `project_path` may 404 or be silently ignored until it does.
+
 ### Security
 - Client names and feedback explanations printed to the terminal (`status`, `whoami`, `clients`, `get-feedback`, etc.) are now stripped of ANSI/VT100 escape sequences before printing, closing a terminal-control-sequence injection vector via server-controlled text — e.g. a `client_name` set via the OAuth callback, or a feedback `explanation` writable via `coolhand wildcard` using only a public key (#95).
 - The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now also excludes coolhand-node's `DEFAULT_EXCLUDE_API_PATTERNS` (e.g. batch-prediction-job status polling) from capture, matching upstream SDK behavior (#95).
 
 ### Fixed
+- `redactSecrets` (the scrubber `analyze-claude-sessions` applies to transcript content before
+  it's submitted) now catches secrets in plain JSON —
+  `{"api_key": "value"}` — not just unquoted-key assignment syntax (`api_key: value`,
+  `api_key=value`). The assignment regex previously required the keyword to be followed
+  immediately by `:`/`=`, but a JSON key is followed by its own closing quote first, so an opaque
+  secret stored as a normal JSON string value (the single most common real-world shape, and the
+  dominant format under `~/.claude`) sailed through unredacted unless it also happened to match one
+  of the hardcoded token-shape patterns (`ghp_`, `sk-`, `AKIA`, etc.). Also added a pattern for
+  PEM-formatted private key blocks (SSH/RSA/EC/OpenSSH/PGP), which had no coverage at all before —
+  no assignment keyword sits next to the base64 body, so the assignment regexes alone never caught
+  a `cat ~/.ssh/id_rsa`-style output or an embedded deploy key.
 - Pinned the transitive `ip-address` dependency (pulled in by `mockttp` via `socks-proxy-agent`/`socks`) to `^10.4.0` via `overrides`, resolving a high-severity SSRF/trust-boundary-bypass advisory (`ip-address` `<=10.3.0`) flagged by `npm audit --omit=dev --audit-level=high` in CI.
 - Pinned the transitive `get-port` dependency (pulled in by `mockttp`) to `^5.1.1` via `overrides`. `mockttp`'s CommonJS build does a top-level `require("get-port")`, but `get-port@6+` is ESM-only, so every invocation — including `coolhand-cli --help` — crashed with `ERR_REQUIRE_ESM` on Node 22 before any command parsing happened (#108).
 - `coolhand login --base-url` and the `monitor`/`claude` proxy path (`endpointForBaseUrl`) now enforce the same https-except-loopback rule that `fetch-log`/`search-logs`/`search-feedback`/`get-feedback`/`mcp-call` already got for free from the `coolhand-node` SDK. Previously `login --base-url http://some-non-loopback-host` was accepted and silently stored, and the proxy path performed no scheme validation at all — so `monitor`/`claude` would ship captured prompts, completions, and the public API key over cleartext HTTP to a non-loopback host while every other command correctly refused it (#94).

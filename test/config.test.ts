@@ -10,6 +10,7 @@ import {
   loadConfig,
   removeClient,
   resolveClient,
+  resolveClientForDryRun,
   saveConfig,
   setDefault,
   upsertClient,
@@ -392,5 +393,49 @@ describe('resolveClient', () => {
         jest.useRealTimers();
       }
     });
+  });
+});
+
+describe('resolveClientForDryRun', () => {
+  const entry = (id: string) => ({
+    client_id: id,
+    client_name: `Client ${id}`,
+    api_key: `key_${id}`,
+    base_url: 'https://coolhandlabs.com',
+    saved_at: '2026-01-01T00:00:00Z',
+  });
+
+  const cfg = (clients: Record<string, ReturnType<typeof entry>>, defaultId: string | null = null) => ({
+    version: 1 as const,
+    default_client_id: defaultId,
+    clients,
+  });
+
+  beforeEach(() => {
+    delete process.env.COOLHAND_CLIENT_ID;
+  });
+
+  afterEach(() => {
+    delete process.env.COOLHAND_CLIENT_ID;
+  });
+
+  test('resolves a client exactly like resolveClient when one is configured', async () => {
+    const a = entry('a');
+    const result = await resolveClientForDryRun(cfg({ a }, 'a'));
+    expect(result).toEqual(a);
+  });
+
+  test('returns undefined instead of throwing when zero clients are configured', async () => {
+    await expect(resolveClientForDryRun(cfg({}))).resolves.toBeUndefined();
+  });
+
+  test('still throws CLIENT_NOT_FOUND for a bad explicit clientId, even with zero clients configured', async () => {
+    await expect(resolveClientForDryRun(cfg({}), 'missing')).rejects.toMatchObject({ code: 'CLIENT_NOT_FOUND' });
+  });
+
+  test('propagates NOT_CONFIGURED when clients exist but none can be auto-selected', async () => {
+    const a = entry('a');
+    const b = entry('b');
+    await expect(resolveClientForDryRun(cfg({ a, b }))).rejects.toMatchObject({ code: 'NOT_CONFIGURED' });
   });
 });

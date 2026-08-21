@@ -100,7 +100,12 @@ export async function scanCoworkSessions(
 
     const envelope = parseTranscript(content, sessionUuid);
     if (envelope) {
-      envelopes.push({ ...envelope, url: `cowork://session/${sessionUuid}` });
+      // parseTranscript captures `cwd` from the FIRST line that has one, regardless of event type
+      // (before it even checks for a `message` field) — so it can and does pick up the system/init
+      // line's `cwd` here. That value is Cowork's own internal sandbox output path, not a real user
+      // project, so it must be stripped: this is the only thing preventing it from leaking into
+      // projectPath, not redundant extra insurance.
+      envelopes.push({ ...envelope, url: `cowork://session/${sessionUuid}`, projectPath: undefined });
     }
   }
 

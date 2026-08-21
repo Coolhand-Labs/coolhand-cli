@@ -92,4 +92,44 @@ describe('redactSecrets', () => {
     expect(out).not.toContain(token);
     expect(out).toContain('[REDACTED]');
   });
+
+  test('redacts a plain-JSON-object secret value (quoted key, opaque value)', () => {
+    const out = redactSecrets('{"api_key": "plainOpaqueValue123"}');
+    expect(out).not.toContain('plainOpaqueValue123');
+    expect(out).toContain('"api_key": "[REDACTED]"');
+  });
+
+  test('redacts a JSON secret value under an uppercase env-style key name', () => {
+    const out = redactSecrets('{"GITHUB_TOKEN": "plainOpaqueValue123"}');
+    expect(out).not.toContain('plainOpaqueValue123');
+    expect(out).toContain('[REDACTED]');
+  });
+
+  test('redacts JSON password/access-key values, keeping surrounding structure intact', () => {
+    const out = redactSecrets('{"DB_PASSWORD": "plainOpaqueValue123", "id": 42}');
+    expect(out).not.toContain('plainOpaqueValue123');
+    expect(out).toContain('"DB_PASSWORD": "[REDACTED]"');
+    expect(out).toContain('"id": 42');
+  });
+
+  test('redacts an OpenSSH private key block', () => {
+    const key = [
+      '-----BEGIN OPENSSH PRIVATE KEY-----',
+      'b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZWQyNTUxOQ',
+      'AAACDfakekeymaterialfakekeymaterialfakekeymaterialfake=',
+      '-----END OPENSSH PRIVATE KEY-----',
+    ].join('\n');
+    const out = redactSecrets(`here is my key:\n${key}\nthanks`);
+    expect(out).not.toContain('fakekeymaterial');
+    expect(out).toContain('[REDACTED]');
+    expect(out).toContain('here is my key:');
+    expect(out).toContain('thanks');
+  });
+
+  test('redacts an RSA and a PGP private key block by their BEGIN/END markers', () => {
+    const rsa = '-----BEGIN RSA PRIVATE KEY-----\nfakebase64body\n-----END RSA PRIVATE KEY-----';
+    const pgp = '-----BEGIN PGP PRIVATE KEY BLOCK-----\nfakebase64body\n-----END PGP PRIVATE KEY BLOCK-----';
+    expect(redactSecrets(rsa)).toBe('[REDACTED]');
+    expect(redactSecrets(pgp)).toBe('[REDACTED]');
+  });
 });

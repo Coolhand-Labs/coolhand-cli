@@ -92,6 +92,8 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand fetch-log` | Fetch the input/output content of a single LLM request log |
 | `coolhand search-logs` | Search LLM request logs with flexible filters |
 | `coolhand analyze-claude-sessions` | Submit Claude sessions for pattern and cost analysis |
+| `coolhand map-claude-projects` | Upload a file-tree map (names + metadata only) of every folder named "claude" |
+| `coolhand upload-client-file` | Upload a local file to Coolhand as a client file |
 | `coolhand wildcard` | Record an agent blocker and exit cleanly |
 
 See [docs/commands.md](./docs/commands.md) for full flag reference and usage notes.

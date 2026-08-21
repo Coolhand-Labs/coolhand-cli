@@ -277,3 +277,28 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
     `Multiple clients configured but no default is set.\n\nConfigured clients:\n${list}\n\nRun \`coolhand clients use <id>\` to set a default, or pass --client-id.`
   );
 }
+
+/**
+ * `resolveClient`, but tolerant of "no clients configured at all" — returns `undefined` in that
+ * one case instead of throwing, so a `--dry-run` caller can still run fully unauthenticated. Any
+ * other resolution error (a bad --client-id, multiple clients with no default set, etc.)
+ * propagates exactly as `resolveClient` would throw it.
+ *
+ * Shared by every command whose `--dry-run` mode should work without any stored credentials
+ * (`analyze-claude-sessions`, `map-claude-projects`, `upload-client-file`, and anything built on
+ * `uploadClientFile`'s shared core).
+ */
+export async function resolveClientForDryRun(cfg: ConfigFile, clientId?: string): Promise<ClientEntry | undefined> {
+  try {
+    return await resolveClient(cfg, clientId);
+  } catch (err) {
+    if (
+      !(err instanceof CliError) ||
+      err.code !== 'NOT_CONFIGURED' ||
+      Object.keys(cfg.clients).length > 0
+    ) {
+      throw err;
+    }
+    return undefined;
+  }
+}

@@ -22,7 +22,7 @@ coolhand --client-id acme claude ...       # must be before for claude
 4. Auto-pick when exactly one client is stored
 5. Interactive prompt (TTY) or descriptive error listing all clients (non-TTY)
 
-Any command that calls `resolveClient` prints `Client: <name> (<id>)` to stderr when a client is successfully resolved, so you always know which account's data you are looking at. `wildcard` and `analyze-claude-sessions` print the label when a client is resolved but proceed without one when **no clients are configured at all** (`wildcard` is designed for logged-out sandbox agents; `analyze-claude-sessions` allows `--dry-run` without credentials). The two commands differ when clients are stored but resolution fails (e.g. no default is set on a non-TTY): `wildcard` saves the complaint locally and warns rather than blocking the agent; `analyze-claude-sessions` surfaces the error so the misconfiguration is visible.
+Any command that calls `resolveClient` prints `Client: <name> (<id>)` to stderr when a client is successfully resolved, so you always know which account's data you are looking at. `wildcard`, `analyze-claude-sessions`, `map-claude-projects`, and `upload-client-file` print the label when a client is resolved but proceed without one when **no clients are configured at all** (`wildcard` is designed for logged-out sandbox agents; the other three allow `--dry-run` without credentials, via the shared `resolveClientForDryRun` helper). These commands differ when clients are stored but resolution fails (e.g. no default is set on a non-TTY): `wildcard` saves the complaint locally and warns rather than blocking the agent; the rest surface the error so the misconfiguration is visible.
 
 ## Authentication
 
@@ -426,6 +426,59 @@ Submits historical Claude Code sessions to Coolhand for pattern and cost analysi
 `WHEN` accepts `YYYY-MM-DD`, a full ISO datetime, or a duration shorthand relative to now: `12h`, `7d`, `2w`. Project names match as substrings, case-insensitively, against the encoded folder names under `~/.claude/projects` (so `--project coolhand-cli` matches the folder for any checkout of that repo). Sessions rejected by a filter are never read from disk, and a filtered run never advances the incremental sync cutoff — see [session-capture.md](./session-capture.md#choosing-what-gets-uploaded).
 
 See [session-capture.md](./session-capture.md) for scan logic, duplicate-avoidance details, and envelope format.
+
+### map-claude-projects
+
+```bash
+coolhand map-claude-projects [--root PATH] [--dry-run] [--client-id ID] [--json]
+```
+
+Recursively searches the home directory (or `--root`) for every folder named `claude`/`Claude`,
+or the dotfile convention `.claude`/`.Claude` (case-insensitive, exact name match after stripping
+one leading dot — not a substring match, so `claude-code` or `my-claude-notes` don't count), and
+uploads a single markdown report listing the full file tree beneath each match, as a client file.
+The report contains **names and metadata only** — file size, extension, created time, and
+last-modified time — never file contents. A match found nested inside another match is not
+treated as a second, separate match; its contents are already covered by the outer match's tree.
+
+| Flag | Description |
+|------|-------------|
+| `--root PATH` | Search PATH instead of the home directory |
+| `--dry-run` | Build the report and report its size without uploading |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+The search and the tree listing apply no exclusions — every file and directory under a matched
+folder is listed, including `.git/`, `node_modules/`, hidden files, and anything else. Symlinked
+directories are never followed (avoids link loops and escaping the search root). This can be a
+large, slow scan on a typical development machine, since it walks the entire home directory
+looking for matches; use `--root` to scope it down if you already know where to look. The
+generated report is capped at coolhand-node's documented 20MB `uploadClientFile` limit — if the
+tree is larger than that, the command fails with a clear error rather than silently truncating
+the report.
+
+### upload-client-file
+
+```bash
+coolhand upload-client-file <file-path> [--name NAME] [--file-type TYPE] [--description TEXT] [--dry-run] [--client-id ID] [--json]
+```
+
+Uploads a local file to Coolhand as a client file (`Coolhand#uploadClientFile`). General-purpose
+utility — `map-claude-projects` builds on the same shared upload core.
+
+| Flag | Description |
+|------|-------------|
+| `--name NAME` | Display name for the client file (defaults to the filename) |
+| `--file-type TYPE` | One of `slide_deck`, `report`, `document` (defaults to `document`) |
+| `--description TEXT` | Optional description |
+| `--dry-run` | Validate and size the file without uploading |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+The file must be 20MB or smaller, matching coolhand-node's own documented `uploadClientFile`
+guidance ("File contents, up to 20MB"); the live API docs don't separately document a
+server-enforced limit for this endpoint. Uploads always land as `status: draft` client files —
+see [coolhand-node's client-file-upload docs](https://github.com/Coolhand-Labs/coolhand-node/blob/fd8b3718bfcdfbd1f855c83ba0589b4cbdf6fdb6/docs/client-file-upload.md) for details.
 
 ## Agent Integration
 

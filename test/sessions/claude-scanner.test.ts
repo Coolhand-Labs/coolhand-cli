@@ -111,6 +111,35 @@ describe('parseTranscript', () => {
     const env = parseTranscript(text, 'sess-1');
     expect(env?.request_body.messages).toHaveLength(4);
   });
+
+  test('captures projectPath from the first line carrying a non-empty cwd', () => {
+    const lines = [
+      JSON.stringify({ type: 'user', cwd: '/Users/me/repo', message: { role: 'user', content: 'hi' } }),
+      JSON.stringify({
+        type: 'assistant',
+        cwd: '/Users/me/repo',
+        message: { role: 'assistant', id: 'm', content: [{ type: 'text', text: 'hi' }] },
+      }),
+    ].join('\n');
+    expect(parseTranscript(lines, 's')?.projectPath).toBe('/Users/me/repo');
+  });
+
+  test('projectPath is undefined when no line has a cwd', () => {
+    expect(parseTranscript(SAMPLE, 'sess-1')?.projectPath).toBeUndefined();
+  });
+
+  test('projectPath is undefined and parsing does not throw when cwd is malformed', () => {
+    const lines = [
+      JSON.stringify({ type: 'user', cwd: 42, message: { role: 'user', content: 'hi' } }),
+      JSON.stringify({ type: 'user', cwd: '   ', message: { role: 'user', content: 'hi' } }),
+      JSON.stringify({
+        type: 'assistant',
+        message: { role: 'assistant', id: 'm', content: [{ type: 'text', text: 'hi' }] },
+      }),
+    ].join('\n');
+    expect(() => parseTranscript(lines, 's')).not.toThrow();
+    expect(parseTranscript(lines, 's')?.projectPath).toBeUndefined();
+  });
 });
 
 describe('parseTranscript — tool activity & block rendering', () => {

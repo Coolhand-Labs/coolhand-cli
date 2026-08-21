@@ -31,7 +31,10 @@ the other.
    `cache_creation_input_tokens`) is summed **once**. The final assistant turn goes in
    `response_body`; the session's summed usage in `response_body.usage`.
 3. **Submit.** POSTs one envelope per session to `POST /api/v2/llm_request_logs`, with the collector
-   string `coolhand-cli/claude-code`.
+   string `coolhand-cli/claude-code`. Claude Code sessions also carry `metadata.project_path`, the
+   transcript's own local working directory (e.g. `/Users/alice/repo`) — note this can embed the OS
+   username. Cowork sessions never get a `project_path`; Cowork has no equivalent real, on-disk
+   project concept, only an internal sandbox output path that must not be surfaced as one.
 
 Each envelope is Anthropic-shaped and wrapped in a session-level url:
 
@@ -116,6 +119,10 @@ past).
   next run can skip unchanged files. When any filter narrowed the run, that cutoff is left
   untouched — otherwise sessions excluded this run would be silently skipped by every future
   run. The summary says so explicitly: `(sync cutoff not advanced — filters active)`.
+- **`metadata.project_path` is sent for Claude Code sessions, never guessed for Cowork.** The
+  transcript's own local working directory is attached as-is (it can embed the OS username);
+  Cowork sessions carry no `project_path` at all, since Cowork has no equivalent real project
+  folder to report.
 
 ## Flags
 

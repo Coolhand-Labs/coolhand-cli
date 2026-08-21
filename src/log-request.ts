@@ -17,10 +17,13 @@ const COLLECTOR = `${PACKAGE_IDENTIFIER}/claude-code`;
  * The SDK swallows submission failures and returns `null`; we translate that (and a base_url
  * rejection from the SDK constructor) back into a `CliError` so `analyze-claude-sessions` keeps its
  * per-session success/failure accounting intact.
+ *
+ * `opts.projectPath`, when given, is sent as `metadata.project_path` so the log can be correlated
+ * back to the repo/working directory it came from.
  */
 export async function logRequest(
   rawRequest: unknown,
-  opts: { clientId?: string } = {}
+  opts: { clientId?: string; projectPath?: string } = {}
 ): Promise<unknown> {
   const cfg = await loadConfig();
   const client = getClient(cfg, opts.clientId);
@@ -49,7 +52,11 @@ export async function logRequest(
 
   let result: unknown;
   try {
-    result = await coolhand.logRequest(rawRequest as CoolhandCallData, { collector: COLLECTOR });
+    const metadata = opts.projectPath ? { project_path: opts.projectPath } : undefined;
+    result = await coolhand.logRequest(rawRequest as CoolhandCallData, {
+      collector: COLLECTOR,
+      ...(metadata ? { metadata } : {}),
+    });
   } catch (err) {
     throw new CliError('INGEST_ERROR', `Log submission failed: ${(err as Error).message}`);
   }
