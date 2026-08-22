@@ -235,6 +235,49 @@ describe('map-claude-projects command', () => {
     await expect(fs.access(outputPath)).resolves.toBeUndefined();
   });
 
+  test('a matched symlink resolving outside the search root is flagged, not walked', async () => {
+    const outsideDir = path.join(os.tmpdir(), `mcp-outside-${randomBytes(6).toString('hex')}`);
+    await fs.mkdir(outsideDir, { recursive: true });
+    await fs.writeFile(path.join(outsideDir, 'TOP-SECRET.txt'), 'sensitive');
+
+    try {
+      const repoDir = path.join(home, 'somerepo');
+      await fs.mkdir(repoDir, { recursive: true });
+      await fs.symlink(outsideDir, path.join(repoDir, '.claude'), 'dir');
+
+      let content = '';
+      mockUploadClientFile.mockImplementation(async (payload: any) => {
+        content = await fs.readFile(payload.filePath, 'utf8');
+        return { status: 'uploaded', sizeBytes: Buffer.byteLength(content), response: { id: 'cf_1', name: 'Claude Folders Map', file_type: 'report', status: 'draft', description: null, metadata: {}, created_at: 'now' } };
+      });
+
+      const code = await run({}, { homedir: () => home });
+      expect(code).toBe(0);
+      expect(content).toContain('resolves outside the search root');
+      expect(content).not.toContain('TOP-SECRET.txt');
+    } finally {
+      await fs.rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  test('a matched symlink resolving within the search root (dotfile-manager style) is still walked normally', async () => {
+    const realDir = path.join(home, 'dotfiles', 'claude-real');
+    await fs.mkdir(realDir, { recursive: true });
+    await fs.writeFile(path.join(realDir, 'settings.json'), '{}');
+    await fs.symlink(realDir, path.join(home, '.claude'), 'dir');
+
+    let content = '';
+    mockUploadClientFile.mockImplementation(async (payload: any) => {
+      content = await fs.readFile(payload.filePath, 'utf8');
+      return { status: 'uploaded', sizeBytes: Buffer.byteLength(content), response: { id: 'cf_1', name: 'Claude Folders Map', file_type: 'report', status: 'draft', description: null, metadata: {}, created_at: 'now' } };
+    });
+
+    const code = await run({}, { homedir: () => home });
+    expect(code).toBe(0);
+    expect(content).toContain('settings.json');
+    expect(content).not.toContain('resolves outside the search root');
+  });
+
   test('escapes backticks in filenames so they cannot break out of the markdown code span', async () => {
     const claudeDir = path.join(home, 'claude');
     await fs.mkdir(claudeDir, { recursive: true });

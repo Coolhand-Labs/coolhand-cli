@@ -2,7 +2,7 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
-## [Unreleased]
+## [0.10.0] - 2026-08-22
 
 ### Added
 - `upload-client-file` command: uploads a local file to Coolhand as a client file (via
@@ -33,10 +33,18 @@ All notable changes to `coolhand-cli` will be documented in this file.
   now that it's shipped, this drops the git dependency. Note the backend may not yet have deployed
   `metadata`/`client_files` support, so live uploads and `project_path` may 404 or be silently
   ignored until it does.
+- `coolhand wildcard` can now be reached for tasks that would take too long or run indefinitely to
+  complete, not just for capabilities that are flatly unavailable — help text and de-loop messages
+  updated to name both cases (`--complaint` was already free text, so no flags, exit codes, or
+  JSON shapes changed) (#97).
 
 ### Security
 - Client names and feedback explanations printed to the terminal (`status`, `whoami`, `clients`, `get-feedback`, etc.) are now stripped of ANSI/VT100 escape sequences before printing, closing a terminal-control-sequence injection vector via server-controlled text — e.g. a `client_name` set via the OAuth callback, or a feedback `explanation` writable via `coolhand wildcard` using only a public key (#95).
 - The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now also excludes coolhand-node's `DEFAULT_EXCLUDE_API_PATTERNS` (e.g. batch-prediction-job status polling) from capture, matching upstream SDK behavior (#95).
+- `coolhand claude`/`coolhand monitor` now validate the MITM proxy's CA key/cert pair (`~/.coolhand/proxy/ca-key.pem`/`ca-cert.pem`) — ownership, file type, and permissions — before trusting them, instead of silently adopting whatever's already on disk. Checks are POSIX-only and go through an `open()`+`fstat()` pattern to close TOCTOU/symlink-following gaps; the cert directory's permissions are now tightened to `0700` on every run, not just on first generation. A previously loosely-permissioned, wrong-owner, or symlinked cert path now fails fast with the new `CERT_FILE_INSECURE` error instead of being silently trusted (#93).
+- The MITM proxy now redacts sensitive query-string parameters (`key`, `api_key`, `apikey`, `token`, `access_token`, `secret`, case-insensitive) from captured request URLs before upload. Some LLM APIs — notably Google Gemini's REST API — authenticate via `?key=...` in the query string rather than a header, and those live third-party API keys were previously captured and uploaded to Coolhand in plaintext (#91, high severity).
+- The proxy's header-redaction list now includes `cf-aig-authorization` (Cloudflare AI Gateway) alongside `authorization`, `x-goog-api-key`, `openai-api-key`, etc. Traffic proxied through `gateway.ai.cloudflare.com` was being captured with its gateway token uploaded to Coolhand in full and retrievable via `fetch-log` (#92).
+- `map-claude-projects` no longer walks a matched `claude`/`.claude` symlink whose target resolves outside the search root. A `claude`-named symlink was recorded as a match with no constraint on where it pointed, so a planted symlink under the (by default, whole-home-directory) search root — from a malicious repo clone or an extracted archive — could point at an arbitrary unrelated directory and have its entire contents (every filename, size, and timestamp) enumerated into the uploaded report. The legitimate dotfile-manager case (chezmoi/Stow/yadm symlinking `~/.claude` to a target still under the search root) is unaffected; only out-of-root targets are now reported as an unresolved symlink instead of walked.
 
 ### Fixed
 - `redactSecrets` (the scrubber `analyze-claude-sessions` applies to transcript content before

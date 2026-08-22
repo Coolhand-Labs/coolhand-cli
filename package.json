@@ -1,6 +1,6 @@
 {
   "name": "coolhand-cli",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "CLI for authenticating with Coolhand and retrieving API tokens from a local dev environment",
   "type": "module",
   "main": "dist/index.js",

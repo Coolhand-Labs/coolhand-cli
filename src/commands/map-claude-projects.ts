@@ -27,6 +27,11 @@ function isClaudeDirName(name: string): boolean {
  * symlinked directories are skipped during further recursion, to avoid link loops and escaping
  * `root`. Unreadable directories (permissions, etc.) are skipped rather than aborting the whole
  * scan.
+ *
+ * Being recorded as a match here does not by itself mean its contents get walked — a matched
+ * symlink whose target resolves outside `root` is caller-checked (see `resolvesWithinRoot`,
+ * used in `run()`) and its contents are never enumerated, since nothing here constrains where a
+ * "claude"-named symlink's target actually lives.
  */
 export async function findClaudeDirs(root: string): Promise<string[]> {
   if (isClaudeDirName(path.basename(root))) {
@@ -99,6 +104,29 @@ function mdInlineCode(text: string): string {
   }
   const fence = '`'.repeat(longestRun + 1);
   return `${fence} ${singleLine} ${fence}`;
+}
+
+/**
+ * Resolve both `root` and `target` to their canonical (symlink-free) paths and report whether
+ * `target` actually lives under `root` — used to decide whether a *matched* symlinked directory
+ * (see `findClaudeDirs`) is safe to walk. A `claude`/`.claude` symlink is recorded as a match
+ * without regard for where it points, so without this check a planted symlink anywhere under the
+ * search root (a malicious repo clone, an extracted archive) could point at an arbitrary
+ * unrelated directory — `/`, `~/.ssh`, a mounted volume — and have its entire contents (every
+ * filename, size, and timestamp) enumerated into the uploaded report. If either path fails to
+ * resolve (e.g. a dangling symlink), this conservatively reports "does not resolve within root".
+ */
+async function resolvesWithinRoot(root: string, target: string): Promise<{ within: boolean; realTarget: string | null }> {
+  const [realRoot, realTarget] = await Promise.all([
+    fs.realpath(root).catch(() => null),
+    fs.realpath(target).catch(() => null),
+  ]);
+  if (realRoot === null || realTarget === null) {
+    return { within: false, realTarget };
+  }
+  const relative = path.relative(realRoot, realTarget);
+  const within = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  return { within, realTarget };
 }
 
 /**
@@ -202,7 +230,19 @@ export async function run(opts: MapClaudeProjectsOptions, deps: MapClaudeProject
       // backticks — a heading built from a raw, unescaped path could otherwise be split across
       // lines (see mdInlineCode's own doc comment for why the newline handling lives there).
       lines.push(`## ${mdInlineCode(match)}`, '');
-      await appendTree(lines, match, 0);
+
+      const matchLstat = await fs.lstat(match).catch(() => null);
+      const escape = matchLstat?.isSymbolicLink() ? await resolvesWithinRoot(root, match) : null;
+
+      if (escape && !escape.within) {
+        lines.push(
+          `- ⚠️ This is a symlink that resolves outside the search root` +
+            (escape.realTarget ? ` (to ${mdInlineCode(escape.realTarget)})` : ' (target could not be resolved)') +
+            ` — not followed, to avoid leaking an unrelated location's contents via a planted symlink.`
+        );
+      } else {
+        await appendTree(lines, match, 0);
+      }
       lines.push('');
     }
     const markdown = `${lines.join('\n')}\n`;

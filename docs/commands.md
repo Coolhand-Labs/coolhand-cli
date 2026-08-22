@@ -438,7 +438,11 @@ or the dotfile convention `.claude`/`.Claude` (case-insensitive, exact name matc
 one leading dot — not a substring match, so `claude-code` or `my-claude-notes` don't count), and
 uploads a single markdown report listing the full file tree beneath each match, as a client file.
 A **symlinked** `claude`/`.claude` directory still counts as a match — dotfile managers (chezmoi,
-GNU Stow, yadm, etc.) commonly manage `~/.claude` this way.
+GNU Stow, yadm, etc.) commonly manage `~/.claude` this way. Its contents are only walked if the
+symlink's target resolves to somewhere under the search root; a symlink pointing outside the
+root (e.g. planted by a malicious repo clone or extracted archive) is reported as a match but
+**not followed** — the report notes it as an unresolved symlink instead of enumerating an
+unrelated location's files.
 The report contains **names and metadata only** — file size, extension, created time, and
 last-modified time — never file contents. A match found nested inside another match is not
 treated as a second, separate match; its contents are already covered by the outer match's tree.
