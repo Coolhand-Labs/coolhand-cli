@@ -207,6 +207,13 @@ export async function run(opts: MapClaudeProjectsOptions, deps: MapClaudeProject
     }
     const markdown = `${lines.join('\n')}\n`;
 
+    if (opts.output) {
+      // Same sensitivity as the upload temp file below (real filenames from every matched
+      // folder) — 0o600, and written before the upload attempt so it's available for inspection
+      // even if the upload itself fails.
+      await fs.writeFile(opts.output, markdown, { encoding: 'utf8', mode: 0o600 });
+    }
+
     const tmpPath = path.join(os.tmpdir(), `coolhand-claude-map-${randomBytes(6).toString('hex')}.md`);
     // The report lists real filenames (and thus can be sensitive) from every matched folder —
     // 0o600 keeps it unreadable by other local users for as long as it exists on disk, matching
@@ -234,14 +241,19 @@ export async function run(opts: MapClaudeProjectsOptions, deps: MapClaudeProject
           matches: matches.length,
           matchedPaths: matches,
           sizeBytes: result.sizeBytes,
+          ...(opts.output && { outputPath: opts.output }),
           result: result.response,
         });
       } else if (result.status === 'dry-run') {
-        logger.info(`Dry run: found ${matches.length} folder(s), map is ${mb}MB. Nothing sent.`);
+        logger.info(
+          `Dry run: found ${matches.length} folder(s), map is ${mb}MB. Nothing sent.` +
+            (opts.output ? ` Report written to ${opts.output}.` : '')
+        );
       } else {
         logger.info(
           `Uploaded a map of ${matches.length} folder(s) (${mb}MB) as client file ` +
-            `"${result.response?.name}" (id: ${result.response?.id}).`
+            `"${result.response?.name}" (id: ${result.response?.id}).` +
+            (opts.output ? ` Report also written to ${opts.output}.` : '')
         );
       }
       return ExitCode.OK;

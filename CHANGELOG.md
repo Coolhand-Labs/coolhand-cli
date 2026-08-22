@@ -17,7 +17,8 @@ All notable changes to `coolhand-cli` will be documented in this file.
   report — via the same shared upload core as `upload-client-file` (private key, same as above)
   — listing the full file tree beneath each match with basic metadata (size, extension,
   created/modified times). Uploads **names and metadata only, never file contents**. No
-  exclusions are applied to the search or the listing. Supports `--root`, `--dry-run`,
+  exclusions are applied to the search or the listing. Supports `--root`, `--output` (write the
+  generated report to a local path for inspection, independent of uploading), `--dry-run`,
   `--client-id`, and `--json`. See [docs/commands.md](./docs/commands.md#map-claude-projects).
 - `analyze-claude-sessions` now attaches `metadata.project_path` to submitted Claude Code
   sessions (via coolhand-node's new `logRequest` `metadata` option), taken from the transcript's
@@ -25,14 +26,13 @@ All notable changes to `coolhand-cli` will be documented in this file.
   on-disk project concept.
 
 ### Changed
-- `coolhand-node` is temporarily pinned to a specific commit on the `mikecarroll/loop-review`
-  branch (`github:Coolhand-Labs/coolhand-node#fd8b3718bfcdfbd1f855c83ba0589b4cbdf6fdb6`, the
-  branch backing [coolhand-node#159](https://github.com/Coolhand-Labs/coolhand-node/pull/159),
-  which adds `logRequest` metadata support and `uploadClientFile`) — a commit SHA rather than the
-  branch name, so `npm install`/`npm update` can't silently pick up new, unreviewed commits pushed
-  to that branch before the PR merges. Swap back to a real published semver range once it ships to
-  npm. Note the backend may not yet have deployed `metadata`/`client_files` support, so live
-  uploads and `project_path` may 404 or be silently ignored until it does.
+- `coolhand-node` bumped to `^0.11.0` (published to npm), which includes the `logRequest`
+  `metadata` option and `uploadClientFile` this CLI depends on. Previously pinned to a specific
+  commit on an unmerged branch while that PR
+  ([coolhand-node#159](https://github.com/Coolhand-Labs/coolhand-node/pull/159)) was in review;
+  now that it's shipped, this drops the git dependency. Note the backend may not yet have deployed
+  `metadata`/`client_files` support, so live uploads and `project_path` may 404 or be silently
+  ignored until it does.
 
 ### Security
 - Client names and feedback explanations printed to the terminal (`status`, `whoami`, `clients`, `get-feedback`, etc.) are now stripped of ANSI/VT100 escape sequences before printing, closing a terminal-control-sequence injection vector via server-controlled text — e.g. a `client_name` set via the OAuth callback, or a feedback `explanation` writable via `coolhand wildcard` using only a public key (#95).

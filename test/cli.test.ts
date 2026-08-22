@@ -530,10 +530,18 @@ describe('run', () => {
   });
 
   test('map-claude-projects dispatches with flags', async () => {
-    const code = await run(['map-claude-projects', '--root', '/tmp/x', '--dry-run', '--json', '--client-id', 'acme']);
+    const code = await run([
+      'map-claude-projects',
+      '--root', '/tmp/x',
+      '--output', '/tmp/report.md',
+      '--dry-run',
+      '--json',
+      '--client-id', 'acme',
+    ]);
     expect(code).toBe(0);
     expect(runMapClaudeProjectsCommand).toHaveBeenCalledWith({
       root: '/tmp/x',
+      output: '/tmp/report.md',
       dryRun: true,
       json: true,
       clientId: 'acme',

@@ -430,7 +430,7 @@ See [session-capture.md](./session-capture.md) for scan logic, duplicate-avoidan
 ### map-claude-projects
 
 ```bash
-coolhand map-claude-projects [--root PATH] [--dry-run] [--client-id ID] [--json]
+coolhand map-claude-projects [--root PATH] [--output PATH] [--dry-run] [--client-id ID] [--json]
 ```
 
 Recursively searches the home directory (or `--root`) for every folder named `claude`/`Claude`,
@@ -446,6 +446,7 @@ treated as a second, separate match; its contents are already covered by the out
 | Flag | Description |
 |------|-------------|
 | `--root PATH` | Search PATH instead of the home directory |
+| `--output PATH` | Also write the generated markdown report to PATH, for local inspection (combine with `--dry-run` to inspect without uploading) |
 | `--dry-run` | Build the report and report its size without uploading |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
@@ -467,6 +468,12 @@ search root is the home directory — same disclosure as `metadata.project_path`
 
 Requires a **private** API key (`coolhand login --scope private`) — the public key used for LLM
 capture (`monitor`/`claude`/`analyze-claude-sessions`) 401s on `client_files`.
+
+`--dry-run`'s output (`matchedPaths`, `sizeBytes`) only ever reports the top-level matched
+folders and the aggregate report size — it does not print the walked file tree itself. To inspect
+the actual generated report (e.g. to confirm a specific subfolder's contents were captured),
+combine `--dry-run --output PATH`: the report is still built and written to `PATH`, but nothing is
+uploaded.
 
 ### upload-client-file
 
@@ -490,7 +497,7 @@ The file must be 20MB or smaller — matching both coolhand-node's own documente
 guidance ("File contents, up to 20MB") and the live API docs' own stated limit for this endpoint
 ("Files are currently proxied through the API and capped at 20MB; larger uploads are not yet
 supported"). Uploads always land as `status: draft` client files — see
-[coolhand-node's client-file-upload docs](https://github.com/Coolhand-Labs/coolhand-node/blob/fd8b3718bfcdfbd1f855c83ba0589b4cbdf6fdb6/docs/client-file-upload.md) for details.
+[coolhand-node's client-file-upload docs](https://github.com/Coolhand-Labs/coolhand-node/blob/v0.11.0/docs/client-file-upload.md) for details.
 
 Requires a **private** API key (`coolhand login --scope private`) — the public key used for LLM
 capture (`monitor`/`claude`/`analyze-claude-sessions`) 401s on `client_files`.

@@ -236,6 +236,7 @@ const COMMANDS: CommandMeta[] = [
     usage: 'coolhand map-claude-projects [options]',
     options: [
       { flag: '--root PATH', description: 'Search PATH instead of the home directory' },
+      { flag: '--output PATH', description: 'Also write the generated markdown report to PATH, for local inspection' },
       { flag: '--dry-run', description: 'Build the map and report its size without uploading' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
@@ -750,6 +751,9 @@ function mapClaudeProjectsOptions(parsed: ParsedArgs): MapClaudeProjectsOptions 
   const opts: MapClaudeProjectsOptions = {};
   if (typeof parsed.flags.root === 'string') {
     opts.root = parsed.flags.root;
+  }
+  if (typeof parsed.flags.output === 'string') {
+    opts.output = parsed.flags.output;
   }
   if (parsed.flags['dry-run'] === true) {
     opts.dryRun = true;

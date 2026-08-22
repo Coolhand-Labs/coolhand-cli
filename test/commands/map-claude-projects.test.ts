@@ -205,6 +205,36 @@ describe('map-claude-projects command', () => {
     expect(mode).toBe(0o600);
   });
 
+  test('--output writes the generated report to the given path and leaves it in place', async () => {
+    const claudeDir = path.join(home, '.claude');
+    await fs.mkdir(claudeDir, { recursive: true });
+    await fs.writeFile(path.join(claudeDir, 'settings.json'), '{"a":1}');
+    const outputPath = path.join(home, 'report.md');
+
+    const code = await run({ output: outputPath }, { homedir: () => home });
+    expect(code).toBe(0);
+
+    const content = await fs.readFile(outputPath, 'utf8');
+    expect(content).toContain('# Claude Folders Map');
+    expect(content).toContain(claudeDir);
+    expect(content).toContain('settings.json');
+
+    const stat = await fs.stat(outputPath);
+    expect(stat.mode & 0o777).toBe(0o600);
+  });
+
+  test('--output combined with --dry-run writes the report without uploading', async () => {
+    const claudeDir = path.join(home, '.claude');
+    await fs.mkdir(claudeDir, { recursive: true });
+    const outputPath = path.join(home, 'report.md');
+    mockUploadClientFile.mockResolvedValue({ status: 'dry-run', sizeBytes: 42, response: null });
+
+    const code = await run({ output: outputPath, dryRun: true }, { homedir: () => home });
+    expect(code).toBe(0);
+    expect(mockUploadClientFile).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ dryRun: true }));
+    await expect(fs.access(outputPath)).resolves.toBeUndefined();
+  });
+
   test('escapes backticks in filenames so they cannot break out of the markdown code span', async () => {
     const claudeDir = path.join(home, 'claude');
     await fs.mkdir(claudeDir, { recursive: true });

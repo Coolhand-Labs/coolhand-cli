@@ -190,6 +190,8 @@ export interface MapClaudeProjectsOptions {
   dryRun?: boolean;
   /** Override for the search root (--root); defaults to the home directory. */
   root?: string;
+  /** Also write the generated markdown report to this local path, for inspection. */
+  output?: string;
 }
 
 export interface SearchFeedbackOptions {
