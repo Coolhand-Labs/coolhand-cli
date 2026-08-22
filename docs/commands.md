@@ -437,6 +437,8 @@ Recursively searches the home directory (or `--root`) for every folder named `cl
 or the dotfile convention `.claude`/`.Claude` (case-insensitive, exact name match after stripping
 one leading dot — not a substring match, so `claude-code` or `my-claude-notes` don't count), and
 uploads a single markdown report listing the full file tree beneath each match, as a client file.
+A **symlinked** `claude`/`.claude` directory still counts as a match — dotfile managers (chezmoi,
+GNU Stow, yadm, etc.) commonly manage `~/.claude` this way.
 The report contains **names and metadata only** — file size, extension, created time, and
 last-modified time — never file contents. A match found nested inside another match is not
 treated as a second, separate match; its contents are already covered by the outer match's tree.
@@ -450,12 +452,18 @@ treated as a second, separate match; its contents are already covered by the out
 
 The search and the tree listing apply no exclusions — every file and directory under a matched
 folder is listed, including `.git/`, `node_modules/`, hidden files, and anything else. Symlinked
-directories are never followed (avoids link loops and escaping the search root). This can be a
-large, slow scan on a typical development machine, since it walks the entire home directory
-looking for matches; use `--root` to scope it down if you already know where to look. The
-generated report is capped at coolhand-node's documented 20MB `uploadClientFile` limit — if the
-tree is larger than that, the command fails with a clear error rather than silently truncating
-the report.
+directories are never followed (avoids link loops and escaping the search root), but symlinked
+files are still listed (with the target's size/dates, wherever the target actually is on disk —
+not just inside the matched folder), just not recursed into. This can be a large, slow scan on a
+typical development machine, since it walks the entire home directory looking for matches; use
+`--root` to scope it down if you already know where to look. The generated report is capped at
+coolhand-node's documented 20MB `uploadClientFile` limit — if the tree is larger than that, the
+command fails with a clear error rather than silently truncating the report.
+
+The report's `##` headings and the intro line are full absolute paths (as is the `root` field
+sent in the upload's `metadata`), which typically embed your OS username since the default
+search root is the home directory — same disclosure as `metadata.project_path` on
+`analyze-claude-sessions` (see [session-capture.md](./session-capture.md)).
 
 Requires a **private** API key (`coolhand login --scope private`) — the public key used for LLM
 capture (`monitor`/`claude`/`analyze-claude-sessions`) 401s on `client_files`.
@@ -472,16 +480,17 @@ utility — `map-claude-projects` builds on the same shared upload core.
 | Flag | Description |
 |------|-------------|
 | `--name NAME` | Display name for the client file (defaults to the filename) |
-| `--file-type TYPE` | One of `slide_deck`, `report`, `document` (defaults to `document`) |
+| `--file-type TYPE` | One of `slide_deck`, `report`, `document`; if omitted, the CLI sends no `file_type` at all and the server decides (coolhand-node's own SDK docs say `document`) |
 | `--description TEXT` | Optional description |
 | `--dry-run` | Validate and size the file without uploading |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
-The file must be 20MB or smaller, matching coolhand-node's own documented `uploadClientFile`
-guidance ("File contents, up to 20MB"); the live API docs don't separately document a
-server-enforced limit for this endpoint. Uploads always land as `status: draft` client files —
-see [coolhand-node's client-file-upload docs](https://github.com/Coolhand-Labs/coolhand-node/blob/fd8b3718bfcdfbd1f855c83ba0589b4cbdf6fdb6/docs/client-file-upload.md) for details.
+The file must be 20MB or smaller — matching both coolhand-node's own documented `uploadClientFile`
+guidance ("File contents, up to 20MB") and the live API docs' own stated limit for this endpoint
+("Files are currently proxied through the API and capped at 20MB; larger uploads are not yet
+supported"). Uploads always land as `status: draft` client files — see
+[coolhand-node's client-file-upload docs](https://github.com/Coolhand-Labs/coolhand-node/blob/fd8b3718bfcdfbd1f855c83ba0589b4cbdf6fdb6/docs/client-file-upload.md) for details.
 
 Requires a **private** API key (`coolhand login --scope private`) — the public key used for LLM
 capture (`monitor`/`claude`/`analyze-claude-sessions`) 401s on `client_files`.

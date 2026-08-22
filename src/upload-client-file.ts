@@ -33,7 +33,9 @@ export interface UploadClientFileResult {
  * path rather than duplicating auth/upload logic).
  *
  * Resolution mirrors `log-request.ts`: `resolveClientForDryRun` tolerates "no clients configured
- * at all" only when `opts.dryRun` is set, so `--dry-run` works fully logged-out.
+ * at all" only when `opts.dryRun` is set, so `--dry-run` works fully logged-out. `--dry-run` also
+ * tolerates a resolved client that hasn't granted a private key yet (the default `coolhand login`
+ * flow only grants the public key) — only a real, non-dry-run upload requires one.
  */
 export async function uploadClientFile(
   payload: UploadClientFilePayload,
@@ -45,7 +47,7 @@ export async function uploadClientFile(
   if (!entry && !opts.dryRun) {
     throw new CliError('NOT_CONFIGURED', 'Not logged in. Run `coolhand login` to authenticate.');
   }
-  if (entry && !entry.private_key) {
+  if (entry && !entry.private_key && !opts.dryRun) {
     throw new CliError(
       'NO_PRIVATE_KEY',
       "No private key configured. Run 'coolhand login --scope private' first."
@@ -69,14 +71,16 @@ export async function uploadClientFile(
     );
   }
 
-  if (!entry) {
-    // Dry run with no resolvable client — report the size but never attempt a network call.
+  if (!entry || !entry.private_key) {
+    // Dry run with no resolvable client, or a resolved client that hasn't granted a private key
+    // yet — report the size but never attempt a network call (and never construct Coolhand with
+    // an undefined apiKey).
     return { status: 'dry-run', sizeBytes: stat.size, response: null };
   }
 
   let coolhand: Coolhand;
   try {
-    coolhand = new Coolhand({ apiKey: entry.private_key as string, baseUrl: entry.base_url, silent: true, dryRun: opts.dryRun });
+    coolhand = new Coolhand({ apiKey: entry.private_key, baseUrl: entry.base_url, silent: true, dryRun: opts.dryRun });
   } catch (err) {
     throw new CliError('INVALID_BASE_URL', `Invalid base_url for client: ${entry.base_url} (${(err as Error).message})`);
   }

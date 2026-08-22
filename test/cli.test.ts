@@ -20,6 +20,12 @@ jest.mock('../src/commands/search-feedback.js', () => ({
 jest.mock('../src/commands/get-feedback.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/upload-client-file.js', () => ({
+  run: jest.fn(),
+}));
+jest.mock('../src/commands/map-claude-projects.js', () => ({
+  run: jest.fn(),
+}));
 jest.mock('../src/commands/analyze-claude-sessions.js', () => ({
   run: jest.fn().mockResolvedValue(0),
 }));
@@ -41,6 +47,8 @@ import { run as runMonitorCommand } from '../src/commands/monitor.js';
 import { run as runSearchOptimizationsCommand } from '../src/commands/search-optimizations.js';
 import { run as runSearchFeedbackCommand } from '../src/commands/search-feedback.js';
 import { run as runGetFeedbackCommand } from '../src/commands/get-feedback.js';
+import { run as runUploadClientFileCommand } from '../src/commands/upload-client-file.js';
+import { run as runMapClaudeProjectsCommand } from '../src/commands/map-claude-projects.js';
 import { run as runAnalyzeClaudeSessions } from '../src/commands/analyze-claude-sessions.js';
 
 function makePending() {
@@ -154,6 +162,8 @@ describe('run', () => {
     (runSearchOptimizationsCommand as jest.Mock).mockResolvedValue(0);
     (runSearchFeedbackCommand as jest.Mock).mockResolvedValue(0);
     (runGetFeedbackCommand as jest.Mock).mockResolvedValue(0);
+    (runUploadClientFileCommand as jest.Mock).mockResolvedValue(0);
+    (runMapClaudeProjectsCommand as jest.Mock).mockResolvedValue(0);
     (runFlushPending as jest.Mock).mockClear().mockResolvedValue(0);
     (spawnBackgroundFlush as jest.Mock).mockClear();
     (confirm as jest.Mock).mockReset().mockResolvedValue(false);
@@ -166,6 +176,8 @@ describe('run', () => {
     (runSearchOptimizationsCommand as jest.Mock).mockReset();
     (runSearchFeedbackCommand as jest.Mock).mockReset();
     (runGetFeedbackCommand as jest.Mock).mockReset();
+    (runUploadClientFileCommand as jest.Mock).mockReset();
+    (runMapClaudeProjectsCommand as jest.Mock).mockReset();
     warnSpy.mockRestore();
   });
 
@@ -484,6 +496,48 @@ describe('run', () => {
     const code = await run(['get-feedback', 'fb-123', '--json', '--client-id', 'acme']);
     expect(code).toBe(0);
     expect(runGetFeedbackCommand).toHaveBeenCalledWith({ id: 'fb-123', json: true, clientId: 'acme' });
+  });
+
+  test('upload-client-file requires a positional <file-path>', async () => {
+    const code = await run(['upload-client-file']);
+    expect(code).toBe(1);
+    expect(runUploadClientFileCommand).not.toHaveBeenCalled();
+  });
+
+  test('upload-client-file rejects an invalid --file-type value', async () => {
+    const code = await run(['upload-client-file', 'report.pdf', '--file-type', 'bogus']);
+    expect(code).toBe(1);
+    expect(runUploadClientFileCommand).not.toHaveBeenCalled();
+  });
+
+  test('upload-client-file dispatches with the file path and flags', async () => {
+    const code = await run([
+      'upload-client-file', 'report.pdf',
+      '--name', 'My Report',
+      '--file-type', 'report',
+      '--description', 'desc',
+      '--json', '--client-id', 'acme',
+    ]);
+    expect(code).toBe(0);
+    expect(runUploadClientFileCommand).toHaveBeenCalledWith({
+      filePath: 'report.pdf',
+      name: 'My Report',
+      fileType: 'report',
+      description: 'desc',
+      json: true,
+      clientId: 'acme',
+    });
+  });
+
+  test('map-claude-projects dispatches with flags', async () => {
+    const code = await run(['map-claude-projects', '--root', '/tmp/x', '--dry-run', '--json', '--client-id', 'acme']);
+    expect(code).toBe(0);
+    expect(runMapClaudeProjectsCommand).toHaveBeenCalledWith({
+      root: '/tmp/x',
+      dryRun: true,
+      json: true,
+      clientId: 'acme',
+    });
   });
 
 });

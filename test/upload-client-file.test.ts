@@ -123,6 +123,15 @@ describe('uploadClientFile (shared core)', () => {
     expect(mockCoolhandCtor).not.toHaveBeenCalled();
   });
 
+  test('dry-run with a resolved client that has no private_key: reports size, does not throw NO_PRIVATE_KEY', async () => {
+    // The default `coolhand login` flow only grants the public key — a --dry-run preview must
+    // still work for an already-logged-in user who hasn't run `login --scope private` yet.
+    (resolveClientForDryRun as jest.Mock).mockResolvedValue({ ...fakeClient, private_key: undefined });
+    const result = await uploadClientFile({ filePath }, { dryRun: true });
+    expect(result).toEqual({ status: 'dry-run', sizeBytes: 11, response: null });
+    expect(mockCoolhandCtor).not.toHaveBeenCalled();
+  });
+
   test('dry-run with a resolvable client: passes dryRun to the SDK, reports dry-run status', async () => {
     mockUploadClientFile.mockResolvedValue(null);
     const result = await uploadClientFile({ filePath }, { dryRun: true });
