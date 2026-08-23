@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { logger } from '../logger.js';
+import { resolveWrapSpawn } from '../win-spawn.js';
 
 interface OpenBrowserDeps {
   platform?: NodeJS.Platform;
@@ -23,8 +24,10 @@ export async function openBrowser(url: string, deps: OpenBrowserDeps = {}): Prom
     args = [url];
   }
 
+  const { cmd, spawnArgs, windowsVerbatimArguments } = resolveWrapSpawn(command, args, platform);
+
   try {
-    const child = spawnFn(command, args, { detached: true, stdio: 'ignore' });
+    const child = spawnFn(cmd, spawnArgs, { detached: true, stdio: 'ignore', windowsVerbatimArguments });
     child.on('error', (err) => {
       logger.warn(`Failed to open browser (${command}): ${err.message}. Open the URL manually.`);
     });
