@@ -3,6 +3,7 @@ import type { CompletedRequest, CompletedResponse, AbortedRequest } from "mocktt
 import { shouldCapture, sanitizeHeaders, sanitizeURL, flattenHeaders } from "./interceptor.js";
 import { sendToCoolhand, type CapturedInteraction } from "./sender.js";
 import type { CACredentials } from "./certs.js";
+import { redactSecrets } from "../sessions/redact-secrets.js";
 
 export interface ProxyOptions {
   /** The port to bind to. Omit or pass 0 to let the OS pick a free ephemeral port. */
@@ -26,6 +27,10 @@ interface PendingRequest {
   bodyPromise: Promise<string | undefined>;
   startTimestamp: number;
   timestamp: string;
+}
+
+function redactBodyText(text: string | undefined): string | undefined {
+  return text === undefined ? undefined : redactSecrets(text);
 }
 
 /**
@@ -85,12 +90,12 @@ export async function startProxy(
           method: req.method,
           url: sanitizedUrl,
           headers: sanitizeHeaders(req.headers),
-          body: requestBodyText,
+          body: redactBodyText(requestBodyText),
         },
         response: {
           statusCode: res.statusCode,
           headers: sanitizeHeaders(flattenHeaders(res.headers as Record<string, string | string[] | undefined>)),
-          body: responseBodyText,
+          body: redactBodyText(responseBodyText),
         },
         timestamp: req.timestamp,
       };

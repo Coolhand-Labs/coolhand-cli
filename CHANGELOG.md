@@ -2,6 +2,11 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.10.1] - 2026-08-23
+
+### Security
+- The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now applies the same `redactSecrets` scrubber that `analyze-claude-sessions` uses to captured request/response bodies before upload. Previously only headers and the URL were sanitized; a captured body echoing a live secret — e.g. a `cat .env`/`printenv` tool result fed back into the next request to `api.anthropic.com` — was uploaded to Coolhand verbatim (#121, medium severity).
+
 ## [0.10.0] - 2026-08-22
 
 ### Added
