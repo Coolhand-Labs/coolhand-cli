@@ -1,6 +1,6 @@
 {
   "name": "coolhand-cli",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "CLI for authenticating with Coolhand and retrieving API tokens from a local dev environment",
   "type": "module",
   "main": "dist/index.js",
@@ -45,7 +45,7 @@
   ],
   "scripts": {
     "sync-version": "node scripts/sync-version.mjs",
-    "prepare": "node scripts/sync-version.mjs",
+    "prepare": "npm run build",
     "build": "npm run sync-version && tsc && chmod +x dist/bin.js",
     "prepublishOnly": "npm run build && npm run lint && npm run typecheck && npm test",
     "test": "jest",
@@ -59,7 +59,7 @@
     "smoke": "node dist/bin.js --version"
   },
   "dependencies": {
-    "coolhand-node": "^0.10.1",
+    "coolhand-node": "^0.11.0",
     "mockttp": "^4.2.1"
   },
   "overrides": {

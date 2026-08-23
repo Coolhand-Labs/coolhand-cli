@@ -14,6 +14,8 @@ import { run as runWildcard } from './commands/wildcard.js';
 import { run as runClaude } from './commands/claude.js';
 import { run as runMonitor } from './commands/monitor.js';
 import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
+import { run as runMapClaudeProjects } from './commands/map-claude-projects.js';
+import { run as runUploadClientFile } from './commands/upload-client-file.js';
 import { run as runListWorkloads } from './commands/list-workloads.js';
 import { run as runGetWorkload } from './commands/get-workload.js';
 import { run as runUpdateWorkload } from './commands/update-workload.js';
@@ -36,6 +38,8 @@ import type {
   UpdateOptimizationOptions,
   ComplaintBoxOptions,
   AnalyzeClaudeSessionsOptions,
+  MapClaudeProjectsOptions,
+  UploadClientFileOptions,
   ListWorkloadsOptions,
   GetWorkloadOptions,
   UpdateWorkloadOptions,
@@ -224,6 +228,31 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--projects-dir PATH', description: 'Scan PATH instead of ~/.claude/projects' },
       { flag: '--project NAME', description: 'Only sessions from matching project folders (repeatable, comma-separable)' },
       { flag: '--exclude-project NAME', description: 'Skip sessions from matching project folders (repeatable, comma-separable)' },
+    ],
+  },
+  {
+    name: 'map-claude-projects',
+    oneLiner: 'Upload a file-tree map (names + metadata, no file contents) of every folder named "claude" found under the home directory',
+    usage: 'coolhand map-claude-projects [options]',
+    options: [
+      { flag: '--root PATH', description: 'Search PATH instead of the home directory' },
+      { flag: '--output PATH', description: 'Also write the generated markdown report to PATH, for local inspection' },
+      { flag: '--dry-run', description: 'Build the map and report its size without uploading' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'upload-client-file',
+    oneLiner: 'Upload a local file to Coolhand as a client file',
+    usage: 'coolhand upload-client-file <file-path> [options]',
+    options: [
+      { flag: '--name NAME', description: 'Display name for the client file (defaults to the filename)' },
+      { flag: '--file-type TYPE', description: 'One of: slide_deck, report, document (defaults to document)' },
+      { flag: '--description TEXT', description: 'Optional description' },
+      { flag: '--dry-run', description: 'Validate and size the file without uploading' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
   },
   {
@@ -718,6 +747,58 @@ function analyzeClaudeSessionsOptions(parsed: ParsedArgs): AnalyzeClaudeSessions
   return opts;
 }
 
+function mapClaudeProjectsOptions(parsed: ParsedArgs): MapClaudeProjectsOptions {
+  const opts: MapClaudeProjectsOptions = {};
+  if (typeof parsed.flags.root === 'string') {
+    opts.root = parsed.flags.root;
+  }
+  if (typeof parsed.flags.output === 'string') {
+    opts.output = parsed.flags.output;
+  }
+  if (parsed.flags['dry-run'] === true) {
+    opts.dryRun = true;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+const CLIENT_FILE_TYPES = new Set(['slide_deck', 'report', 'document']);
+
+function uploadClientFileOptions(parsed: ParsedArgs): UploadClientFileOptions {
+  const filePath = parsed.positional[0];
+  if (!filePath) {
+    throw new CliError('INVALID_ARGS', 'upload-client-file requires a <file-path> argument');
+  }
+  const opts: UploadClientFileOptions = { filePath };
+  if (typeof parsed.flags.name === 'string') {
+    opts.name = parsed.flags.name;
+  }
+  if (typeof parsed.flags['file-type'] === 'string') {
+    if (!CLIENT_FILE_TYPES.has(parsed.flags['file-type'])) {
+      throw new CliError('INVALID_ARGS', '--file-type must be one of: slide_deck, report, document');
+    }
+    opts.fileType = parsed.flags['file-type'] as UploadClientFileOptions['fileType'];
+  }
+  if (typeof parsed.flags.description === 'string') {
+    opts.description = parsed.flags.description;
+  }
+  if (parsed.flags['dry-run'] === true) {
+    opts.dryRun = true;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 function getWorkloadOptions(parsed: ParsedArgs): GetWorkloadOptions {
   const id = parsed.flags['id'];
   if (typeof id !== 'string' || id.length === 0) {
@@ -1176,6 +1257,10 @@ export async function run(argv: string[]): Promise<number> {
         return await runGetFeedback(getFeedbackOptions(parsed));
       case 'analyze-claude-sessions':
         return await runAnalyzeClaudeSessions(analyzeClaudeSessionsOptions(parsed));
+      case 'map-claude-projects':
+        return await runMapClaudeProjects(mapClaudeProjectsOptions(parsed));
+      case 'upload-client-file':
+        return await runUploadClientFile(uploadClientFileOptions(parsed));
       case 'list-workloads':
         return await runListWorkloads(listWorkloadsOptions(parsed));
       case 'get-workload':

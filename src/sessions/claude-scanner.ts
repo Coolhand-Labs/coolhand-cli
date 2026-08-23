@@ -36,6 +36,9 @@ export interface CaptureEnvelope {
   };
   /** Number of assistant turns in this session — compared against state to detect growth. */
   turnCount: number;
+  /** The session's working directory, taken from the transcript's first line carrying a
+   *  non-empty string `cwd`. Undefined when no line has one — never guessed. */
+  projectPath?: string;
 }
 
 export interface ScanResult {
@@ -229,6 +232,7 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
   let turnCount = 0;
   const countedTurns = new Set<string>();
   let pending: PendingTurn | null = null;
+  let projectPath: string | undefined;
 
   const flushPending = (): void => {
     if (!pending) {
@@ -256,6 +260,13 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
     }
     if (!event || typeof event !== 'object') {
       continue;
+    }
+
+    if (projectPath === undefined) {
+      const cwd = event.cwd;
+      if (typeof cwd === 'string' && cwd.trim().length > 0) {
+        projectPath = cwd.trim();
+      }
     }
 
     const message = event.message as Record<string, unknown> | undefined;
@@ -335,6 +346,7 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
       usage: sawUsage ? usage : undefined,
     },
     turnCount,
+    projectPath,
   };
 }
 

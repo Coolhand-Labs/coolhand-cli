@@ -9,7 +9,7 @@ jest.mock('../../src/config.js', () => {
   return {
     ...actual,
     loadConfig: jest.fn().mockResolvedValue({ version: 1, clients: {}, default_client_id: null }),
-    resolveClient: jest.fn().mockImplementation((_cfg: unknown, clientId?: string) =>
+    resolveClientForDryRun: jest.fn().mockImplementation((_cfg: unknown, clientId?: string) =>
       Promise.resolve({
         client_id: clientId ?? 'default-client',
         client_name: 'Test Client',
@@ -33,7 +33,7 @@ jest.mock('../../src/log-request.js', () => ({
 jest.mock('../../src/api/last-sync.js', () => ({
   fetchLastSync: jest.fn(),
 }));
-import { loadConfig, resolveClient } from '../../src/config.js';
+import { loadConfig, resolveClientForDryRun } from '../../src/config.js';
 import { scanSessions } from '../../src/sessions/claude-scanner.js';
 import { scanCoworkSessions } from '../../src/sessions/cowork-scanner.js';
 import { logRequest } from '../../src/log-request.js';
@@ -58,7 +58,7 @@ describe('analyze-claude-sessions command', () => {
     dir = path.join(os.tmpdir(), `chs-cmd-${randomBytes(6).toString('hex')}`);
     prev = process.env.COOLHAND_CONFIG_DIR;
     process.env.COOLHAND_CONFIG_DIR = dir;
-    (resolveClient as jest.Mock).mockReset().mockImplementation((_cfg: unknown, clientId?: string) =>
+    (resolveClientForDryRun as jest.Mock).mockReset().mockImplementation((_cfg: unknown, clientId?: string) =>
       Promise.resolve({
         client_id: clientId ?? 'default-client',
         client_name: 'Test Client',
@@ -217,7 +217,7 @@ describe('analyze-claude-sessions command', () => {
 
   test('returns non-zero when an explicit --client-id does not match any stored client', async () => {
     const { CliError } = await import('../../src/errors.js');
-    (resolveClient as jest.Mock).mockRejectedValueOnce(
+    (resolveClientForDryRun as jest.Mock).mockRejectedValueOnce(
       new CliError('CLIENT_NOT_FOUND', 'No client "bad-id" is configured.')
     );
     // The outer catch converts CliError to an exit code rather than re-throwing.
@@ -227,16 +227,15 @@ describe('analyze-claude-sessions command', () => {
   });
 
   test('proceeds unauthenticated when NOT_CONFIGURED and no clients are stored (dry-run without credentials)', async () => {
-    const { CliError } = await import('../../src/errors.js');
-    // No clients stored — the unauthenticated path should be taken silently.
+    // No clients stored — resolveClientForDryRun resolves to undefined (its own tolerance logic,
+    // covered by config.ts's tests) rather than throwing; the command must treat that as the
+    // unauthenticated path.
     (loadConfig as jest.Mock).mockResolvedValueOnce({
       version: 1,
       clients: {},
       default_client_id: null,
     });
-    (resolveClient as jest.Mock).mockRejectedValueOnce(
-      new CliError('NOT_CONFIGURED', 'Not logged in.')
-    );
+    (resolveClientForDryRun as jest.Mock).mockResolvedValueOnce(undefined);
     const code = await run({ dryRun: true });
     expect(code).toBe(0);
     expect(logRequest).not.toHaveBeenCalled();
@@ -253,7 +252,7 @@ describe('analyze-claude-sessions command', () => {
       },
       default_client_id: null,
     });
-    (resolveClient as jest.Mock).mockRejectedValueOnce(
+    (resolveClientForDryRun as jest.Mock).mockRejectedValueOnce(
       new CliError('NOT_CONFIGURED', 'Multiple clients configured but no default is set.')
     );
     const code = await run({});

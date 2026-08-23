@@ -2,18 +2,68 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
-## [Unreleased]
+## [0.10.0] - 2026-08-22
+
+### Added
+- `upload-client-file` command: uploads a local file to Coolhand as a client file (via
+  coolhand-node's new `Coolhand#uploadClientFile`), with `--name`, `--file-type`,
+  `--description`, `--dry-run`, `--client-id`, and `--json`. Requires a private API key
+  (`coolhand login --scope private`) — the public key used for LLM capture 401s on
+  `client_files`. A conservative 20MB size cap matches coolhand-node's own documented
+  `uploadClientFile` guidance. See [docs/commands.md](./docs/commands.md#upload-client-file).
+- `map-claude-projects` command: recursively searches the home directory (or `--root`) for every
+  folder named `claude`/`Claude`, or `.claude`/`.Claude` (case-insensitive exact match, not a
+  substring match), and uploads a single markdown
+  report — via the same shared upload core as `upload-client-file` (private key, same as above)
+  — listing the full file tree beneath each match with basic metadata (size, extension,
+  created/modified times). Uploads **names and metadata only, never file contents**. No
+  exclusions are applied to the search or the listing. Supports `--root`, `--output` (write the
+  generated report to a local path for inspection, independent of uploading), `--dry-run`,
+  `--client-id`, and `--json`. See [docs/commands.md](./docs/commands.md#map-claude-projects).
+- `analyze-claude-sessions` now attaches `metadata.project_path` to submitted Claude Code
+  sessions (via coolhand-node's new `logRequest` `metadata` option), taken from the transcript's
+  own `cwd`. Cowork sessions never get a guessed `project_path`, since Cowork has no real
+  on-disk project concept.
+
+### Changed
+- `coolhand-node` bumped to `^0.11.0` (published to npm), which includes the `logRequest`
+  `metadata` option and `uploadClientFile` this CLI depends on. Previously pinned to a specific
+  commit on an unmerged branch while that PR
+  ([coolhand-node#159](https://github.com/Coolhand-Labs/coolhand-node/pull/159)) was in review;
+  now that it's shipped, this drops the git dependency. Note the backend may not yet have deployed
+  `metadata`/`client_files` support, so live uploads and `project_path` may 404 or be silently
+  ignored until it does.
+- `coolhand wildcard` can now be reached for tasks that would take too long or run indefinitely to
+  complete, not just for capabilities that are flatly unavailable — help text and de-loop messages
+  updated to name both cases (`--complaint` was already free text, so no flags, exit codes, or
+  JSON shapes changed) (#97).
 
 ### Security
 - Client names and feedback explanations printed to the terminal (`status`, `whoami`, `clients`, `get-feedback`, etc.) are now stripped of ANSI/VT100 escape sequences before printing, closing a terminal-control-sequence injection vector via server-controlled text — e.g. a `client_name` set via the OAuth callback, or a feedback `explanation` writable via `coolhand wildcard` using only a public key (#95).
 - The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now also excludes coolhand-node's `DEFAULT_EXCLUDE_API_PATTERNS` (e.g. batch-prediction-job status polling) from capture, matching upstream SDK behavior (#95).
+- `coolhand claude`/`coolhand monitor` now validate the MITM proxy's CA key/cert pair (`~/.coolhand/proxy/ca-key.pem`/`ca-cert.pem`) — ownership, file type, and permissions — before trusting them, instead of silently adopting whatever's already on disk. Checks are POSIX-only and go through an `open()`+`fstat()` pattern to close TOCTOU/symlink-following gaps; the cert directory's permissions are now tightened to `0700` on every run, not just on first generation. A previously loosely-permissioned, wrong-owner, or symlinked cert path now fails fast with the new `CERT_FILE_INSECURE` error instead of being silently trusted (#93).
+- The MITM proxy now redacts sensitive query-string parameters (`key`, `api_key`, `apikey`, `token`, `access_token`, `secret`, case-insensitive) from captured request URLs before upload. Some LLM APIs — notably Google Gemini's REST API — authenticate via `?key=...` in the query string rather than a header, and those live third-party API keys were previously captured and uploaded to Coolhand in plaintext (#91, high severity).
+- The proxy's header-redaction list now includes `cf-aig-authorization` (Cloudflare AI Gateway) alongside `authorization`, `x-goog-api-key`, `openai-api-key`, etc. Traffic proxied through `gateway.ai.cloudflare.com` was being captured with its gateway token uploaded to Coolhand in full and retrievable via `fetch-log` (#92).
+- `map-claude-projects` no longer walks a matched `claude`/`.claude` symlink whose target resolves outside the search root. A `claude`-named symlink was recorded as a match with no constraint on where it pointed, so a planted symlink under the (by default, whole-home-directory) search root — from a malicious repo clone or an extracted archive — could point at an arbitrary unrelated directory and have its entire contents (every filename, size, and timestamp) enumerated into the uploaded report. The legitimate dotfile-manager case (chezmoi/Stow/yadm symlinking `~/.claude` to a target still under the search root) is unaffected; only out-of-root targets are now reported as an unresolved symlink instead of walked.
 
 ### Fixed
+- `redactSecrets` (the scrubber `analyze-claude-sessions` applies to transcript content before
+  it's submitted) now catches secrets in plain JSON —
+  `{"api_key": "value"}` — not just unquoted-key assignment syntax (`api_key: value`,
+  `api_key=value`). The assignment regex previously required the keyword to be followed
+  immediately by `:`/`=`, but a JSON key is followed by its own closing quote first, so an opaque
+  secret stored as a normal JSON string value (the single most common real-world shape, and the
+  dominant format under `~/.claude`) sailed through unredacted unless it also happened to match one
+  of the hardcoded token-shape patterns (`ghp_`, `sk-`, `AKIA`, etc.). Also added a pattern for
+  PEM-formatted private key blocks (SSH/RSA/EC/OpenSSH/PGP), which had no coverage at all before —
+  no assignment keyword sits next to the base64 body, so the assignment regexes alone never caught
+  a `cat ~/.ssh/id_rsa`-style output or an embedded deploy key.
 - Pinned the transitive `ip-address` dependency (pulled in by `mockttp` via `socks-proxy-agent`/`socks`) to `^10.4.0` via `overrides`, resolving a high-severity SSRF/trust-boundary-bypass advisory (`ip-address` `<=10.3.0`) flagged by `npm audit --omit=dev --audit-level=high` in CI.
 - Pinned the transitive `get-port` dependency (pulled in by `mockttp`) to `^5.1.1` via `overrides`. `mockttp`'s CommonJS build does a top-level `require("get-port")`, but `get-port@6+` is ESM-only, so every invocation — including `coolhand-cli --help` — crashed with `ERR_REQUIRE_ESM` on Node 22 before any command parsing happened (#108).
 - `coolhand login --base-url` and the `monitor`/`claude` proxy path (`endpointForBaseUrl`) now enforce the same https-except-loopback rule that `fetch-log`/`search-logs`/`search-feedback`/`get-feedback`/`mcp-call` already got for free from the `coolhand-node` SDK. Previously `login --base-url http://some-non-loopback-host` was accepted and silently stored, and the proxy path performed no scheme validation at all — so `monitor`/`claude` would ship captured prompts, completions, and the public API key over cleartext HTTP to a non-loopback host while every other command correctly refused it (#94).
 - `analyze-claude-sessions --exclude-project` now applies to Cowork sessions. Previously it was silently a no-op for them since Cowork sessions have no project folder to compare against; the filter now fails closed and excludes them, mirroring how `--project` already treats them (#95).
 - Windows: `resolveWrapSpawn` (used by `coolhand claude`/`coolhand monitor`) now escapes the spawned command token the same way it already escaped each argument, closing a quoting inconsistency that could let an embedded `"` in the command break out of the quoted `cmd.exe` invocation (#95).
+- The `prepare` script now runs the full build (`tsc`), not just `sync-version`. `prepare` is the only lifecycle script npm runs when installing this package from a git reference (a git dependency, or `npm install -g github:...`) — previously it only synced the version string, so a git-ref install silently produced a package with no compiled `dist/` at all. Registry installs (`npm install -g coolhand-cli`) were never affected, since `npm publish` already runs the full build on the maintainer's machine before the tarball ships. (Git-ref installs still don't work reliably for an unrelated npm/pacote reason — see [#123](https://github.com/Coolhand-Labs/coolhand-cli/issues/123) — but this was a real, independent bug worth fixing regardless.)
 
 ## [0.9.0] - 2026-08-01
 

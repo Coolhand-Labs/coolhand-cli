@@ -26,14 +26,22 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
   /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, // JWT (three base64url segments)
   /\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*/gi, // Authorization: Bearer <token>
   /\b[A-Fa-f0-9]{40,}\b/g, // long hex blobs (generic tokens / hashes)
+  // PEM-formatted private key blocks (SSH/RSA/EC/OpenSSH/PGP/encrypted) — no assignment keyword
+  // sits next to the base64 body, so ASSIGNMENT_QUOTED/BARE never catch these; a `cat ~/.ssh/id_rsa`
+  // in a tool output or a deploy key embedded in a config file would otherwise sail through whole.
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY[A-Z0-9 ]*-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY[A-Z0-9 ]*-----/g,
 ];
 
 // Two variants: a QUOTED value may contain spaces ("my secret value"); a BARE value stops at
 // whitespace. Splitting them closes the gap where a spaced quoted secret was only partly redacted.
+// The optional `["']?` right after the keyword matches a JSON key's closing quote (`"api_key":
+// "value"` — the key is itself quoted, unlike the YAML/shell-style `api_key: value`/`api_key=value`
+// this was originally written for), so plain JSON — the dominant config format under
+// `~/.claude` — is covered too, not just unquoted-key assignment syntax.
 const ASSIGNMENT_QUOTED =
-  /((?:api[_-]?key|secret|token|password|passwd|access[_-]?key|private[_-]?key)\b\s*[:=]\s*)(['"])[^'"]*\2/gi;
+  /((?:api[_-]?key|secret|token|password|passwd|access[_-]?key|private[_-]?key)\b["']?\s*[:=]\s*)(['"])[^'"]*\2/gi;
 const ASSIGNMENT_BARE =
-  /((?:api[_-]?key|secret|token|password|passwd|access[_-]?key|private[_-]?key)\b\s*[:=]\s*)[^\s'"]+/gi;
+  /((?:api[_-]?key|secret|token|password|passwd|access[_-]?key|private[_-]?key)\b["']?\s*[:=]\s*)[^\s'"]+/gi;
 
 const REDACTED = '[REDACTED]';
 

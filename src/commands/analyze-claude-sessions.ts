@@ -11,7 +11,7 @@ import {
   type CaptureState,
 } from '../sessions/capture-state.js';
 import { fetchLastSync } from '../api/last-sync.js';
-import { loadConfig, resolveClient } from '../config.js';
+import { loadConfig, resolveClientForDryRun } from '../config.js';
 import { logRequest } from '../log-request.js';
 import { parseWhen } from '../parse-when.js';
 import { buildSessionFilter } from '../sessions/session-filter.js';
@@ -69,27 +69,15 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
     // stderr. Using the resolved client_id as the state key ensures consistent tracking regardless
     // of which selection path was used.
     //
-    // NOT_CONFIGURED is caught and treated as "unauthenticated" only when no clients are stored
-    // at all, so that --dry-run still works without credentials (same behaviour as before this
-    // branch). If clients exist but resolution failed (e.g. no default on a non-TTY), the error
-    // propagates so the user sees a clear message rather than a silent no-op.
-    // Any other error (e.g. CLIENT_NOT_FOUND for a bad --client-id) also propagates.
+    // resolveClientForDryRun tolerates "no clients configured at all" so --dry-run still works
+    // without credentials (same behaviour as before this branch). If clients exist but resolution
+    // failed (e.g. no default on a non-TTY), the error propagates so the user sees a clear message
+    // rather than a silent no-op. Any other error (e.g. CLIENT_NOT_FOUND for a bad --client-id)
+    // also propagates.
     const cfg = await loadConfig();
-    let stateClientId = '_default';
-    let resolvedClientId: string | undefined;
-    try {
-      const client = await resolveClient(cfg, opts.clientId);
-      stateClientId = client.client_id;
-      resolvedClientId = client.client_id;
-    } catch (err) {
-      if (
-        !(err instanceof CliError) ||
-        err.code !== 'NOT_CONFIGURED' ||
-        Object.keys(cfg.clients).length > 0
-      ) {
-        throw err;
-      }
-    }
+    const client = await resolveClientForDryRun(cfg, opts.clientId);
+    const stateClientId = client?.client_id ?? '_default';
+    const resolvedClientId = client?.client_id;
     const state = await loadCaptureState();
 
     // (2) Work out the reference timestamp. serverTime is only used when local state is absent or
@@ -214,7 +202,7 @@ export async function run(opts: AnalyzeClaudeSessionsOptions): Promise<number> {
         const sessionId = sessionIdOf(envelope);
         const prior = getTurnsSubmitted(state, stateClientId, sessionId);
         try {
-          await logRequest(envelope, { clientId: resolvedClientId });
+          await logRequest(envelope, { clientId: resolvedClientId, projectPath: envelope.projectPath });
           recordSubmission(state, stateClientId, sessionId, envelope.turnCount);
           if (prior === 0) {
             submittedNew += 1;

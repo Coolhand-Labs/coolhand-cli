@@ -172,6 +172,26 @@ describe('scanCoworkSessions', () => {
     }
   });
 
+  test('never surfaces projectPath, even when a line carries a cwd', async () => {
+    const withCwd = [
+      JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        cwd: '/Users/me/Library/Application Support/Claude/local-agent-mode-sessions/acct/org/local_uuid/outputs',
+        session_id: 'sess-abc',
+      }),
+      JSON.stringify({ type: 'user', cwd: '/some/sandbox/path', message: { role: 'user', content: 'hi' } }),
+      JSON.stringify({
+        type: 'assistant',
+        cwd: '/some/sandbox/path',
+        message: { role: 'assistant', id: 'm', content: [{ type: 'text', text: 'hi' }] },
+      }),
+    ].join('\n');
+    await writeCoworkSession(dir, 'ws-1', 'cs-1', 'cwd-uuid', withCwd);
+    const res = await scanCoworkSessions({ sessionsDir: dir });
+    expect(res.envelopes[0].projectPath).toBeUndefined();
+  });
+
   test('preFilter receives a null project, the local uuid, and the cowork source', async () => {
     await writeCoworkSession(dir, 'ws-1', 'cs-1', 'uuid-xyz', COWORK_SAMPLE);
     const seen: SessionFileMeta[] = [];

@@ -23,7 +23,8 @@ export type ErrorCode =
   | 'INGEST_ERROR'
   | 'FEEDBACK_ERROR'
   | 'LOG_ERROR'
-  | 'CERT_FILE_INSECURE';
+  | 'CERT_FILE_INSECURE'
+  | 'UPLOAD_ERROR';
 
 export class CliError extends Error {
   public readonly code: ErrorCode;

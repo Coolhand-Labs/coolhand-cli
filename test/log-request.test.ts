@@ -50,6 +50,20 @@ describe('logRequest (coolhand-node SDK transport)', () => {
     expect(mockLogRequest).toHaveBeenCalledWith(envelope, { collector: expect.stringMatching(/^coolhand-cli-[\d.]+\/claude-code$/) });
   });
 
+  test('includes metadata.project_path when opts.projectPath is set', async () => {
+    await logRequest(envelope, { projectPath: '/Users/me/repo' });
+    expect(mockLogRequest).toHaveBeenCalledWith(envelope, {
+      collector: expect.stringMatching(/^coolhand-cli-[\d.]+\/claude-code$/),
+      metadata: { project_path: '/Users/me/repo' },
+    });
+  });
+
+  test('omits metadata when opts.projectPath is absent', async () => {
+    await logRequest(envelope, { clientId: undefined });
+    const call = mockLogRequest.mock.calls[0][1];
+    expect(call).not.toHaveProperty('metadata');
+  });
+
   test('returns the SDK result on success', async () => {
     mockLogRequest.mockResolvedValue({ id: 42 });
     await expect(logRequest(envelope)).resolves.toEqual({ id: 42 });
