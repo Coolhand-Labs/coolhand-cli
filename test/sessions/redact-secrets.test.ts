@@ -132,4 +132,22 @@ describe('redactSecrets', () => {
     expect(redactSecrets(rsa)).toBe('[REDACTED]');
     expect(redactSecrets(pgp)).toBe('[REDACTED]');
   });
+
+  test('redacts an Authorization: Basic header', () => {
+    const out = redactSecrets('curl -H "Authorization: Basic dXNlcjpwYXNzd29yZA=="');
+    expect(out).toContain('[REDACTED]');
+    expect(out).not.toContain('dXNlcjpwYXNzd29yZA==');
+  });
+
+  test('redacts a Slack webhook URL assigned to a variable', () => {
+    const out = redactSecrets('SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T000/B000/XXXXXXXX');
+    expect(out).toContain('[REDACTED]');
+    expect(out).not.toContain('T000/B000/XXXXXXXX');
+  });
+
+  test('redacts a Discord webhook URL', () => {
+    const out = redactSecrets('https://discord.com/api/webhooks/123456789/abcDEF-token');
+    expect(out).toContain('[REDACTED]');
+    expect(out).not.toContain('abcDEF-token');
+  });
 });
