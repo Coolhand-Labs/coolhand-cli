@@ -2,6 +2,14 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [Unreleased]
+
+### Security
+- The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now binds to `127.0.0.1` only,
+  instead of all network interfaces. Previously, mockttp's `start()` bound the wildcard address
+  with no authentication, making the unauthenticated forward proxy reachable from any other host
+  on the same network for as long as the wrapped command ran (#119).
+
 ## [0.10.0] - 2026-08-22
 
 ### Added

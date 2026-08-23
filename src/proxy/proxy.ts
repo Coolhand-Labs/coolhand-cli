@@ -1,8 +1,78 @@
+import * as net from "node:net";
 import * as mockttp from "mockttp";
-import type { CompletedRequest, CompletedResponse, AbortedRequest } from "mockttp";
+import type { CompletedRequest, CompletedResponse, AbortedRequest, Mockttp } from "mockttp";
 import { shouldCapture, sanitizeHeaders, sanitizeURL, flattenHeaders } from "./interceptor.js";
 import { sendToCoolhand, type CapturedInteraction } from "./sender.js";
 import type { CACredentials } from "./certs.js";
+
+const LOOPBACK = "127.0.0.1";
+
+/**
+ * mockttp has no host/bind-address option anywhere in its public API (checked
+ * every published 4.x release, including latest) — Mockttp#start(port) always
+ * calls its internal combo server's .listen(port) with no host, which binds
+ * the wildcard address and turns this MITM proxy into an unauthenticated open
+ * forward proxy reachable from the local network (coolhand-cli#119).
+ *
+ * mockttp's combo server is built via httpolyglot, whose `Server` class
+ * `extends net.Server` without overriding `listen()`, so it inherits
+ * `net.Server.prototype.listen` directly — same as http.Server/https.Server.
+ * We exploit that to force a real loopback bind, identical in effect to
+ * callback-server.ts's own `server.listen(0, LOOPBACK, ...)`, by scope-patching
+ * the prototype for the exact duration of the start() call. Do not remove this
+ * without confirming upstream mockttp has added a real host option.
+ */
+// Guards against two overlapping startMockttpOnLoopback() calls stepping on
+// each other's prototype patch — startProxy() only ever runs once per CLI
+// process, so this should never trip in practice; it exists so a future
+// concurrent caller fails loudly instead of silently reverting to a wildcard
+// bind for whichever call restores the prototype first.
+let patchInFlight = false;
+
+async function startMockttpOnLoopback(server: Mockttp, port: number | undefined): Promise<void> {
+  if (patchInFlight) {
+    throw new Error("[coolhand-proxy] a proxy is already starting — concurrent startProxy() calls are not supported");
+  }
+  patchInFlight = true;
+
+  const originalListen = net.Server.prototype.listen;
+  net.Server.prototype.listen = function (this: net.Server, ...args: unknown[]) {
+    // Only the (port[, callback]) shape needs a host injected — leave any
+    // other call shape (e.g. one that already specifies a host) untouched.
+    if (typeof args[0] === "number" && (args.length === 1 || typeof args[1] === "function")) {
+      args.splice(1, 0, LOOPBACK);
+    }
+    return originalListen.apply(this, args as Parameters<typeof originalListen>);
+  } as typeof originalListen;
+
+  try {
+    await server.start(port ?? 0);
+  } finally {
+    net.Server.prototype.listen = originalListen;
+    patchInFlight = false;
+  }
+
+  // Defense in depth: if a future mockttp release changes its internals such
+  // that the patch above silently no-ops, fail loudly here rather than run an
+  // open proxy unnoticed. Verification itself is best-effort — if it can't
+  // determine the bound host (e.g. the private field was renamed), skip the
+  // check rather than fail the whole command over an inability to double-check.
+  let boundHost: string | undefined;
+  try {
+    const internal = (server as unknown as { server?: net.Server }).server;
+    const address = internal?.address();
+    boundHost = address && typeof address === "object" ? address.address : undefined;
+  } catch {
+    return;
+  }
+  if (boundHost !== undefined && boundHost !== LOOPBACK) {
+    await server.stop().catch(() => undefined);
+    throw new Error(
+      `[coolhand-proxy] refused to start: proxy bound to ${boundHost}, expected ${LOOPBACK}. ` +
+      `This likely means mockttp's internals changed in a way that broke the loopback-only fix — see coolhand-cli#119.`
+    );
+  }
+}
 
 export interface ProxyOptions {
   /** The port to bind to. Omit or pass 0 to let the OS pick a free ephemeral port. */
@@ -119,7 +189,7 @@ export async function startProxy(
 
   // Pass all requests through to their real destinations
   await server.forAnyRequest().thenPassThrough();
-  await server.start(options.port ?? 0);
+  await startMockttpOnLoopback(server, options.port);
 
   const port = server.port;
   if (!options.silent) {
