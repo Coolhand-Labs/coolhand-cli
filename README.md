@@ -101,6 +101,7 @@ See [docs/commands.md](./docs/commands.md) for full flag reference and usage not
 ## Security
 
 - The callback listener binds to `127.0.0.1` only — never reachable from the LAN.
+- The MITM proxy started by `coolhand claude`/`coolhand monitor` also binds to `127.0.0.1` only — never reachable from the LAN.
 - Tokens are delivered through a one-shot localhost redirect; subsequent calls to the listener get `410 Gone`.
 - CSRF protection: every login generates a random `state` value verified with `crypto.timingSafeEqual` before any token is accepted.
 - `~/.coolhand/config.json` is written atomically with mode `0o600`; the parent directory is `0o700`.

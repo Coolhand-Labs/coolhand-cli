@@ -2,6 +2,8 @@
 
 `coolhand claude` routes Claude CLI traffic through an in-process HTTPS MITM proxy powered by [mockttp](https://github.com/httptoolkit/mockttp). The proxy intercepts outbound LLM API calls and forwards them to Coolhand for capture and analysis. `coolhand monitor [--] <command> [args...]` (see [docs/commands.md](./commands.md#monitor)) routes any other CLI's traffic through the same proxy.
 
+The proxy binds to `127.0.0.1` only — it is never reachable from the LAN, for as long as the wrapped command runs.
+
 ## CA Certificate
 
 On first run, `coolhand claude` (or `coolhand monitor`) generates a self-signed CA certificate and stores it at:
