@@ -54,23 +54,23 @@ async function flush(rounds = 5) {
   }
 }
 
-function makeReq(id: string, url = 'https://api.anthropic.com/v1/messages') {
+function makeReq(id: string, url = 'https://api.anthropic.com/v1/messages', body = '{"model":"claude-opus-4-8"}') {
   return {
     id,
     method: 'POST',
     url,
     headers: { 'content-type': 'application/json' },
-    body: { getText: jest.fn().mockResolvedValue('{"model":"claude-opus-4-8"}') },
+    body: { getText: jest.fn().mockResolvedValue(body) },
     timingEvents: { startTimestamp: 1000 },
   };
 }
 
-function makeRes(id: string, statusCode = 200) {
+function makeRes(id: string, statusCode = 200, body = '{"id":"msg_123"}') {
   return {
     id,
     statusCode,
     headers: { 'content-type': 'application/json' },
-    body: { getText: jest.fn().mockResolvedValue('{"id":"msg_123"}') },
+    body: { getText: jest.fn().mockResolvedValue(body) },
     timingEvents: { responseSentTimestamp: 2000 },
   };
 }
@@ -208,6 +208,26 @@ describe('startProxy', () => {
     expect(sanitizeURL).toHaveBeenCalledWith('https://generativelanguage.googleapis.com/v1/models?key=super-secret');
     const [interaction] = (sendToCoolhand as jest.Mock).mock.calls[0];
     expect(interaction.request.url).toBe('https://generativelanguage.googleapis.com/v1/models?key=[REDACTED]');
+  });
+
+  test('redacts secrets found in the request and response bodies before sending', async () => {
+    (shouldCapture as jest.Mock).mockReturnValue(true);
+    await startProxy(CA, { apiKey: 'key', silent: true });
+
+    const stripeKey = `sk_live_${'a'.repeat(24)}`;
+    const reqBody = `{"tool_result":"AWS key: AKIAIOSFODNN7EXAMPLE, keep going"}`;
+    const resBody = `{"content":"Stripe key: ${stripeKey}, noted"}`;
+
+    registeredHandlers.request(makeReq('r8', 'https://api.anthropic.com/v1/messages', reqBody));
+    registeredHandlers.response(makeRes('r8', 200, resBody));
+
+    await flush();
+
+    const [interaction] = (sendToCoolhand as jest.Mock).mock.calls[0];
+    expect(interaction.request.body).not.toContain('AKIAIOSFODNN7EXAMPLE');
+    expect(interaction.response.body).not.toContain(stripeKey);
+    expect(interaction.request.body).toContain('keep going');
+    expect(interaction.response.body).toContain('noted');
   });
 
   test('response for unknown request id is silently ignored', async () => {

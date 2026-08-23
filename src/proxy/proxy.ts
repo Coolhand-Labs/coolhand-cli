@@ -4,6 +4,7 @@ import type { CompletedRequest, CompletedResponse, AbortedRequest, Mockttp } fro
 import { shouldCapture, sanitizeHeaders, sanitizeURL, flattenHeaders } from "./interceptor.js";
 import { sendToCoolhand, type CapturedInteraction } from "./sender.js";
 import type { CACredentials } from "./certs.js";
+import { redactSecrets } from "../sessions/redact-secrets.js";
 
 const LOOPBACK = "127.0.0.1";
 
@@ -98,6 +99,10 @@ interface PendingRequest {
   timestamp: string;
 }
 
+function redactBodyText(text: string | undefined): string | undefined {
+  return text === undefined ? undefined : redactSecrets(text);
+}
+
 /**
  * Start an HTTPS MITM proxy that intercepts LLM API calls
  * and forwards them to the Coolhand platform.
@@ -155,12 +160,12 @@ export async function startProxy(
           method: req.method,
           url: sanitizedUrl,
           headers: sanitizeHeaders(req.headers),
-          body: requestBodyText,
+          body: redactBodyText(requestBodyText),
         },
         response: {
           statusCode: res.statusCode,
           headers: sanitizeHeaders(flattenHeaders(res.headers as Record<string, string | string[] | undefined>)),
-          body: responseBodyText,
+          body: redactBodyText(responseBodyText),
         },
         timestamp: req.timestamp,
       };

@@ -25,6 +25,9 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
   /sk_test_[0-9A-Za-z]{16,}/g, // Stripe test secret key
   /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, // JWT (three base64url segments)
   /\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*/gi, // Authorization: Bearer <token>
+  /\bBasic\s+[A-Za-z0-9+/=]{8,}/gi, // Authorization: Basic <base64 user:pass>
+  /https:\/\/hooks\.slack\.com\/services\/\S+/g, // Slack incoming webhook URL
+  /https:\/\/discord(?:app)?\.com\/api\/webhooks\/\S+/g, // Discord webhook URL
   /\b[A-Fa-f0-9]{40,}\b/g, // long hex blobs (generic tokens / hashes)
   // PEM-formatted private key blocks (SSH/RSA/EC/OpenSSH/PGP/encrypted) — no assignment keyword
   // sits next to the base64 body, so ASSIGNMENT_QUOTED/BARE never catch these; a `cat ~/.ssh/id_rsa`

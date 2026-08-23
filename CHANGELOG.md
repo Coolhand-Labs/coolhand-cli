@@ -10,6 +10,11 @@ All notable changes to `coolhand-cli` will be documented in this file.
   with no authentication, making the unauthenticated forward proxy reachable from any other host
   on the same network for as long as the wrapped command ran (#119).
 
+## [0.10.1] - 2026-08-23
+
+### Security
+- The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now applies the same `redactSecrets` scrubber that `analyze-claude-sessions` uses to captured request/response bodies before upload. Previously only headers and the URL were sanitized; a captured body echoing a live secret — e.g. a `cat .env`/`printenv` tool result fed back into the next request to `api.anthropic.com` — was uploaded to Coolhand verbatim (#121, medium severity).
+
 ## [0.10.0] - 2026-08-22
 
 ### Added
@@ -53,6 +58,7 @@ All notable changes to `coolhand-cli` will be documented in this file.
 - The MITM proxy now redacts sensitive query-string parameters (`key`, `api_key`, `apikey`, `token`, `access_token`, `secret`, case-insensitive) from captured request URLs before upload. Some LLM APIs — notably Google Gemini's REST API — authenticate via `?key=...` in the query string rather than a header, and those live third-party API keys were previously captured and uploaded to Coolhand in plaintext (#91, high severity).
 - The proxy's header-redaction list now includes `cf-aig-authorization` (Cloudflare AI Gateway) alongside `authorization`, `x-goog-api-key`, `openai-api-key`, etc. Traffic proxied through `gateway.ai.cloudflare.com` was being captured with its gateway token uploaded to Coolhand in full and retrievable via `fetch-log` (#92).
 - `map-claude-projects` no longer walks a matched `claude`/`.claude` symlink whose target resolves outside the search root. A `claude`-named symlink was recorded as a match with no constraint on where it pointed, so a planted symlink under the (by default, whole-home-directory) search root — from a malicious repo clone or an extracted archive — could point at an arbitrary unrelated directory and have its entire contents (every filename, size, and timestamp) enumerated into the uploaded report. The legitimate dotfile-manager case (chezmoi/Stow/yadm symlinking `~/.claude` to a target still under the search root) is unaffected; only out-of-root targets are now reported as an unresolved symlink instead of walked.
+- Windows: `coolhand login`'s `openBrowser()` now spawns `cmd /c start` through the same escaped `cmd.exe /d /s /c` invocation (`resolveWrapSpawn`, extracted to `src/win-spawn.ts`) that `coolhand claude`/`coolhand monitor` already used, with `windowsVerbatimArguments: true`. Previously the auth URL was passed to `cmd.exe` with only Node's default argv quoting, which does not quote an argument containing `&` — every legitimate auth URL (`...&state=...`) already broke on this, and a malicious/compromised `--base-url` (e.g. `https://ok.example.com&calc.exe&`) could inject and run an arbitrary second command (#120).
 
 ### Fixed
 - `redactSecrets` (the scrubber `analyze-claude-sessions` applies to transcript content before
