@@ -21,6 +21,8 @@ import { run as runGetWorkload } from './commands/get-workload.js';
 import { run as runUpdateWorkload } from './commands/update-workload.js';
 import { run as runFetchLog } from './commands/fetch-log.js';
 import { run as runSearchLogs } from './commands/search-logs.js';
+import { run as runSearchTemplates } from './commands/search-templates.js';
+import { run as runGetTemplate } from './commands/get-template.js';
 import { run as runFlushPending, spawnBackgroundFlush } from './commands/flush-pending.js';
 import { run as runSearchFeedback } from './commands/search-feedback.js';
 import { run as runGetFeedback } from './commands/get-feedback.js';
@@ -47,6 +49,8 @@ import type {
   GetFeedbackOptions,
   FetchLogOptions,
   SearchLogsOptions,
+  SearchTemplatesOptions,
+  GetTemplateOptions,
 } from './types.js';
 
 interface ParsedArgs {
@@ -63,7 +67,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-deprecated']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
 const REPEATABLE_FLAGS = new Set(['project', 'exclude-project']);
@@ -341,6 +345,31 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--sort VALUE', description: "Sort expression, e.g. 'created_at desc' (default: newest first)" },
       { flag: '--page N', description: 'Page number (default: 1)' },
       { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'search-templates',
+    oneLiner: 'List and search LLM request templates (requires a private key)',
+    usage: 'coolhand search-templates [options]',
+    options: [
+      { flag: '--search TEXT', description: 'Case-insensitive substring to match in the template name' },
+      { flag: '--workload-id ID', description: 'Filter to a single workload, by workload hashid' },
+      { flag: '--status VALUE', description: 'Filter by status: draft, published, or failure' },
+      { flag: '--include-deprecated', description: 'Include deprecated templates (hidden by default)' },
+      { flag: '--include-system', description: "Include the 'Unmatched' and 'Ignored API Calls' system buckets (hidden by default) — inspect 'Unmatched' when logs are misrouting" },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'get-template',
+    oneLiner: 'Get a single LLM request template by ID, including its prompt patterns',
+    usage: 'coolhand get-template <template-id> [options]',
+    options: [
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -896,6 +925,69 @@ function fetchLogOptions(parsed: ParsedArgs): FetchLogOptions {
   return opts;
 }
 
+const TEMPLATE_STATUSES = new Set(['draft', 'published', 'failure']);
+
+function searchTemplatesOptions(parsed: ParsedArgs): SearchTemplatesOptions {
+  const opts: SearchTemplatesOptions = {};
+  if (typeof parsed.flags['search'] === 'string') {
+    opts.search = parsed.flags['search'];
+  }
+  if (typeof parsed.flags['workload-id'] === 'string') {
+    opts.workloadId = parsed.flags['workload-id'];
+  }
+  if (typeof parsed.flags['status'] === 'string') {
+    const status = parsed.flags['status'];
+    if (!TEMPLATE_STATUSES.has(status)) {
+      throw new CliError('INVALID_ARGS', '--status must be one of: draft, published, failure');
+    }
+    opts.status = status as SearchTemplatesOptions['status'];
+  }
+  if (parsed.flags['include-deprecated'] === true) {
+    opts.includeDeprecated = true;
+  }
+  if (parsed.flags['include-system'] === true) {
+    opts.includeSystem = true;
+  }
+  if (typeof parsed.flags['page'] === 'string') {
+    const raw = parsed.flags['page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--page must be a positive integer');
+    }
+    opts.page = n;
+  }
+  if (typeof parsed.flags['per-page'] === 'string') {
+    const raw = parsed.flags['per-page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 100) {
+      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
+    }
+    opts.perPage = n;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+function getTemplateOptions(parsed: ParsedArgs): GetTemplateOptions {
+  const id = parsed.positional[0];
+  if (!id) {
+    throw new CliError('INVALID_ARGS', 'get-template requires a <template-id> argument');
+  }
+  const opts: GetTemplateOptions = { id };
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 function searchLogsOptions(parsed: ParsedArgs): SearchLogsOptions {
   const opts: SearchLogsOptions = {};
   if (typeof parsed.flags['template-id'] === 'string') {
@@ -1271,6 +1363,10 @@ export async function run(argv: string[]): Promise<number> {
         return await runFetchLog(fetchLogOptions(parsed));
       case 'search-logs':
         return await runSearchLogs(searchLogsOptions(parsed));
+      case 'search-templates':
+        return await runSearchTemplates(searchTemplatesOptions(parsed));
+      case 'get-template':
+        return await runGetTemplate(getTemplateOptions(parsed));
       default:
         logger.info(`Unknown command: ${parsed.command}`);
         logger.info(buildSummaryHelp());

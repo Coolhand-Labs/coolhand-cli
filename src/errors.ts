@@ -23,6 +23,7 @@ export type ErrorCode =
   | 'INGEST_ERROR'
   | 'FEEDBACK_ERROR'
   | 'LOG_ERROR'
+  | 'TEMPLATE_ERROR'
   | 'CERT_FILE_INSECURE'
   | 'UPLOAD_ERROR';
 
