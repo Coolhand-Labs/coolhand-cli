@@ -5,9 +5,14 @@ import * as net from 'net';
 import { randomBytes } from 'crypto';
 
 const mockUploadClientFile = jest.fn();
+const mockConfirm = jest.fn();
 
 jest.mock('../../src/upload-client-file.js', () => ({
   uploadClientFile: mockUploadClientFile,
+}));
+
+jest.mock('../../src/prompt.js', () => ({
+  confirm: mockConfirm,
 }));
 
 import { run, findClaudeDirs } from '../../src/commands/map-claude-projects.js';
@@ -134,6 +139,7 @@ describe('map-claude-projects command', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockConfirm.mockResolvedValue(false);
     mockUploadClientFile.mockResolvedValue({
       status: 'uploaded',
       sizeBytes: 100,
@@ -221,6 +227,43 @@ describe('map-claude-projects command', () => {
 
     const stat = await fs.stat(outputPath);
     expect(stat.mode & 0o777).toBe(0o600);
+  });
+
+  test('--output pointing at an existing file with no TTY confirmation aborts without writing or uploading', async () => {
+    await fs.mkdir(path.join(home, 'claude'), { recursive: true });
+    const outputPath = path.join(home, 'report.md');
+    await fs.writeFile(outputPath, 'pre-existing content');
+
+    const code = await run({ output: outputPath }, { homedir: () => home });
+    expect(code).not.toBe(0);
+    expect(mockConfirm).toHaveBeenCalledTimes(1);
+    expect(mockUploadClientFile).not.toHaveBeenCalled();
+    await expect(fs.readFile(outputPath, 'utf8')).resolves.toBe('pre-existing content');
+  });
+
+  test('--output pointing at an existing file overwrites it once the user confirms', async () => {
+    await fs.mkdir(path.join(home, 'claude'), { recursive: true });
+    const outputPath = path.join(home, 'report.md');
+    await fs.writeFile(outputPath, 'pre-existing content');
+    mockConfirm.mockResolvedValue(true);
+
+    const code = await run({ output: outputPath }, { homedir: () => home });
+    expect(code).toBe(0);
+    expect(mockConfirm).toHaveBeenCalledTimes(1);
+    const content = await fs.readFile(outputPath, 'utf8');
+    expect(content).toContain('# Claude Folders Map');
+  });
+
+  test('--force skips the confirmation prompt and overwrites an existing --output file directly', async () => {
+    await fs.mkdir(path.join(home, 'claude'), { recursive: true });
+    const outputPath = path.join(home, 'report.md');
+    await fs.writeFile(outputPath, 'pre-existing content');
+
+    const code = await run({ output: outputPath, force: true }, { homedir: () => home });
+    expect(code).toBe(0);
+    expect(mockConfirm).not.toHaveBeenCalled();
+    const content = await fs.readFile(outputPath, 'utf8');
+    expect(content).toContain('# Claude Folders Map');
   });
 
   test('--output combined with --dry-run writes the report without uploading', async () => {

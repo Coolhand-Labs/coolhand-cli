@@ -534,6 +534,7 @@ describe('run', () => {
       'map-claude-projects',
       '--root', '/tmp/x',
       '--output', '/tmp/report.md',
+      '--force',
       '--dry-run',
       '--json',
       '--client-id', 'acme',
@@ -542,6 +543,7 @@ describe('run', () => {
     expect(runMapClaudeProjectsCommand).toHaveBeenCalledWith({
       root: '/tmp/x',
       output: '/tmp/report.md',
+      force: true,
       dryRun: true,
       json: true,
       clientId: 'acme',
