@@ -9,6 +9,10 @@ All notable changes to `coolhand-cli` will be documented in this file.
   instead of all network interfaces. Previously, mockttp's `start()` bound the wildcard address
   with no authentication, making the unauthenticated forward proxy reachable from any other host
   on the same network for as long as the wrapped command ran (#119).
+- `coolhand map-claude-projects --output PATH` now asks for confirmation before overwriting a
+  file that already exists at `PATH`, showing its size and modified time. Previously the report
+  was written straight to `PATH` with no check, silently destroying anything already there. Add
+  `--force` to skip the prompt and overwrite unconditionally (e.g. for scripted/CI use).
 
 ## [0.10.1] - 2026-08-23
 

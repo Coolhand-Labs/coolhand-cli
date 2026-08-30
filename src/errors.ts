@@ -24,7 +24,8 @@ export type ErrorCode =
   | 'FEEDBACK_ERROR'
   | 'LOG_ERROR'
   | 'CERT_FILE_INSECURE'
-  | 'UPLOAD_ERROR';
+  | 'UPLOAD_ERROR'
+  | 'OUTPUT_EXISTS';
 
 export class CliError extends Error {
   public readonly code: ErrorCode;
