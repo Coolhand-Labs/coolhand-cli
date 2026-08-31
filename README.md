@@ -155,9 +155,12 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
       "base_url": "https://coolhandlabs.com",
       "saved_at": "2026-05-12T18:04:11.000Z"
     }
-  }
+  },
+  "feature_flags": []
 }
 ```
+
+`feature_flags` lists the enabled feature groups, which unhide commands that ship gated. `COOLHAND_FEATURE_FLAGS` (comma-separated) overrides it for a single run. See [Configuration File](./docs/config-file.md#feature-flags).
 
 ## Documentation
 

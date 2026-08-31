@@ -24,7 +24,7 @@ export function configPath(): string {
 }
 
 function emptyConfig(): ConfigFile {
-  return { version: 1, default_client_id: null, clients: {} };
+  return { version: 1, default_client_id: null, clients: {}, feature_flags: [] };
 }
 
 export async function loadConfig(): Promise<ConfigFile> {
@@ -41,10 +41,18 @@ export async function loadConfig(): Promise<ConfigFile> {
   }
   try {
     const parsed = JSON.parse(raw) as Partial<ConfigFile>;
+    // feature_flags is external input: keep only non-empty strings, trimmed to match env-var parsing.
+    const feature_flags = Array.isArray(parsed.feature_flags)
+      ? parsed.feature_flags
+          .filter((group): group is string => typeof group === 'string')
+          .map((group) => group.trim())
+          .filter((group) => group.length > 0)
+      : [];
     return {
       version: 1,
       default_client_id: parsed.default_client_id ?? null,
       clients: parsed.clients ?? {},
+      feature_flags,
     };
   } catch (err) {
     throw new CliError(

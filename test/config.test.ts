@@ -55,7 +55,44 @@ describe('config', () => {
 
   test('loadConfig returns empty default when file is missing', async () => {
     const cfg = await loadConfig();
-    expect(cfg).toEqual({ version: 1, default_client_id: null, clients: {} });
+    expect(cfg).toEqual({ version: 1, default_client_id: null, clients: {}, feature_flags: [] });
+  });
+
+  test('loadConfig reads a persisted feature_flags list', async () => {
+    await saveConfig({ version: 1, default_client_id: null, clients: {}, feature_flags: ['workloads'] });
+    const cfg = await loadConfig();
+    expect(cfg.feature_flags).toEqual(['workloads']);
+  });
+
+  test('loadConfig defaults feature_flags to an empty array when the field is absent', async () => {
+    await saveConfig({ version: 1, default_client_id: null, clients: {} });
+    const cfg = await loadConfig();
+    expect(cfg.feature_flags).toEqual([]);
+  });
+
+  test('loadConfig ignores a non-array feature_flags value', async () => {
+    await fs.writeFile(
+      configPath(),
+      JSON.stringify({ version: 1, default_client_id: null, clients: {}, feature_flags: 'workloads' }),
+      'utf8'
+    );
+    const cfg = await loadConfig();
+    expect(cfg.feature_flags).toEqual([]);
+  });
+
+  test('loadConfig trims whitespace and drops empty/non-string feature_flags entries', async () => {
+    await fs.writeFile(
+      configPath(),
+      JSON.stringify({
+        version: 1,
+        default_client_id: null,
+        clients: {},
+        feature_flags: [' workloads ', '', 42, 'optimizations'],
+      }),
+      'utf8'
+    );
+    const cfg = await loadConfig();
+    expect(cfg.feature_flags).toEqual(['workloads', 'optimizations']);
   });
 
   test('saveConfig writes parseable JSON', async () => {

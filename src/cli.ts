@@ -26,6 +26,8 @@ import { run as runSearchFeedback } from './commands/search-feedback.js';
 import { run as runGetFeedback } from './commands/get-feedback.js';
 import { countPending, flushFailed } from './pending-store.js';
 import { confirm } from './prompt.js';
+import { loadConfig } from './config.js';
+import { enabledGroups, blockingGroup, visibleCommands } from './feature-flags.js';
 import type {
   ClientsOptions,
   LoginOptions,
@@ -58,6 +60,8 @@ interface ParsedArgs {
 interface CommandMeta {
   name: string;
   aliases?: readonly string[];
+  // When set, the command is gated behind this feature group (issue #57). Omit for always-on commands.
+  featureGroup?: string;
   oneLiner: string;
   usage: string;
   options: Array<{ flag: string; description: string }>;
@@ -358,8 +362,18 @@ function findCommand(name: string): CommandMeta | undefined {
   return COMMANDS.find((c) => c.name === name || c.aliases?.includes(name));
 }
 
-function buildSummaryHelp(): string {
-  const rows = COMMANDS.flatMap((c) => [c, ...(c.aliases ?? []).map((a) => ({ ...c, name: a }))]);
+// Falls back to env-var-only when the config is unreadable so help never crashes on a bad file.
+async function currentEnabledGroups(): Promise<Set<string>> {
+  try {
+    return enabledGroups(await loadConfig());
+  } catch {
+    return enabledGroups({});
+  }
+}
+
+function buildSummaryHelp(enabled: Set<string>): string {
+  const visible = visibleCommands(COMMANDS, enabled);
+  const rows = visible.flatMap((c) => [c, ...(c.aliases ?? []).map((a) => ({ ...c, name: a }))]);
   const nameWidth = Math.max(...rows.map((r) => r.name.length)) + 2;
   const commandLines = rows.map((r) => `  ${r.name.padEnd(nameWidth)}${r.oneLiner}`).join('\n');
   return `coolhand-cli — authenticate with Coolhand from your terminal
@@ -1151,7 +1165,7 @@ async function maybeRemindFailedFlush(command: string, json: boolean): Promise<v
 
 export async function run(argv: string[]): Promise<number> {
   if (argv.length === 0) {
-    logger.info(buildSummaryHelp());
+    logger.info(buildSummaryHelp(await currentEnabledGroups()));
     return ExitCode.OK;
   }
 
@@ -1162,6 +1176,18 @@ export async function run(argv: string[]): Promise<number> {
     // Peel a leading --client-id before command dispatch. The `claude` passthrough
     // skips parseArgs entirely, so we extract any global --client-id here first.
     const { clientId: globalClientId, rest: argv2 } = peelClientId(argv);
+
+    // The passthroughs below return before the main gating check, so a gated passthrough
+    // would stay runnable while hidden from help unless it is also checked here.
+    if (argv2[0] === 'claude' || argv2[0] === 'monitor') {
+      const passthroughMeta = findCommand(argv2[0]);
+      const passthroughEnabled = await currentEnabledGroups();
+      if (passthroughMeta && blockingGroup(passthroughMeta, passthroughEnabled) !== null) {
+        logger.info(`Unknown command: ${argv2[0]}`);
+        logger.info(buildSummaryHelp(passthroughEnabled));
+        return ExitCode.USER_ERROR;
+      }
+    }
 
     // `claude` is a passthrough wrapper: everything after it goes to the Claude CLI
     // verbatim (e.g. `coolhand claude --resume`), so it must skip the flag parser.
@@ -1203,33 +1229,43 @@ export async function run(argv: string[]): Promise<number> {
       return ExitCode.OK;
     }
 
+    const enabled = await currentEnabledGroups();
+
     if (parsed.command === 'help' || parsed.command === '') {
       const target = parsed.positional[0];
       if (target) {
         const meta = findCommand(target);
-        if (!meta) {
+        // A gated command is treated as unknown so its existence never leaks through help.
+        if (!meta || blockingGroup(meta, enabled) !== null) {
           logger.info(`Unknown command: ${target}`);
-          logger.info(buildSummaryHelp());
+          logger.info(buildSummaryHelp(enabled));
           return ExitCode.USER_ERROR;
         }
         logger.info(buildCommandHelp(meta));
       } else {
-        logger.info(buildSummaryHelp());
+        logger.info(buildSummaryHelp(enabled));
       }
       return ExitCode.OK;
     }
 
     if (parsed.flags.help === true || parsed.flags.h === true) {
       const meta = findCommand(parsed.command);
-      if (meta) {
+      if (meta && blockingGroup(meta, enabled) === null) {
         logger.info(buildCommandHelp(meta));
       } else {
-        logger.info(buildSummaryHelp());
+        logger.info(buildSummaryHelp(enabled));
       }
       return ExitCode.OK;
     }
 
-    const resolvedCommand = findCommand(parsed.command)?.name ?? parsed.command;
+    const resolvedMeta = findCommand(parsed.command);
+    const resolvedCommand = resolvedMeta?.name ?? parsed.command;
+    // A gated command is indistinguishable from an unknown one: reveal nothing about its existence.
+    if (resolvedMeta && blockingGroup(resolvedMeta, enabled) !== null) {
+      logger.info(`Unknown command: ${parsed.command}`);
+      logger.info(buildSummaryHelp(enabled));
+      return ExitCode.USER_ERROR;
+    }
     await maybeRemindFailedFlush(resolvedCommand, parsed.flags.json === true);
 
     switch (resolvedCommand) {
@@ -1277,7 +1313,7 @@ export async function run(argv: string[]): Promise<number> {
         return await runSearchLogs(searchLogsOptions(parsed));
       default:
         logger.info(`Unknown command: ${parsed.command}`);
-        logger.info(buildSummaryHelp());
+        logger.info(buildSummaryHelp(enabled));
         return ExitCode.USER_ERROR;
     }
   } catch (err) {

@@ -34,6 +34,18 @@ jest.mock('../src/commands/flush-pending.js', () => ({
   spawnBackgroundFlush: jest.fn(),
 }));
 jest.mock('../src/prompt.js', () => ({ confirm: jest.fn().mockResolvedValue(false) }));
+// Default to the real feature-flag logic; individual tests override to mark a command as gated,
+// so the real cli.ts dispatch/help wiring can be exercised without tagging a shipping command.
+jest.mock('../src/feature-flags.js', () => {
+  const actual = jest.requireActual('../src/feature-flags.js');
+  return {
+    __esModule: true,
+    ...actual,
+    enabledGroups: jest.fn(actual.enabledGroups),
+    blockingGroup: jest.fn(actual.blockingGroup),
+    visibleCommands: jest.fn(actual.visibleCommands),
+  };
+});
 
 import { parseArgs, peelClientId, run } from '../src/cli.js';
 import { CliError } from '../src/errors.js';
@@ -50,6 +62,9 @@ import { run as runGetFeedbackCommand } from '../src/commands/get-feedback.js';
 import { run as runUploadClientFileCommand } from '../src/commands/upload-client-file.js';
 import { run as runMapClaudeProjectsCommand } from '../src/commands/map-claude-projects.js';
 import { run as runAnalyzeClaudeSessions } from '../src/commands/analyze-claude-sessions.js';
+import { blockingGroup, visibleCommands, enabledGroups } from '../src/feature-flags.js';
+
+const actualFeatureFlags = jest.requireActual('../src/feature-flags.js') as typeof import('../src/feature-flags.js');
 
 function makePending() {
   return savePendingRecord({
@@ -632,5 +647,141 @@ describe('peelClientId', () => {
       clientId: 'acme',
       rest: ['--'],
     });
+  });
+});
+
+describe('run — feature flags', () => {
+  let home: TmpHome;
+  let infoSpy: jest.SpyInstance;
+
+  beforeEach(async () => {
+    home = await createTmpHome();
+    delete process.env.COOLHAND_FEATURE_FLAGS;
+    (runSearchOptimizationsCommand as jest.Mock).mockResolvedValue(0);
+    infoSpy = jest.spyOn(logger, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(async () => {
+    delete process.env.COOLHAND_FEATURE_FLAGS;
+    infoSpy.mockRestore();
+    (runSearchOptimizationsCommand as jest.Mock).mockReset();
+    await home.cleanup();
+  });
+
+  function helpText(): string {
+    return infoSpy.mock.calls.map((c) => String(c[0])).join('\n');
+  }
+
+  test('no command is gated by default: help lists workload and optimization commands', async () => {
+    await run(['help']);
+    const text = helpText();
+    expect(text).toContain('list-workloads');
+    expect(text).toContain('search-optimizations');
+  });
+
+  test('setting the flag does not hide untagged commands', async () => {
+    process.env.COOLHAND_FEATURE_FLAGS = 'workloads,optimizations';
+    await run(['help']);
+    expect(helpText()).toContain('list-workloads');
+  });
+
+  test('an ungated command dispatches normally regardless of the flag', async () => {
+    process.env.COOLHAND_FEATURE_FLAGS = 'nonexistent-group';
+    const code = await run(['search-optimizations']);
+    expect(code).toBe(0);
+  });
+});
+
+describe('run — feature flag gating (wiring)', () => {
+  let home: TmpHome;
+  const GATED = 'search-optimizations';
+
+  beforeEach(async () => {
+    home = await createTmpHome();
+    delete process.env.COOLHAND_FEATURE_FLAGS;
+    (runSearchOptimizationsCommand as jest.Mock).mockClear().mockResolvedValue(0);
+    // Mark GATED as blocked; every other command behaves normally.
+    (blockingGroup as jest.Mock).mockImplementation((cmd) =>
+      cmd?.name === GATED ? 'optimizations' : null
+    );
+    (visibleCommands as jest.Mock).mockImplementation((cmds, en) => {
+      const visible = actualFeatureFlags.visibleCommands(cmds, en) as Array<{ name: string }>;
+      return visible.filter((c) => c.name !== GATED);
+    });
+  });
+
+  afterEach(async () => {
+    (blockingGroup as jest.Mock).mockImplementation(actualFeatureFlags.blockingGroup);
+    (visibleCommands as jest.Mock).mockImplementation(actualFeatureFlags.visibleCommands);
+    (enabledGroups as jest.Mock).mockImplementation(actualFeatureFlags.enabledGroups);
+    delete process.env.COOLHAND_FEATURE_FLAGS;
+    await home.cleanup();
+  });
+
+  function output(spy: jest.SpyInstance): string {
+    return spy.mock.calls.map((c) => String(c[0])).join('\n');
+  }
+
+  test('blocks a gated command at dispatch, reporting it as unknown, before its handler runs', async () => {
+    const spy = jest.spyOn(logger, 'info').mockImplementation(() => {});
+    const code = await run([GATED]);
+    expect(code).toBe(1);
+    const text = output(spy);
+    expect(text).toContain(`Unknown command: ${GATED}`);
+    expect(text).not.toContain('FEATURE_GATED');
+    expect(text).not.toContain('COOLHAND_FEATURE_FLAGS');
+    expect(runSearchOptimizationsCommand).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  test('hides a gated command from the help summary', async () => {
+    const spy = jest.spyOn(logger, 'info').mockImplementation(() => {});
+    await run(['help']);
+    const text = output(spy);
+    expect(text).not.toContain(GATED);
+    expect(text).toContain('login');
+    spy.mockRestore();
+  });
+
+  test('help <gated> reports unknown and never prints the command help', async () => {
+    const spy = jest.spyOn(logger, 'info').mockImplementation(() => {});
+    const code = await run(['help', GATED]);
+    expect(code).toBe(1);
+    const text = output(spy);
+    expect(text).toContain(`Unknown command: ${GATED}`);
+    expect(text).not.toContain(`coolhand ${GATED} —`);
+    spy.mockRestore();
+  });
+
+  test('<gated> --help falls back to summary help, not the command help', async () => {
+    const spy = jest.spyOn(logger, 'info').mockImplementation(() => {});
+    const code = await run([GATED, '--help']);
+    expect(code).toBe(0);
+    const text = output(spy);
+    expect(text).toContain('Global options:');
+    expect(text).not.toContain(`coolhand ${GATED} —`);
+    spy.mockRestore();
+  });
+
+  test('blocks the gated claude passthrough before it spawns anything', async () => {
+    (blockingGroup as jest.Mock).mockImplementation((cmd) => (cmd?.name === 'claude' ? 'passthroughs' : null));
+    (runClaudeCommand as jest.Mock).mockClear().mockResolvedValue(0);
+    const spy = jest.spyOn(logger, 'info').mockImplementation(() => {});
+    const code = await run(['claude', '--resume']);
+    expect(code).toBe(1);
+    expect(output(spy)).toContain('Unknown command: claude');
+    expect(runClaudeCommand).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  test('blocks the gated monitor passthrough before it spawns anything', async () => {
+    (blockingGroup as jest.Mock).mockImplementation((cmd) => (cmd?.name === 'monitor' ? 'passthroughs' : null));
+    (runMonitorCommand as jest.Mock).mockClear().mockResolvedValue(0);
+    const spy = jest.spyOn(logger, 'info').mockImplementation(() => {});
+    const code = await run(['monitor', '--', 'kimi']);
+    expect(code).toBe(1);
+    expect(output(spy)).toContain('Unknown command: monitor');
+    expect(runMonitorCommand).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

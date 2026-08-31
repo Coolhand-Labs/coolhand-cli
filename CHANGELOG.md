@@ -4,6 +4,9 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Feature-flag infrastructure for commands that are written but not yet released. A command tagged with a feature group is hidden from `coolhand help` and reports `Unknown command` when invoked, making it indistinguishable from a command that does not exist. Enable a group with the `COOLHAND_FEATURE_FLAGS` environment variable (comma-separated) or a `feature_flags` array in `~/.coolhand/config.json`; the environment variable wins, and an empty value disables every group for that run rather than falling back to the file. No command ships gated today — the infrastructure is dormant until an unreleased command uses it. See [docs/config-file.md](./docs/config-file.md#feature-flags). (#57)
+
 ### Security
 - The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now binds to `127.0.0.1` only,
   instead of all network interfaces. Previously, mockttp's `start()` bound the wildcard address
