@@ -67,7 +67,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-deprecated']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-deprecated', 'force']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
 const REPEATABLE_FLAGS = new Set(['project', 'exclude-project']);
@@ -241,6 +241,7 @@ const COMMANDS: CommandMeta[] = [
     options: [
       { flag: '--root PATH', description: 'Search PATH instead of the home directory' },
       { flag: '--output PATH', description: 'Also write the generated markdown report to PATH, for local inspection' },
+      { flag: '--force', description: 'Skip the confirmation prompt when --output already exists' },
       { flag: '--dry-run', description: 'Build the map and report its size without uploading' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
@@ -783,6 +784,9 @@ function mapClaudeProjectsOptions(parsed: ParsedArgs): MapClaudeProjectsOptions 
   }
   if (typeof parsed.flags.output === 'string') {
     opts.output = parsed.flags.output;
+  }
+  if (parsed.flags.force === true) {
+    opts.force = true;
   }
   if (parsed.flags['dry-run'] === true) {
     opts.dryRun = true;

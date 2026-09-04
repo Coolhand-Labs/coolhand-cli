@@ -4,6 +4,7 @@ import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
+import { confirm } from '../prompt.js';
 import { uploadClientFile } from '../upload-client-file.js';
 import type { MapClaudeProjectsOptions } from '../types.js';
 
@@ -205,8 +206,34 @@ async function appendTree(lines: string[], dir: string, depth: number): Promise<
   }
 }
 
+/**
+ * If `--output` names a path that already has a file on it, `fs.writeFile` would silently
+ * overwrite it later in `run()`. Ask before that happens (skipped entirely with `--force`, or
+ * when nothing exists there yet). Runs before any scanning so a decline doesn't waste work.
+ */
+async function confirmOutputOverwrite(outputPath: string): Promise<void> {
+  const existing = await fs.stat(outputPath).catch(() => null);
+  if (!existing || !existing.isFile()) {
+    return;
+  }
+  const kb = (existing.size / 1024).toFixed(1);
+  const proceed = await confirm(
+    `A file already exists at ${outputPath} (${kb} KB, modified ${existing.mtime.toISOString()}). Overwrite it?`
+  );
+  if (!proceed) {
+    throw new CliError(
+      'OUTPUT_EXISTS',
+      `Refusing to overwrite existing file at ${outputPath}. Use --force to skip this check.`
+    );
+  }
+}
+
 export async function run(opts: MapClaudeProjectsOptions, deps: MapClaudeProjectsDeps = {}): Promise<number> {
   try {
+    if (opts.output && !opts.force) {
+      await confirmOutputOverwrite(opts.output);
+    }
+
     const root = opts.root ?? (deps.homedir ?? os.homedir)();
     const matches = await findClaudeDirs(root);
 

@@ -213,6 +213,8 @@ export interface MapClaudeProjectsOptions {
   root?: string;
   /** Also write the generated markdown report to this local path, for inspection. */
   output?: string;
+  /** Skip the confirmation prompt when --output already exists. */
+  force?: boolean;
 }
 
 export interface SearchFeedbackOptions {

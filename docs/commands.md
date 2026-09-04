@@ -502,7 +502,7 @@ See [session-capture.md](./session-capture.md) for scan logic, duplicate-avoidan
 ### map-claude-projects
 
 ```bash
-coolhand map-claude-projects [--root PATH] [--output PATH] [--dry-run] [--client-id ID] [--json]
+coolhand map-claude-projects [--root PATH] [--output PATH] [--force] [--dry-run] [--client-id ID] [--json]
 ```
 
 Recursively searches the home directory (or `--root`) for every folder named `claude`/`Claude`,
@@ -523,6 +523,7 @@ treated as a second, separate match; its contents are already covered by the out
 |------|-------------|
 | `--root PATH` | Search PATH instead of the home directory |
 | `--output PATH` | Also write the generated markdown report to PATH, for local inspection (combine with `--dry-run` to inspect without uploading) |
+| `--force` | Skip the confirmation prompt when `--output` already points at an existing file |
 | `--dry-run` | Build the report and report its size without uploading |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
@@ -536,6 +537,12 @@ typical development machine, since it walks the entire home directory looking fo
 `--root` to scope it down if you already know where to look. The generated report is capped at
 coolhand-node's documented 20MB `uploadClientFile` limit — if the tree is larger than that, the
 command fails with a clear error rather than silently truncating the report.
+
+If `--output` names a path that already has a file on it, the command asks for confirmation
+before overwriting it (showing the existing file's size and modified time) and exits without
+writing or scanning anything if declined. In a non-interactive session (no TTY — CI, agents) the
+prompt cannot be answered and the command aborts by default; pass `--force` to skip the check and
+overwrite unconditionally.
 
 The report's `##` headings and the intro line are full absolute paths (as is the `root` field
 sent in the upload's `metadata`), which typically embed your OS username since the default
