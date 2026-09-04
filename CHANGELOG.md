@@ -4,6 +4,19 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `search-templates` command: lists and searches the resolved client's LLM request templates via
+  coolhand-node's new `Coolhand#searchTemplates`, with `--search`, `--workload-id`, `--status`,
+  `--include-deprecated`, `--include-system`, `--page`, `--per-page`, `--client-id` and `--json`.
+  The `Unmatched` and `Ignored API Calls` system buckets are hidden unless `--include-system` is
+  passed, and an empty default list says so rather than looking like a broken query. A `504` is
+  reported as the `log_count` aggregate timing out, with advice to narrow the query, instead of a
+  generic server error. Requires a private API key (`coolhand login --scope private`).
+  See [docs/commands.md](./docs/commands.md#search-templates).
+- `get-template` command: fetches a single template by hashid via `Coolhand#getTemplate`, printing
+  every list field plus the full, untruncated `user_prompt_pattern` and `system_prompt_pattern`.
+  See [docs/commands.md](./docs/commands.md#get-template).
+
 ### Security
 - The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now binds to `127.0.0.1` only,
   instead of all network interfaces. Previously, mockttp's `start()` bound the wildcard address

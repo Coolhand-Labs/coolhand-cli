@@ -83,6 +83,8 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand list-workloads` | List workloads with optional search and pagination |
 | `coolhand get-workload` | Fetch a single workload by ID |
 | `coolhand update-workload` | Update a workload's name and/or description |
+| `coolhand search-templates` | List and search LLM request templates |
+| `coolhand get-template` | Fetch a single template by ID, with its prompt patterns |
 | `coolhand search-optimizations` | List and filter optimization records |
 | `coolhand get-optimization` | Fetch a single optimization by ID |
 | `coolhand update-optimization` | Update an optimization's fields |

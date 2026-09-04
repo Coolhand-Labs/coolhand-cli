@@ -113,6 +113,27 @@ export interface SearchLogsOptions {
   clientId?: string;
 }
 
+export interface SearchTemplatesOptions {
+  /** Literal, case-insensitive substring match on the template name. `%` and `_` are escaped
+   *  server-side, so they match themselves and must not be escaped again here. */
+  search?: string;
+  workloadId?: string;
+  status?: 'draft' | 'published' | 'failure';
+  includeDeprecated?: boolean;
+  /** Include the `Unmatched` / `Ignored API Calls` buckets, hidden by default. */
+  includeSystem?: boolean;
+  page?: number;
+  perPage?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface GetTemplateOptions {
+  id: string;
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface SearchOptimizationsOptions {
   status?: string;
   type?: string;
