@@ -137,7 +137,15 @@ node <workspaceRoot>/coolhand/harness/harness.mjs wait --run <RUN_DIR> --channel
 If node cannot resolve it, node passes it up to server, and server to the human. You do
 not contact server directly — you only know your parent. Name the rule number (`R1`–`R5`).
 
-## 6. Open your PR — then STOP
+## 6. Run your review skill
+
+**Mandatory, before you push.** Follow `<workspaceRoot>/coolhand/harness/RESIST_RULES.md`
+→ "Before you push: run your repo's review skill" (R8) — load
+`.claude/skills/loop-review/SKILL.md` off disk and run it for real against your diff. Do
+not approximate its steps manually; if you cannot spawn the reviewer subagent it calls
+for, escalate to node (R8) and STOP rather than substitute a self-review.
+
+## 7. Open your PR — then STOP
 
 **If `dryRun` is true, stop after step 1.** Commit locally, report what you built, and push
 nothing.
@@ -153,15 +161,19 @@ nothing.
    The version bump is deliberately **not** done in this PR — node has not published yet,
    so any version you wrote here would be a guess.
 4. Record it: `node <workspaceRoot>/coolhand/harness/harness.mjs pr --run <RUN_DIR> --repo cli --url <url>`
-5. **Stop.** You launch no one. You are the last agent in the tree.
+5. Post your review skill's Iteration Breakdown table (section 6) as a comment on this PR
+   — see `RESIST_RULES.md` → "After the loop exits."
+6. **Stop.** You launch no one. You are the last agent in the tree.
 
-## 7. Done means
+## 8. Done means
 
 - [ ] Command exists, registered, follows this repo's command pattern
 - [ ] It calls the server through `coolhand-node`, not through its own HTTP code
 - [ ] Proven against the real chain: CLI → linked node build → `http://127.0.0.1:<port>`
 - [ ] `npm test`, `npm run typecheck`, `npm run lint` all pass
 - [ ] `package.json` / `package-lock.json` contain no `file:` link to a local path
+- [ ] Your review skill ran for real (not approximated) and its Iteration Breakdown table
+      is posted as a comment on your PR
 - [ ] PR opened, recorded, references its issue, states the full deploy order including
       the version bump
 - [ ] You launched no child agents
