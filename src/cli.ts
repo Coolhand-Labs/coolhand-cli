@@ -27,6 +27,8 @@ import { run as runGetTemplate } from './commands/get-template.js';
 import { run as runFlushPending, spawnBackgroundFlush } from './commands/flush-pending.js';
 import { run as runSearchFeedback } from './commands/search-feedback.js';
 import { run as runGetFeedback } from './commands/get-feedback.js';
+import { run as runSearchReferencedFiles } from './commands/search-referenced-files.js';
+import { run as runListReferencedFileSessions } from './commands/list-referenced-file-sessions.js';
 import { countPending, flushFailed } from './pending-store.js';
 import { confirm } from './prompt.js';
 import type {
@@ -53,6 +55,8 @@ import type {
   SearchLogsOptions,
   SearchTemplatesOptions,
   GetTemplateOptions,
+  SearchReferencedFilesOptions,
+  ListReferencedFileSessionsOptions,
 } from './types.js';
 
 interface ParsedArgs {
@@ -382,12 +386,35 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
-  },
-  {
+  },  {
     name: 'get-template',
     oneLiner: 'Get a single LLM request template by ID, including its prompt patterns (requires a private key)',
     usage: 'coolhand get-template <template-id> [options]',
     options: [
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },  {
+    name: 'search-referenced-files',
+    oneLiner: "List a client's referenced files, aggregated and ranked by reference count",
+    usage: 'coolhand search-referenced-files [options]',
+    options: [
+      { flag: '--file-path-contains TEXT', description: 'Case-insensitive substring to match in the file path' },
+      { flag: '--created-at-gteq DATE', description: 'Lower bound (inclusive) on created_at, ISO-8601' },
+      { flag: '--created-at-lteq DATE', description: 'Upper bound (inclusive) on created_at, ISO-8601' },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },  {
+    name: 'list-referenced-file-sessions',
+    oneLiner: 'List the raw, un-aggregated sessions that referenced one exact file path',
+    usage: 'coolhand list-referenced-file-sessions --file-path PATH [options]',
+    options: [
+      { flag: '--file-path PATH', description: 'Exact file_path to look up (required)' },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -1106,6 +1133,73 @@ function searchLogsOptions(parsed: ParsedArgs): SearchLogsOptions {
   return opts;
 }
 
+function searchReferencedFilesOptions(parsed: ParsedArgs): SearchReferencedFilesOptions {
+  const opts: SearchReferencedFilesOptions = {};
+  if (typeof parsed.flags['file-path-contains'] === 'string') {
+    opts.filePathContains = parsed.flags['file-path-contains'];
+  }
+  if (typeof parsed.flags['created-at-gteq'] === 'string') {
+    opts.createdAtGteq = parsed.flags['created-at-gteq'];
+  }
+  if (typeof parsed.flags['created-at-lteq'] === 'string') {
+    opts.createdAtLteq = parsed.flags['created-at-lteq'];
+  }
+  if (typeof parsed.flags['page'] === 'string') {
+    const raw = parsed.flags['page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--page must be a positive integer');
+    }
+    opts.page = n;
+  }
+  if (typeof parsed.flags['per-page'] === 'string') {
+    const raw = parsed.flags['per-page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 100) {
+      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
+    }
+    opts.perPage = n;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+function listReferencedFileSessionsOptions(parsed: ParsedArgs): ListReferencedFileSessionsOptions {
+  const filePath = parsed.flags['file-path'];
+  if (typeof filePath !== 'string') {
+    throw new CliError('INVALID_ARGS', 'list-referenced-file-sessions requires --file-path <value>');
+  }
+  const opts: ListReferencedFileSessionsOptions = { filePath };
+  if (typeof parsed.flags['page'] === 'string') {
+    const raw = parsed.flags['page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--page must be a positive integer');
+    }
+    opts.page = n;
+  }
+  if (typeof parsed.flags['per-page'] === 'string') {
+    const raw = parsed.flags['per-page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 100) {
+      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
+    }
+    opts.perPage = n;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 function listWorkloadsOptions(parsed: ParsedArgs): ListWorkloadsOptions {
   const opts: ListWorkloadsOptions = {};
   if (typeof parsed.flags.search === 'string') {
@@ -1422,6 +1516,10 @@ export async function run(argv: string[]): Promise<number> {
         return await runSearchTemplates(searchTemplatesOptions(parsed));
       case 'get-template':
         return await runGetTemplate(getTemplateOptions(parsed));
+      case 'search-referenced-files':
+        return await runSearchReferencedFiles(searchReferencedFilesOptions(parsed));
+      case 'list-referenced-file-sessions':
+        return await runListReferencedFileSessions(listReferencedFileSessionsOptions(parsed));
       default:
         logger.info(`Unknown command: ${parsed.command}`);
         logger.info(buildSummaryHelp());

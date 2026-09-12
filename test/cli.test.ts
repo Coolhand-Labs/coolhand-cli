@@ -26,6 +26,12 @@ jest.mock('../src/commands/search-templates.js', () => ({
 jest.mock('../src/commands/get-template.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/search-referenced-files.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
+jest.mock('../src/commands/list-referenced-file-sessions.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
 jest.mock('../src/commands/upload-client-file.js', () => ({
   run: jest.fn(),
 }));
@@ -55,6 +61,8 @@ import { run as runSearchFeedbackCommand } from '../src/commands/search-feedback
 import { run as runGetFeedbackCommand } from '../src/commands/get-feedback.js';
 import { run as runSearchTemplatesCommand } from '../src/commands/search-templates.js';
 import { run as runGetTemplateCommand } from '../src/commands/get-template.js';
+import { run as runSearchReferencedFilesCommand } from '../src/commands/search-referenced-files.js';
+import { run as runListReferencedFileSessionsCommand } from '../src/commands/list-referenced-file-sessions.js';
 import { run as runUploadClientFileCommand } from '../src/commands/upload-client-file.js';
 import { run as runMapClaudeProjectsCommand } from '../src/commands/map-claude-projects.js';
 import { run as runAnalyzeClaudeSessions } from '../src/commands/analyze-claude-sessions.js';
@@ -172,6 +180,8 @@ describe('run', () => {
     (runGetFeedbackCommand as jest.Mock).mockResolvedValue(0);
     (runSearchTemplatesCommand as jest.Mock).mockResolvedValue(0);
     (runGetTemplateCommand as jest.Mock).mockResolvedValue(0);
+    (runSearchReferencedFilesCommand as jest.Mock).mockResolvedValue(0);
+    (runListReferencedFileSessionsCommand as jest.Mock).mockResolvedValue(0);
     (runUploadClientFileCommand as jest.Mock).mockResolvedValue(0);
     (runMapClaudeProjectsCommand as jest.Mock).mockResolvedValue(0);
     (runFlushPending as jest.Mock).mockClear().mockResolvedValue(0);
@@ -188,6 +198,8 @@ describe('run', () => {
     (runGetFeedbackCommand as jest.Mock).mockReset();
     (runSearchTemplatesCommand as jest.Mock).mockReset();
     (runGetTemplateCommand as jest.Mock).mockReset();
+    (runSearchReferencedFilesCommand as jest.Mock).mockReset();
+    (runListReferencedFileSessionsCommand as jest.Mock).mockReset();
     (runUploadClientFileCommand as jest.Mock).mockReset();
     (runMapClaudeProjectsCommand as jest.Mock).mockReset();
     warnSpy.mockRestore();
@@ -565,6 +577,69 @@ describe('run', () => {
     const code = await run(['get-feedback', 'fb-123', '--json', '--client-id', 'acme']);
     expect(code).toBe(0);
     expect(runGetFeedbackCommand).toHaveBeenCalledWith({ id: 'fb-123', json: true, clientId: 'acme' });
+  });
+
+  test('search-referenced-files dispatches with parsed flags', async () => {
+    const code = await run([
+      'search-referenced-files',
+      '--file-path-contains', 'routes',
+      '--created-at-gteq', '2026-01-01T00:00:00Z',
+      '--created-at-lteq', '2026-09-01T00:00:00Z',
+      '--page', '2',
+      '--per-page', '10',
+      '--client-id', 'acme',
+    ]);
+    expect(code).toBe(0);
+    expect(runSearchReferencedFilesCommand).toHaveBeenCalledWith({
+      filePathContains: 'routes',
+      createdAtGteq: '2026-01-01T00:00:00Z',
+      createdAtLteq: '2026-09-01T00:00:00Z',
+      page: 2,
+      perPage: 10,
+      clientId: 'acme',
+    });
+  });
+
+  test('search-referenced-files with non-numeric --page returns exit 1', async () => {
+    const code = await run(['search-referenced-files', '--page', 'abc']);
+    expect(code).toBe(1);
+    expect(runSearchReferencedFilesCommand).not.toHaveBeenCalled();
+  });
+
+  test('search-referenced-files rejects an out-of-range --per-page', async () => {
+    const code = await run(['search-referenced-files', '--per-page', '101']);
+    expect(code).toBe(1);
+    expect(runSearchReferencedFilesCommand).not.toHaveBeenCalled();
+  });
+
+  test('list-referenced-file-sessions requires --file-path', async () => {
+    const code = await run(['list-referenced-file-sessions']);
+    expect(code).toBe(1);
+    expect(runListReferencedFileSessionsCommand).not.toHaveBeenCalled();
+  });
+
+  test('list-referenced-file-sessions dispatches with the file path and flags', async () => {
+    const code = await run([
+      'list-referenced-file-sessions',
+      '--file-path', 'config/routes.rb',
+      '--page', '2',
+      '--per-page', '10',
+      '--json', '--client-id', 'acme',
+    ]);
+    expect(code).toBe(0);
+    expect(runListReferencedFileSessionsCommand).toHaveBeenCalledWith({
+      filePath: 'config/routes.rb',
+      page: 2,
+      perPage: 10,
+      json: true,
+      clientId: 'acme',
+    });
+  });
+
+  test('list-referenced-file-sessions rejects an out-of-range --per-page', async () => {
+    const code = await run(['list-referenced-file-sessions', '--file-path', 'x.rb', '--per-page', '101']);
+    expect(code).toBe(1);
+    expect(runListReferencedFileSessionsCommand).not.toHaveBeenCalled();
   });
 
   test('upload-client-file requires a positional <file-path>', async () => {

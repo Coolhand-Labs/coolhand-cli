@@ -16,6 +16,16 @@ All notable changes to `coolhand-cli` will be documented in this file.
 - `get-template` command: fetches a single template by hashid via `Coolhand#getTemplate`, printing
   every list field plus the full, untruncated `user_prompt_pattern` and `system_prompt_pattern`.
   See [docs/commands.md](./docs/commands.md#get-template).
+- `search-referenced-files` and `list-referenced-file-sessions` commands: read which files a
+  client's logged requests are associated with, via `coolhand-node`'s new `searchReferencedFiles`
+  and `listReferencedFileSessions` methods (`GET /api/v2/llm_references` and
+  `GET /api/v2/llm_references/sessions`). `search-referenced-files` lists files aggregated and
+  ranked by reference count, with `--file-path-contains`/`--created-at-gteq`/`--created-at-lteq`
+  filters; `list-referenced-file-sessions` is the per-file drill-down, taking a required
+  `--file-path` (exact match) and returning raw, un-aggregated session rows. Both require a
+  private API key and support `--page`, `--per-page`, `--client-id`, and `--json`. Depends on an
+  unpublished `coolhand-node` release — see [RELEASING.md](./RELEASING.md) and
+  [docs/commands.md](./docs/commands.md#referenced-files).
 - `sync-skills` command: discovers locally-built Claude skills (`SKILL.md` files) under
   `~/Documents/Claude`, the Cowork local-agent-mode sessions directory, and `~/.claude/skills`
   (or a custom `--root`), content-hashes and dedupes the many near-identical installed copies

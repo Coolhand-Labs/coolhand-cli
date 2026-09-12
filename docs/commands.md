@@ -474,6 +474,50 @@ instead of a body envelope, but the SDK reads those headers and assembles the sa
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
+## Referenced Files
+
+Search which files a client's logged requests are associated with — the same data as the "Referenced Files" dashboard page. Both commands are read-only and require a **private** API key (`coolhand login --scope private`) — the public key is write-only for this resource and gets a 401. Both are bounded to the last 90 days server-side; a file referenced only outside that window will not appear.
+
+### search-referenced-files
+
+```bash
+coolhand search-referenced-files [--file-path-contains TEXT] [--created-at-gteq DATE] [--created-at-lteq DATE] [--page N] [--per-page N] [--client-id ID] [--json]
+```
+
+Lists the client's referenced files, aggregated to one row per distinct `file_path` and ranked by `reference_count` descending. `reference_count`/`last_referenced_at` are computed aggregates, not stored columns — there is no `id` field on this shape and no `--id` filter; an unrecognized filter is a `422` from the server, not silently ignored.
+
+| Flag | Description |
+|------|-------------|
+| `--file-path-contains TEXT` | Case-insensitive substring match against `file_path` |
+| `--created-at-gteq DATE` | Lower bound (inclusive) on `created_at`, ISO-8601 |
+| `--created-at-lteq DATE` | Upper bound (inclusive) on `created_at`, ISO-8601 |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 25, max: 100) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+Human-readable output includes a pagination hint: `Page N of M (X total) — use --page N to navigate`.
+
+A `504` means the aggregate exceeded the backend's statement timeout — this is retryable, not a bug; narrow `--file-path-contains` or lower `--per-page` and try again.
+
+### list-referenced-file-sessions
+
+```bash
+coolhand list-referenced-file-sessions --file-path PATH [--page N] [--per-page N] [--client-id ID] [--json]
+```
+
+The per-file drill-down `search-referenced-files` intentionally omits: raw, un-aggregated rows for one **exact** `file_path` (not a substring match), newest first. There is no `get-referenced-file <file-path>`-shaped command — file paths contain slashes and aren't safe as a CLI positional/URL segment, so this is a filtered list rather than a single-resource lookup. An unmatched `--file-path` is a real empty result (`sessions: []`), not an error.
+
+| Flag | Description |
+|------|-------------|
+| `--file-path PATH` | Exact `file_path` to look up. **Required** — checked by the CLI before any request is made |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 25, max: 100) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+Each session row's `llm_request_log_id` is a hashid — pass it to `fetch-log` to inspect that session directly.
+
 ## Session Analysis
 
 ### analyze-claude-sessions
