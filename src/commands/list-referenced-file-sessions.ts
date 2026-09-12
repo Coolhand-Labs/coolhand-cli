@@ -20,7 +20,7 @@ export async function run(opts: ListReferencedFileSessionsOptions): Promise<numb
     try {
       result = await coolhand.listReferencedFileSessions(params);
     } catch (err) {
-      throw mapLlmReferenceHttpError(err);
+      throw mapLlmReferenceHttpError(err, 'lower --per-page and try again');
     }
 
     if (opts.json) {

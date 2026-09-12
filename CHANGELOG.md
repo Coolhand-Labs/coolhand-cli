@@ -23,9 +23,13 @@ All notable changes to `coolhand-cli` will be documented in this file.
   ranked by reference count, with `--file-path-contains`/`--created-at-gteq`/`--created-at-lteq`
   filters; `list-referenced-file-sessions` is the per-file drill-down, taking a required
   `--file-path` (exact match) and returning raw, un-aggregated session rows. Both require a
-  private API key and support `--page`, `--per-page`, `--client-id`, and `--json`. Depends on an
-  unpublished `coolhand-node` release — see [RELEASING.md](./RELEASING.md) and
-  [docs/commands.md](./docs/commands.md#referenced-files).
+  private API key and support `--page`, `--per-page`, `--client-id`, and `--json`. `coolhand-node`
+  is temporarily pinned to a commit on an unmerged branch
+  ([Coolhand-Labs/coolhand-node@fead9c04](https://github.com/Coolhand-Labs/coolhand-node/commit/fead9c04a7fd1c6d531cde4031ec131e5019b513))
+  since `searchReferencedFiles`/`listReferencedFileSessions` aren't in a published release yet —
+  see [docs/commands.md](./docs/commands.md#referenced-files) for the commands, and the
+  `coolhand-node` entry under [0.10.0] → Changed below for how the same pin was lifted last time
+  (coolhand-node#159) — this one gets un-pinned back to a `^` range the same way once it ships.
 - `sync-skills` command: discovers locally-built Claude skills (`SKILL.md` files) under
   `~/Documents/Claude`, the Cowork local-agent-mode sessions directory, and `~/.claude/skills`
   (or a custom `--root`), content-hashes and dedupes the many near-identical installed copies

@@ -29,7 +29,7 @@ export async function run(opts: SearchReferencedFilesOptions): Promise<number> {
     try {
       result = await coolhand.searchReferencedFiles(params);
     } catch (err) {
-      throw mapLlmReferenceHttpError(err);
+      throw mapLlmReferenceHttpError(err, 'narrow --file-path-contains or lower --per-page and try again');
     }
 
     if (opts.json) {

@@ -91,4 +91,16 @@ describe('list-referenced-file-sessions command', () => {
     const code = await run({ filePath: 'config/routes.rb' });
     expect(code).not.toBe(0);
   });
+
+  // This command has no --file-path-contains flag, so its 504 retry hint must not name one.
+  test('passes a retry hint naming only flags this command defines', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    const { mapLlmReferenceHttpError } = await import('../../src/api/llm-reference-client.js');
+    (mapLlmReferenceHttpError as jest.Mock).mockReturnValue(new CliError('LLM_REFERENCE_ERROR', 'boom'));
+    mockListReferencedFileSessions.mockRejectedValue(new Error('timeout'));
+    await run({ filePath: 'config/routes.rb' });
+    const hint = (mapLlmReferenceHttpError as jest.Mock).mock.calls[0][1];
+    expect(hint).toContain('--per-page');
+    expect(hint).not.toContain('--file-path-contains');
+  });
 });

@@ -74,29 +74,41 @@ describe('getLlmReferenceClient', () => {
 });
 
 describe('mapLlmReferenceHttpError', () => {
+  const anyHint = 'lower --per-page and try again';
+
   test('maps a 401 to a re-authenticate hint', () => {
-    const err = mapLlmReferenceHttpError(new HttpError('Unauthorized', 401));
+    const err = mapLlmReferenceHttpError(new HttpError('Unauthorized', 401), anyHint);
     expect(err.code).toBe('LLM_REFERENCE_ERROR');
     expect(err.message).toContain('coolhand login --scope private');
   });
 
-  test('maps a 504 to a retryable, narrow-your-filters message', () => {
-    const err = mapLlmReferenceHttpError(new HttpError('Gateway Timeout', 504));
+  test('maps a 504 to a retryable message carrying the caller-supplied hint', () => {
+    const err = mapLlmReferenceHttpError(
+      new HttpError('Gateway Timeout', 504),
+      'narrow --file-path-contains or lower --per-page and try again'
+    );
     expect(err.code).toBe('LLM_REFERENCE_ERROR');
     expect(err.message).toContain('504');
-    expect(err.message).toContain('--file-path-contains');
+    expect(err.message).toContain('narrow --file-path-contains or lower --per-page and try again');
+  });
+
+  // list-referenced-file-sessions has no --file-path-contains flag, and the arg parser accepts
+  // unknown flags silently, so suggesting it there would send the user into a no-op retry.
+  test('a 504 never suggests a flag the calling command does not define', () => {
+    const err = mapLlmReferenceHttpError(new HttpError('Gateway Timeout', 504), 'lower --per-page and try again');
     expect(err.message).toContain('--per-page');
+    expect(err.message).not.toContain('--file-path-contains');
   });
 
   test('maps a 422 to a generic message including the server-supplied text', () => {
-    const err = mapLlmReferenceHttpError(new HttpError('Unknown filter: id_eq', 422));
+    const err = mapLlmReferenceHttpError(new HttpError('Unknown filter: id_eq', 422), anyHint);
     expect(err.code).toBe('LLM_REFERENCE_ERROR');
     expect(err.message).toContain('422');
     expect(err.message).toContain('Unknown filter: id_eq');
   });
 
   test('maps a non-HttpError (e.g. network failure) to a generic message', () => {
-    const err = mapLlmReferenceHttpError(new Error('fetch failed'));
+    const err = mapLlmReferenceHttpError(new Error('fetch failed'), anyHint);
     expect(err.code).toBe('LLM_REFERENCE_ERROR');
     expect(err.message).toContain('fetch failed');
   });

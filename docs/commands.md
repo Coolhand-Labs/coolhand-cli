@@ -518,6 +518,8 @@ The per-file drill-down `search-referenced-files` intentionally omits: raw, un-a
 
 Each session row's `llm_request_log_id` is a hashid — pass it to `fetch-log` to inspect that session directly.
 
+This command can `504` too: there's no `GROUP BY` aggregate here, but a `file_path` referenced by very many sessions makes the pagination `COUNT(*)` just as expensive. It's retryable the same way — lower `--per-page` and try again. Note that this command has no `--file-path-contains` flag to narrow with, and unrecognized flags are ignored rather than rejected, so passing one here does nothing.
+
 ## Session Analysis
 
 ### analyze-claude-sessions

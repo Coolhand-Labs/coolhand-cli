@@ -32,11 +32,17 @@ export async function getLlmReferenceClient(opts: { clientId?: string } = {}): P
 /**
  * Maps an error thrown by `Coolhand#searchReferencedFiles`/`listReferencedFileSessions` to a
  * `CliError` — a 401 means the stored private key was rejected (mirrors `log-client.ts`'s hint), a
- * 504 (searchReferencedFiles only) means the aggregate exceeded the backend's statement timeout
- * and is retryable, not a bug. Any other status (e.g. 422 for an unrecognized filter or non-scalar
- * param) surfaces the server's own message rather than swallowing it.
+ * 504 means the query exceeded the backend's statement timeout and is retryable, not a bug. Any
+ * other status (e.g. 422 for an unrecognized filter or non-scalar param) surfaces the server's own
+ * message rather than swallowing it.
+ *
+ * Both endpoints can 504 — `searchReferencedFiles` on its GROUP BY aggregate, and
+ * `listReferencedFileSessions` on the pagination `COUNT(*)` for a very hot `file_path` — but they
+ * have different flags to retry with, so `timeoutHint` is caller-supplied (same shape as
+ * `mapFeedbackHttpError`'s `notFoundMessage`). Suggesting a flag the invoking command doesn't
+ * define would be a silent no-op: the arg parser accepts unknown flags without complaint.
  */
-export function mapLlmReferenceHttpError(err: unknown): CliError {
+export function mapLlmReferenceHttpError(err: unknown, timeoutHint: string): CliError {
   if (err instanceof HttpError) {
     if (err.status === 401) {
       return new CliError(
@@ -47,8 +53,8 @@ export function mapLlmReferenceHttpError(err: unknown): CliError {
     if (err.status === 504) {
       return new CliError(
         'LLM_REFERENCE_ERROR',
-        `Referenced file search timed out (504): the aggregate exceeded the backend's statement ` +
-          `timeout. This is retryable — narrow --file-path-contains or lower --per-page and try again.`
+        `Referenced file request timed out (504): the query exceeded the backend's statement ` +
+          `timeout. This is retryable — ${timeoutHint}.`
       );
     }
     return new CliError('LLM_REFERENCE_ERROR', `Referenced file request failed (${err.status}): ${err.message}`);

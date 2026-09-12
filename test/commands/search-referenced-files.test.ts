@@ -89,4 +89,15 @@ describe('search-referenced-files command', () => {
     const code = await run({});
     expect(code).not.toBe(0);
   });
+
+  test('passes a retry hint naming both of this command\'s narrowing flags', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    const { mapLlmReferenceHttpError } = await import('../../src/api/llm-reference-client.js');
+    (mapLlmReferenceHttpError as jest.Mock).mockReturnValue(new CliError('LLM_REFERENCE_ERROR', 'timed out'));
+    mockSearchReferencedFiles.mockRejectedValue(new Error('gateway timeout'));
+    await run({});
+    const hint = (mapLlmReferenceHttpError as jest.Mock).mock.calls[0][1];
+    expect(hint).toContain('--file-path-contains');
+    expect(hint).toContain('--per-page');
+  });
 });
