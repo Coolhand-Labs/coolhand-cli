@@ -16,6 +16,7 @@ import { run as runMonitor } from './commands/monitor.js';
 import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
 import { run as runMapClaudeProjects } from './commands/map-claude-projects.js';
 import { run as runUploadClientFile } from './commands/upload-client-file.js';
+import { run as runSyncSkills } from './commands/sync-skills.js';
 import { run as runListWorkloads } from './commands/list-workloads.js';
 import { run as runGetWorkload } from './commands/get-workload.js';
 import { run as runUpdateWorkload } from './commands/update-workload.js';
@@ -40,6 +41,7 @@ import type {
   AnalyzeClaudeSessionsOptions,
   MapClaudeProjectsOptions,
   UploadClientFileOptions,
+  SyncSkillsOptions,
   ListWorkloadsOptions,
   GetWorkloadOptions,
   UpdateWorkloadOptions,
@@ -66,7 +68,7 @@ interface CommandMeta {
 const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'force']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
-const REPEATABLE_FLAGS = new Set(['project', 'exclude-project']);
+const REPEATABLE_FLAGS = new Set(['project', 'exclude-project', 'skill', 'exclude-skill', 'source']);
 
 const COMMANDS: CommandMeta[] = [
   {
@@ -252,6 +254,21 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--file-type TYPE', description: 'One of: slide_deck, report, document (defaults to document)' },
       { flag: '--description TEXT', description: 'Optional description' },
       { flag: '--dry-run', description: 'Validate and size the file without uploading' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'sync-skills',
+    oneLiner: 'Upload locally-built Claude skills (SKILL.md files) to Coolhand as client files',
+    usage: 'coolhand sync-skills [options]',
+    options: [
+      { flag: '--root PATH', description: 'Search only PATH (recursively) instead of the 3 default roots' },
+      { flag: '--source NAME', description: 'Restrict the default scan to: authored, installed, claude-code (repeatable, comma-separable)' },
+      { flag: '--skill NAME', description: 'Only upload skills whose name matches (repeatable, comma-separable)' },
+      { flag: '--exclude-skill NAME', description: 'Skip skills whose name matches (repeatable, comma-separable)' },
+      { flag: '--force', description: 'Re-upload every matched skill, ignoring the unchanged-content skip (different meaning than map-claude-projects\' --force)' },
+      { flag: '--dry-run', description: 'Scan and report what would be uploaded, without sending or updating local state' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -771,6 +788,38 @@ function mapClaudeProjectsOptions(parsed: ParsedArgs): MapClaudeProjectsOptions 
   return opts;
 }
 
+function syncSkillsOptions(parsed: ParsedArgs): SyncSkillsOptions {
+  const opts: SyncSkillsOptions = {};
+  if (typeof parsed.flags.root === 'string') {
+    opts.root = parsed.flags.root;
+  }
+  const sources = stringListFlag(parsed.flags.source);
+  if (sources) {
+    opts.sources = sources;
+  }
+  const skills = stringListFlag(parsed.flags.skill);
+  if (skills) {
+    opts.skills = skills;
+  }
+  const excludeSkills = stringListFlag(parsed.flags['exclude-skill']);
+  if (excludeSkills) {
+    opts.excludeSkills = excludeSkills;
+  }
+  if (parsed.flags.force === true) {
+    opts.force = true;
+  }
+  if (parsed.flags['dry-run'] === true) {
+    opts.dryRun = true;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 const CLIENT_FILE_TYPES = new Set(['slide_deck', 'report', 'document']);
 
 function uploadClientFileOptions(parsed: ParsedArgs): UploadClientFileOptions {
@@ -1265,6 +1314,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runMapClaudeProjects(mapClaudeProjectsOptions(parsed));
       case 'upload-client-file':
         return await runUploadClientFile(uploadClientFileOptions(parsed));
+      case 'sync-skills':
+        return await runSyncSkills(syncSkillsOptions(parsed));
       case 'list-workloads':
         return await runListWorkloads(listWorkloadsOptions(parsed));
       case 'get-workload':

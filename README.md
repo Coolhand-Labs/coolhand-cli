@@ -94,6 +94,7 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand analyze-claude-sessions` | Submit Claude sessions for pattern and cost analysis |
 | `coolhand map-claude-projects` | Upload a file-tree map (names + metadata only) of every folder named "claude" |
 | `coolhand upload-client-file` | Upload a local file to Coolhand as a client file |
+| `coolhand sync-skills` | Upload locally-built Claude skills (SKILL.md files) to Coolhand as client files |
 | `coolhand wildcard` | Record an agent blocker and exit cleanly |
 
 See [docs/commands.md](./docs/commands.md) for full flag reference and usage notes.
@@ -166,6 +167,7 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
 - [Auth Flow](./docs/auth-flow.md) — browser-callback sequence, state machine, timeout and error paths
 - [Configuration File](./docs/config-file.md) — full config schema, multi-client model, `COOLHAND_CONFIG_DIR` override
 - [Session Capture](./docs/session-capture.md) — session scanning, envelope format, deduplication, scope and limitations
+- [Skill Capture](./docs/skill-capture.md) — skill discovery, dedup, and incremental upload logic for `sync-skills`
 
 ## About Coolhand Labs
 

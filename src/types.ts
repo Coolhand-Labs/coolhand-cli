@@ -196,6 +196,23 @@ export interface MapClaudeProjectsOptions {
   force?: boolean;
 }
 
+export interface SyncSkillsOptions {
+  clientId?: string;
+  json?: boolean;
+  /** Scan, dedupe, and report counts without uploading or touching skills-state.json. */
+  dryRun?: boolean;
+  /** Search only this path (recursively) instead of the 3 default roots (--root). */
+  root?: string;
+  /** Restrict the default scan to these sourceKinds: authored, installed, claude-code (--source, repeatable). */
+  sources?: string[];
+  /** Only upload skills whose name matches one of these (--skill, repeatable). */
+  skills?: string[];
+  /** Never upload skills whose name matches one of these (--exclude-skill, repeatable). */
+  excludeSkills?: string[];
+  /** Bypass the unchanged-content skip in skills-state.json; re-upload every matched skill. */
+  force?: boolean;
+}
+
 export interface SearchFeedbackOptions {
   sentiment?: 'positive' | 'negative' | 'neutral';
   search?: string;

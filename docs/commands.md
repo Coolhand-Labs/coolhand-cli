@@ -513,6 +513,62 @@ supported"). Uploads always land as `status: draft` client files — see
 Requires a **private** API key (`coolhand login --scope private`) — the public key used for LLM
 capture (`monitor`/`claude`/`analyze-claude-sessions`) 401s on `client_files`.
 
+### sync-skills
+
+```bash
+coolhand sync-skills [--root PATH] [--source NAME] [--skill NAME] [--exclude-skill NAME] [--force] [--dry-run] [--client-id ID] [--json]
+```
+
+Discovers Claude "skills" (`SKILL.md` files) built locally and uploads each one to Coolhand as a
+client file, so a client's skill-building activity becomes citable evidence — the same motivating
+use case as `map-claude-projects`, but per-skill rather than a single directory-tree report.
+
+By default it scans three roots, each tagged with a `sourceKind`:
+
+| sourceKind | Path | What it is |
+|------------|------|------------|
+| `authored` | `~/Documents/Claude` | User-facing, often iCloud-synced "source of truth" skill files |
+| `installed` | `~/Library/Application Support/Claude/local-agent-mode-sessions` | Cowork's installed runtime copies — one full set per local-agent-mode session, so this is the noisiest source |
+| `claude-code` | `~/.claude/skills` | Claude Code's own skills directory |
+
+A given skill routinely has many byte-identical copies across these locations (especially
+`installed`, which gets a fresh copy per session). Every discovered file is content-hashed
+(SHA-256); files are grouped by `(skillName, contentHash)` — not name alone, so a genuinely edited
+authored copy is never silently squashed by a stale installed duplicate of the same name — and one
+canonical file per group is chosen to upload: prefer `authored` over `claude-code` over `installed`
+over `custom` (from `--root`), then the newest modification time. The skill name and description
+come from the file's YAML frontmatter (`name:`/`description:`), falling back to the parent
+directory's name when frontmatter is absent.
+
+| Flag | Description |
+|------|-------------|
+| `--root PATH` | Search only PATH (recursively) instead of the 3 default roots; matches are tagged `sourceKind: custom` |
+| `--source NAME` | Restrict the default scan to one or more of `authored`, `installed`, `claude-code` (repeatable, comma-separable) |
+| `--skill NAME` | Only upload skills whose name matches NAME, substring/case-insensitive (repeatable, comma-separable) |
+| `--exclude-skill NAME` | Skip skills whose name matches NAME (repeatable, comma-separable) |
+| `--force` | Re-upload every matched skill, bypassing the unchanged-content skip below — **not** the same meaning as `map-claude-projects`' `--force`, which skips an overwrite-confirmation prompt |
+| `--dry-run` | Scan, hash, and dedupe, reporting counts (found / duplicates skipped / would-upload / unchanged) without uploading or touching local state |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+Re-running the command does not re-upload a skill whose content hasn't changed since the last
+successful upload for that client — a local `skills-state.json` (next to `config.json`, under
+`~/.coolhand` or `COOLHAND_CONFIG_DIR`) records each uploaded skill's content hash per client.
+A skill whose authored content genuinely changed is detected and re-uploaded automatically; use
+`--force` to re-upload regardless. There is currently no server-side way to check whether a given
+skill was already uploaded (the `client_files` API has no list/search endpoint), so this local
+state file is the only source of truth for what's already been sent — deleting it (or running from
+a different machine) means the next run re-uploads everything.
+
+Each upload is a `document`-type client file whose `metadata` carries `source: 'sync-skills'`,
+`skillName`, `sourceKind`, `sourcePath`, `contentHash`, `duplicateCount`, and `root` — the same
+kind of self-describing metadata `map-claude-projects` attaches to its own uploads. Like every
+other client-file upload, this lands as `status: draft`; a human still needs to review and publish
+it before it appears on the client's dashboard.
+
+Requires a **private** API key (`coolhand login --scope private`) — the public key used for LLM
+capture (`monitor`/`claude`/`analyze-claude-sessions`) 401s on `client_files`.
+
 ## Agent Integration
 
 ### wildcard / complaint-box / report-blocker
