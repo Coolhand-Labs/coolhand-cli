@@ -93,6 +93,8 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand get-feedback` | Fetch a single feedback record by ID |
 | `coolhand fetch-log` | Fetch the input/output content of a single LLM request log |
 | `coolhand search-logs` | Search LLM request logs with flexible filters |
+| `coolhand search-referenced-files` | List a client's referenced files, aggregated and ranked by reference count |
+| `coolhand list-referenced-file-sessions` | List the raw sessions that referenced one exact file path |
 | `coolhand analyze-claude-sessions` | Submit Claude sessions for pattern and cost analysis |
 | `coolhand map-claude-projects` | Upload a file-tree map (names + metadata only) of every folder named "claude" |
 | `coolhand upload-client-file` | Upload a local file to Coolhand as a client file |

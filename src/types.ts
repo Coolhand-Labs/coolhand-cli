@@ -258,6 +258,26 @@ export interface GetFeedbackOptions {
   clientId?: string;
 }
 
+export interface SearchReferencedFilesOptions {
+  filePathContains?: string;
+  createdAtGteq?: string;
+  createdAtLteq?: string;
+  page?: number;
+  perPage?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface ListReferencedFileSessionsOptions {
+  /** Exact file_path to look up. Required — checked in the CLI flag layer, not left to the
+   *  server's 422, since this is a flag the CLI's own parser can validate before any request. */
+  filePath: string;
+  page?: number;
+  perPage?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface ComplaintBoxOptions {
   complaint: string;
   agentName: string;
