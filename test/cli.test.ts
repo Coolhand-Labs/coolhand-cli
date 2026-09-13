@@ -20,6 +20,12 @@ jest.mock('../src/commands/search-feedback.js', () => ({
 jest.mock('../src/commands/get-feedback.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/search-templates.js', () => ({
+  run: jest.fn(),
+}));
+jest.mock('../src/commands/get-template.js', () => ({
+  run: jest.fn(),
+}));
 jest.mock('../src/commands/upload-client-file.js', () => ({
   run: jest.fn(),
 }));
@@ -47,6 +53,8 @@ import { run as runMonitorCommand } from '../src/commands/monitor.js';
 import { run as runSearchOptimizationsCommand } from '../src/commands/search-optimizations.js';
 import { run as runSearchFeedbackCommand } from '../src/commands/search-feedback.js';
 import { run as runGetFeedbackCommand } from '../src/commands/get-feedback.js';
+import { run as runSearchTemplatesCommand } from '../src/commands/search-templates.js';
+import { run as runGetTemplateCommand } from '../src/commands/get-template.js';
 import { run as runUploadClientFileCommand } from '../src/commands/upload-client-file.js';
 import { run as runMapClaudeProjectsCommand } from '../src/commands/map-claude-projects.js';
 import { run as runAnalyzeClaudeSessions } from '../src/commands/analyze-claude-sessions.js';
@@ -162,6 +170,8 @@ describe('run', () => {
     (runSearchOptimizationsCommand as jest.Mock).mockResolvedValue(0);
     (runSearchFeedbackCommand as jest.Mock).mockResolvedValue(0);
     (runGetFeedbackCommand as jest.Mock).mockResolvedValue(0);
+    (runSearchTemplatesCommand as jest.Mock).mockResolvedValue(0);
+    (runGetTemplateCommand as jest.Mock).mockResolvedValue(0);
     (runUploadClientFileCommand as jest.Mock).mockResolvedValue(0);
     (runMapClaudeProjectsCommand as jest.Mock).mockResolvedValue(0);
     (runFlushPending as jest.Mock).mockClear().mockResolvedValue(0);
@@ -176,6 +186,8 @@ describe('run', () => {
     (runSearchOptimizationsCommand as jest.Mock).mockReset();
     (runSearchFeedbackCommand as jest.Mock).mockReset();
     (runGetFeedbackCommand as jest.Mock).mockReset();
+    (runSearchTemplatesCommand as jest.Mock).mockReset();
+    (runGetTemplateCommand as jest.Mock).mockReset();
     (runUploadClientFileCommand as jest.Mock).mockReset();
     (runMapClaudeProjectsCommand as jest.Mock).mockReset();
     warnSpy.mockRestore();
@@ -310,6 +322,63 @@ describe('run', () => {
   test('search-logs with non-numeric --days-back returns exit 1', async () => {
     const code = await run(['search-logs', '--days-back', 'abc']);
     expect(code).toBe(1);
+  });
+
+  test('search-templates with an invalid --status returns exit 1', async () => {
+    const code = await run(['search-templates', '--status', 'archived']);
+    expect(code).toBe(1);
+  });
+
+  test('search-templates with --per-page over 100 returns exit 1', async () => {
+    const code = await run(['search-templates', '--per-page', '101']);
+    expect(code).toBe(1);
+  });
+
+  test('search-templates with non-numeric --page returns exit 1', async () => {
+    const code = await run(['search-templates', '--page', 'abc']);
+    expect(code).toBe(1);
+  });
+
+  test('search-templates forwards its filter flags to the command', async () => {
+    const code = await run([
+      'search-templates',
+      '--search', 'summar',
+      '--workload-id', 'wl-1',
+      '--status', 'published',
+      '--include-deprecated',
+      '--include-system',
+      '--page', '2',
+      '--per-page', '50',
+    ]);
+    expect(code).toBe(0);
+    expect(runSearchTemplatesCommand).toHaveBeenCalledWith({
+      search: 'summar',
+      workloadId: 'wl-1',
+      status: 'published',
+      includeDeprecated: true,
+      includeSystem: true,
+      page: 2,
+      perPage: 50,
+    });
+  });
+
+  test('--include-deprecated and --include-system parse as booleans, not value flags', async () => {
+    await run(['search-templates', '--include-deprecated', '--include-system']);
+    expect(runSearchTemplatesCommand).toHaveBeenCalledWith({
+      includeDeprecated: true,
+      includeSystem: true,
+    });
+  });
+
+  test('get-template without <template-id> returns exit 1', async () => {
+    const code = await run(['get-template']);
+    expect(code).toBe(1);
+  });
+
+  test('get-template forwards the positional id to the command', async () => {
+    const code = await run(['get-template', 'tmpl-1', '--json']);
+    expect(code).toBe(0);
+    expect(runGetTemplateCommand).toHaveBeenCalledWith({ id: 'tmpl-1', json: true });
   });
 
   test('global --client-id with no value returns exit 1', async () => {

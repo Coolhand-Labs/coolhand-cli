@@ -213,6 +213,78 @@ Updates a workload's name and/or description. At least one of `--name` or `--des
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
+## Templates
+
+An LLM request template is the regex pair Coolhand uses to route incoming logs to a workload. These
+two commands are read-only — templates are created, edited and deprecated on the MCP surface, not
+here. Both require a **private** key (`coolhand login --scope private`).
+
+### search-templates
+
+```bash
+coolhand search-templates [--search TEXT] [--workload-id ID] [--status VALUE] [--include-deprecated]
+                          [--include-system] [--page N] [--per-page N] [--client-id ID] [--json]
+```
+
+Lists the resolved client's templates, newest first. Search is a filter on the list, not a separate
+command — `coolhand search-templates` with no `--search` is the plain list. `--search` is a
+case-insensitive **literal** substring match on the template name; `%` and `_` are escaped
+server-side, so they match themselves and should not be escaped again. The response is
+`{ templates: [...], pagination: {...} }`, matching `search-logs`' shape — the backing REST endpoint
+renders `templates` as a bare array and exposes pagination via response headers, which the SDK reads
+back into the envelope for you.
+
+Every client has two **system templates**, `Unmatched` and `Ignored API Calls`, created with the
+client. They are hidden unless `--include-system` is passed, so a client with no templates of its own
+lists as empty rather than as those two rows. `Unmatched` is the bucket to inspect when logs are
+being misrouted. Each row carries `system_template: true|false` so the buckets are identifiable
+without matching on their names.
+
+`log_count` counts **directly-collected client logs only** — the same records
+`coolhand search-logs --template-id <id>` returns. Evals, bakeoff comparisons and synthetic logs are
+excluded, so this can be lower than the count the `search_templates` MCP tool reports. These two are
+not equivalent surfaces: the MCP tool also hides templates whose workload has been archived, and this
+command does not.
+
+Aggregating `log_count` is the expensive part of the response and is bounded by a server-side
+10-second statement timeout. If you exceed it the command reports the timeout as itself and tells you
+to narrow the query with `--workload-id`, `--search`, or a smaller `--per-page` — it is retryable, not
+a failure of the command.
+
+Prompt patterns are **not** in this response; use `get-template` for those.
+
+| Flag | Description |
+|------|-------------|
+| `--search TEXT` | Case-insensitive literal substring to match in the template name |
+| `--workload-id ID` | Filter to a single workload, by workload hashid |
+| `--status VALUE` | Filter by status: `draft`, `published`, or `failure` |
+| `--include-deprecated` | Include deprecated templates (hidden by default; a deprecated row has a non-null `deprecated_at`) |
+| `--include-system` | Include the `Unmatched` and `Ignored API Calls` system buckets (hidden by default) |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 25, max: 100) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+### get-template
+
+```bash
+coolhand get-template <template-id> [--client-id ID] [--json]
+```
+
+Fetches a single template by the hashid `search-templates` returns, printing every list field plus
+`user_prompt_pattern` and `system_prompt_pattern` — the full, untruncated matching regexes. Patterns
+can be long; they are printed in their own labelled blocks rather than trimmed, since a partial regex
+is misleading. Use `--json` for machine-readable output.
+
+Unlike the list, this applies no filtering beyond client ownership: deprecated and system templates
+are reachable by id with no opt-in flag. A template belonging to another client returns "not found"
+rather than a permission error — its existence is not disclosed.
+
+| Flag | Description |
+|------|-------------|
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
 ## Optimizations
 
 Coolhand stores LLM-generated optimization suggestions as structured records. These commands let you query, update, and act on them from the terminal or from agent workflows.
