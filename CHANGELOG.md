@@ -16,6 +16,16 @@ All notable changes to `coolhand-cli` will be documented in this file.
 - `get-template` command: fetches a single template by hashid via `Coolhand#getTemplate`, printing
   every list field plus the full, untruncated `user_prompt_pattern` and `system_prompt_pattern`.
   See [docs/commands.md](./docs/commands.md#get-template).
+- `sync-skills` command: discovers locally-built Claude skills (`SKILL.md` files) under
+  `~/Documents/Claude`, the Cowork local-agent-mode sessions directory, and `~/.claude/skills`
+  (or a custom `--root`), content-hashes and dedupes the many near-identical installed copies
+  down to one canonical upload per skill, and uploads each as a `document`-type client file via
+  the same shared upload core as `upload-client-file`/`map-claude-projects`. Skips re-uploading
+  unchanged skills across runs via a local `skills-state.json` (use `--force` to override).
+  Supports `--root`, `--source`, `--skill`, `--exclude-skill`, `--force`, `--dry-run`,
+  `--client-id`, and `--json`. Requires a private API key, same as `upload-client-file`. See
+  [docs/skill-capture.md](./docs/skill-capture.md) and
+  [docs/commands.md](./docs/commands.md#sync-skills).
 
 ### Security
 - The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now binds to `127.0.0.1` only,
