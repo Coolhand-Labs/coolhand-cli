@@ -29,6 +29,12 @@ This runs the same steps as the `prepublishOnly` CI gate. Run this as the single
 
 See [RELEASING.md](./RELEASING.md) for the full release checklist.
 
+## Changelog and versioning
+
+Do not add `CHANGELOG.md` entries or bump `package.json`'s `version` on feature/fix branches or in PRs. The `/prep-release` skill is the sole owner of both — it writes changelog entries for the PRs actually shipping in a release and bumps the version once, at release time.
+
+Per-PR changelog edits create merge conflicts across concurrent branches for no benefit, since the entries get rewritten from the final, user-approved set of merged PRs anyway. Leave `CHANGELOG.md` and `package.json`'s `version` field alone in your PR.
+
 ## Client selection convention
 
 Every command that calls the Coolhand API must accept and forward `--client-id`. The pattern:
