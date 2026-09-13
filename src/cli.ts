@@ -368,7 +368,7 @@ const COMMANDS: CommandMeta[] = [
   },
   {
     name: 'get-template',
-    oneLiner: 'Get a single LLM request template by ID, including its prompt patterns',
+    oneLiner: 'Get a single LLM request template by ID, including its prompt patterns (requires a private key)',
     usage: 'coolhand get-template <template-id> [options]',
     options: [
       { flag: '--client-id ID', description: 'Use a specific stored client' },
