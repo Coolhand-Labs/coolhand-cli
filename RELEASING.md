@@ -6,7 +6,7 @@
 `git+https://…#<sha>` entry left in `package.json` would make every `npm install coolhand-cli`
 require `git` and network access to GitHub and resolve to an unmerged branch commit instead of a
 published release. We pin to a commit while a `coolhand-node` PR is in review (see the `[0.10.0]`
-and `[Unreleased]` `coolhand-node` entries in `CHANGELOG.md`), so check before every release:
+and `[0.11.0]` `coolhand-node` entries in `CHANGELOG.md`), so check before every release:
 
 ```bash
 node -p "Object.entries(require('./package.json').dependencies).filter(([,v]) => /^(git(\+[a-z]+)?:|github:|gitlab:|bitbucket:|gist:)/.test(v))"

@@ -1,6 +1,6 @@
 {
   "name": "coolhand-cli",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "CLI for authenticating with Coolhand and retrieving API tokens from a local dev environment",
   "type": "module",
   "main": "dist/index.js",
@@ -59,7 +59,7 @@
     "smoke": "node dist/bin.js --version"
   },
   "dependencies": {
-    "coolhand-node": "git+https://github.com/Coolhand-Labs/coolhand-node.git#fead9c04a7fd1c6d531cde4031ec131e5019b513",
+    "coolhand-node": "^0.13.0",
     "mockttp": "^4.2.1"
   },
   "overrides": {
