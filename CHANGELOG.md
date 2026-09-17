@@ -4,6 +4,8 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-16
+
 ### Added
 - `search-templates` command: lists and searches the resolved client's LLM request templates via
   coolhand-node's new `Coolhand#searchTemplates`, with `--search`, `--workload-id`, `--status`,
@@ -23,13 +25,8 @@ All notable changes to `coolhand-cli` will be documented in this file.
   ranked by reference count, with `--file-path-contains`/`--created-at-gteq`/`--created-at-lteq`
   filters; `list-referenced-file-sessions` is the per-file drill-down, taking a required
   `--file-path` (exact match) and returning raw, un-aggregated session rows. Both require a
-  private API key and support `--page`, `--per-page`, `--client-id`, and `--json`. `coolhand-node`
-  is temporarily pinned to a commit on an unmerged branch
-  ([Coolhand-Labs/coolhand-node@fead9c04](https://github.com/Coolhand-Labs/coolhand-node/commit/fead9c04a7fd1c6d531cde4031ec131e5019b513))
-  since `searchReferencedFiles`/`listReferencedFileSessions` aren't in a published release yet —
-  see [docs/commands.md](./docs/commands.md#referenced-files) for the commands, and the
-  `coolhand-node` entry under [0.10.0] → Changed below for how the same pin was lifted last time
-  (coolhand-node#159) — this one gets un-pinned back to a `^` range the same way once it ships.
+  private API key and support `--page`, `--per-page`, `--client-id`, and `--json`. See
+  [docs/commands.md](./docs/commands.md#referenced-files).
 - `sync-skills` command: discovers locally-built Claude skills (`SKILL.md` files) under
   `~/Documents/Claude`, the Cowork local-agent-mode sessions directory, and `~/.claude/skills`
   (or a custom `--root`), content-hashes and dedupes the many near-identical installed copies
@@ -41,6 +38,14 @@ All notable changes to `coolhand-cli` will be documented in this file.
   [docs/skill-capture.md](./docs/skill-capture.md) and
   [docs/commands.md](./docs/commands.md#sync-skills).
 
+### Changed
+- `coolhand-node` bumped to `^0.13.0` (published to npm), which includes the
+  `searchReferencedFiles`/`listReferencedFileSessions` methods `search-referenced-files`/
+  `list-referenced-file-sessions` depend on. Previously pinned to a specific commit on an
+  unmerged branch while that functionality was in review; now that it's shipped, this drops the
+  git dependency per `RELEASING.md`'s pre-release check (same pattern as the `coolhand-node`
+  unpin under [0.10.0] below, coolhand-node#159).
+
 ### Security
 - The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now binds to `127.0.0.1` only,
   instead of all network interfaces. Previously, mockttp's `start()` bound the wildcard address
@@ -50,11 +55,8 @@ All notable changes to `coolhand-cli` will be documented in this file.
   file that already exists at `PATH`, showing its size and modified time. Previously the report
   was written straight to `PATH` with no check, silently destroying anything already there. Add
   `--force` to skip the prompt and overwrite unconditionally (e.g. for scripted/CI use).
-
-## [0.10.1] - 2026-08-23
-
-### Security
 - The Coolhand MITM proxy (`coolhand claude`/`coolhand monitor`) now applies the same `redactSecrets` scrubber that `analyze-claude-sessions` uses to captured request/response bodies before upload. Previously only headers and the URL were sanitized; a captured body echoing a live secret — e.g. a `cat .env`/`printenv` tool result fed back into the next request to `api.anthropic.com` — was uploaded to Coolhand verbatim (#121, medium severity).
+- `redactSecrets` (the scrubber applied to session content and MITM-captured traffic before upload) now also catches `Authorization: Basic <base64>` headers — previously only `Bearer` tokens were covered — and Slack (`hooks.slack.com/services/...`) / Discord (`discord.com/api/webhooks/...`) webhook URLs, which are send-capable credentials that don't match the existing `api_key|secret|token|password|...` assignment-keyword patterns (#122).
 
 ## [0.10.0] - 2026-08-22
 
