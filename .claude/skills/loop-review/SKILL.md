@@ -8,85 +8,61 @@ description: |
   a self-healing code review cycle instead of a single one-shot pass.
 user_invocable: true
 argument-hint: [low|medium|high|max]
-version: 0.1.0
+version: 0.2.0
 ---
 
-Run an automated code review + fix loop on the current branch. Keep iterating until the reviewer reports no issues.
+# Loop Review
+
+Run an automated code review + fix loop on the current branch by delegating each round to the built-in `/code-review` skill, plus a manual supplementary pass for conventions `/code-review` can't see. Keep iterating until two consecutive rounds come back clean, a no-progress condition is detected, or the safety cap is hit.
 
 ## Setup
 
-- Effort level: `$ARGUMENTS` (default: `high` if blank)
+- Effort level: `EFFORT` = `$ARGUMENTS` (default: `high` if blank) — forwarded to `/code-review` every round.
 - Max iterations: 5
-- Review scope: `git diff $(git merge-base origin/main HEAD)` — a single-ref diff against the merge-base, so it also picks up uncommitted fixes from prior iterations (`git diff origin/main...HEAD` would not, since three-dot diffs two commits and ignores the working tree)
+- Review scope: whatever `/code-review` targets by default (the current diff). No explicit target is passed, so it also picks up uncommitted fixes made in prior iterations.
 
 ## Loop Instructions
 
-Repeat the following cycle up to 5 times:
+Repeat the following cycle, starting at ITERATION_NUM = 1, up to 5 times:
 
-### Step 1 — Review (Agent)
+### Step 1 — Delegate to /code-review
 
-Spawn an Agent using the Agent tool with `thinking: EFFORT` enabled and this prompt (substitute ITERATION_NUM, EFFORT, and PREVIOUS_DISPOSITIONS):
+Invoke the `code-review` skill via the Skill tool with `args: "EFFORT --fix"`. This reviews the current diff at the given effort level and applies fixes to the working tree in the same call. Record the findings it reports.
 
----
-You are a code reviewer doing pass ITERATION_NUM of an automated review loop.
+### Step 2 — Manual Review criteria pass
 
-Run `git diff $(git merge-base origin/main HEAD)` to get the current branch diff (this includes any uncommitted fixes from prior iterations). Review it for:
+`/code-review` has no visibility into this repo's conventions. Every round, apply the "Review criteria" checklist below yourself against the same diff. For each item you flag, either fix it directly (Edit, Write, Bash) or reject it with a one-line reason (false positive / out of scope / disagree with the call). Silent skipping is not allowed.
 
-**Correctness & quality**
-- Correctness bugs and logic errors
-- Missing/broken error handling
-- Inefficiencies or unnecessary complexity
-- Violations of project conventions in CLAUDE.md
-- Code reuse opportunities (existing utilities being duplicated)
+### Step 3 — Classify severity
 
-**Security**
-- Injection vulnerabilities (command injection, path traversal, etc.)
-- Secrets or credentials hardcoded or logged
-- Unsafe use of user-supplied input
-- Auth or permission bypass risks
+Tag every finding from Steps 1 and 2 with exactly one severity (keep `/code-review`'s own tag if it provides one; otherwise classify it yourself):
 
-**Backwards compatibility**
-- Any changes to existing CLI command names, flags, or output format that were NOT the stated intention of this branch — flag these as breaking changes requiring explicit justification
-- Removal or rename of exported functions/types from the public API surface (src/index.ts)
-- Changes to config file schema that would break existing user configs
-
-**Coolhand API accuracy**
-- Where the diff touches code that calls the Coolhand API (endpoints, request/response shapes, auth headers), fetch the current published API docs from coolhandlabs.com and verify the implementation matches
-- Flag any mismatches between what the code sends/expects and what the API actually accepts/returns
-
-**Documentation**
-- Check whether README.md, CHANGELOG.md, or files under docs/ need updates to reflect the changes on this branch
-- Verify that any existing documentation touched by this diff is still accurate (no stale flags, commands, or descriptions)
-- Flag missing changelog entries for user-visible changes
-
-Effort: EFFORT
-
-Already triaged in prior iterations — do NOT re-flag these unless you have new evidence that changes the call:
-PREVIOUS_DISPOSITIONS
-
-Every finding must be tagged with exactly one severity:
 - `[CRITICAL]` — security vulnerabilities, wrong/broken behavior, performance problems
 - `[NICE-TO-HAVE]` — DRY violations, missing test coverage, code-reuse opportunities
 - `[NITPICK]` — documentation, comments, naming, formatting-adjacent issues
 
-Return a numbered list of issues with file path and line numbers, each prefixed with its severity tag — e.g. `1. [CRITICAL] file:line — problem — fix`. Be specific about what to fix and why.
-If there are NO issues, the first line of your response must be exactly: LGTM: No issues found.
-End your response with a final line: TOKENS_USED: <number> — your best estimate of tokens consumed this pass (approximate, not metered).
----
+### Step 4 — Classify the round
 
-### Step 2 — Check Result
+- **Dry round**: zero findings from both Step 1 and Step 2.
+- **Findings round**: at least one finding from either step.
 
-- If the first line of the agent's response is exactly `LGTM: No issues found.` → exit the loop, go to Final Summary
-- If iteration count has reached 5 → exit the loop, go to Final Summary (partial)
-- Otherwise → proceed to Step 3
+### Step 5 — Convergence, no-progress, and cap checks
 
-### Step 3 — Fix
+- Dry round, and the immediately preceding round was also dry → **CLEAN**. Exit the loop. Never declare victory off a single clean round.
+- Dry round, but the preceding round had findings (or this is round 1) → this is the confirming round. Continue to the next iteration.
+- Findings round whose finding set (file:line + description, Steps 1 and 2 combined) is identical to the immediately preceding round's non-empty finding set → **NO-PROGRESS**. Exit the loop. This is a design call for a human, not something to keep retrying.
+- ITERATION_NUM has reached 5 without CLEAN or NO-PROGRESS → **STOPPED** (safety cap). Exit the loop.
+- Otherwise → increment ITERATION_NUM and go back to Step 1.
 
-For each finding, either fix it, or reject it with a one-line reason (false positive / out of scope / disagree with the call). Use Edit, Write, and Bash tools to apply fixes directly. Every finding must get one of these two dispositions — silent skipping is not allowed. Track the fixed count and rejected count, broken out by severity, for this iteration.
+## Review criteria
 
-### Step 4 — Log & Continue
+Manual supplementary checklist applied every round in Step 2. `/code-review` does not know these repo-specific conventions.
 
-Record this iteration in your running log (see format below). Append this iteration's fixed AND rejected findings (with their reasons) to the running `PREVIOUS_DISPOSITIONS` list — both dispositions must carry forward, or rejected findings will be re-flagged and re-rejected every round and the loop can never reach LGTM. Then go back to Step 1 with the next iteration number.
+- **CLI backwards-compat**: changes to existing CLI command names, flags, or output format that were NOT the stated intention of this branch — flag as breaking changes requiring explicit justification. Any command or flag change must also be reflected in `docs/commands.md`.
+- **Public API surface**: removal or rename of exported functions/types from `src/index.ts`.
+- **Config file schema**: changes that would break existing user configs (see `docs/config-file.md`).
+- **Coolhand API accuracy**: where the diff touches code that calls the Coolhand API (endpoints, request/response shapes, auth headers), fetch the current published API docs from coolhandlabs.com and verify the implementation matches. Flag any mismatch between what the code sends/expects and what the API accepts/returns.
+- **Docs**: verify that README.md and files under `docs/` touched by this diff are still accurate (no stale flags, commands, or descriptions), and that docs needing updates for the branch's changes have them. Do NOT flag missing `CHANGELOG.md` entries or `package.json` version bumps — this repo's CLAUDE.md reserves both for the `/prep-release` skill.
 
 ## Iteration Log Format
 
@@ -94,20 +70,22 @@ Maintain this log as you work:
 
 ```
 === Iteration 1 ===
-Reviewer found N issues (CRITICAL: x, NICE-TO-HAVE: y, NITPICK: z):
-  1. [CRITICAL] [file:line] description
+Round type: DRY | FINDINGS
+/code-review findings: N; manual Review-criteria findings: M
+Combined (CRITICAL: x, NICE-TO-HAVE: y, NITPICK: z):
+  1. [CRITICAL] [file:line] description — source: code-review | manual
   2. ...
 Disposition:
   - Fixed: [description of fix]
   - Rejected: [description] — reason: [one-line reason]
 Totals: F fixed, R rejected (CRITICAL: f1/r1, NICE-TO-HAVE: f2/r2, NITPICK: f3/r3)
-Tokens used (reviewer estimate): N
+Convergence: dry (1st) | dry (confirmed → CLEAN) | findings (new) | findings (repeat → NO-PROGRESS)
 
 === Iteration 2 ===
 ...
 
 === RESULT ===
-[CLEAN after N iterations] or [STOPPED at max iterations — N issues remain]
+[CLEAN after N iterations] or [STOPPED at max iterations — N issues remain] or [NO-PROGRESS after N iterations — same findings in rounds N-1 and N, needs a human call]
 ```
 
 ## Run Log (CSV)
@@ -122,12 +100,12 @@ For each iteration:
 - `timestamp` — `date -u +%Y-%m-%dT%H:%M:%SZ` at write time
 - `branch` — `git branch --show-current`
 - `iteration` — the iteration number
-- `model` — `default` (this command doesn't pin a specific model per round)
+- `model` — `default` (this skill doesn't pin a specific model per round)
 - `thinking_level` — the EFFORT value used for that iteration (from `$ARGUMENTS`, default `high`)
-- `clock_seconds` — wall-clock time for that iteration, bracketed with `date +%s` immediately before spawning the Step 1 agent and immediately after Step 3 fixes complete
-- `tokens_used_approx` — the reviewer's self-reported `TOKENS_USED` value for that iteration
-- `critical_found` / `nice_to_have_found` / `nitpick_found` / `total_found` — counts from that iteration's findings
-- `issues_addressed` — number fixed that iteration
+- `clock_seconds` — wall-clock time for that iteration, bracketed with `date +%s` immediately before Step 1 and immediately after Step 2 completes
+- `tokens_used_approx` — leave empty; `/code-review` is a built-in call and does not report a token estimate
+- `critical_found` / `nice_to_have_found` / `nitpick_found` / `total_found` — combined counts from Step 3
+- `issues_addressed` — number fixed that iteration (by `/code-review --fix` plus your own Step 2 fixes)
 - `issues_ignored` — number rejected that iteration
 
 Branch names can contain characters that are unsafe to splice directly into a shell heredoc (`$`, backticks, parens) or that would misalign CSV columns (commas). Assign the branch name to a shell variable, strip commas from it, and append the row with `printf` inside a single-quoted format string so no part of the row is re-parsed by the shell:
@@ -137,7 +115,7 @@ mkdir -p ~/loop-review-outputs
 [ -f ~/loop-review-outputs/coolhand-cli.csv ] || echo "timestamp,branch,iteration,model,thinking_level,clock_seconds,tokens_used_approx,critical_found,nice_to_have_found,nitpick_found,total_found,issues_addressed,issues_ignored" > ~/loop-review-outputs/coolhand-cli.csv
 branch=$(git branch --show-current | tr -d ',')
 printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
-  "2026-01-01T00:00:00Z" "$branch" "1" "default" "high" "42" "1234" "1" "2" "0" "3" "3" "0" \
+  "2026-01-01T00:00:00Z" "$branch" "1" "default" "high" "42" "" "1" "2" "0" "3" "3" "0" \
   >> ~/loop-review-outputs/coolhand-cli.csv
 ```
 
@@ -145,8 +123,8 @@ printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
 
 After the loop exits and the CSV run log has been written, output:
 
-1. **Overall result**: CLEAN (N iterations) or STOPPED (issues remain)
-2. **Per-iteration breakdown**: What was found (by severity) vs. what was fixed and what was rejected (with reasons) each round
+1. **Overall result**: CLEAN (N iterations), STOPPED (safety cap, issues remain), or NO-PROGRESS (needs a human call)
+2. **Per-iteration breakdown**: What was found (by severity, and by source) vs. what was fixed and what was rejected (with reasons) each round
 3. **All files modified**: Complete list of files touched across all iterations
-4. **Remaining issues** (if stopped at max): Unresolved items with context on why they're hard to fix automatically
+4. **Remaining issues** (if STOPPED or NO-PROGRESS): Unresolved items with context on why they need a human
 5. **Run log**: Number of CSV rows appended and the file path (`~/loop-review-outputs/coolhand-cli.csv`)
