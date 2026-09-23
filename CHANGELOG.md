@@ -4,6 +4,23 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-09-23
+
+### Changed
+- Upgraded `coolhand-node` from `^0.13.0` to `^0.14.0`. (#150)
+- Renamed the repository's agent instructions file from `CLAUDE.md` to `AGENTS.md` and updated
+  every reference to it. (#149)
+- Bumped dev dependencies: `eslint` to 10.10.0 (#145), `@typescript-eslint/parser` and
+  `@typescript-eslint/eslint-plugin` to 8.70.0 (#146, #147), and `globals` to 17.12.0 (#148).
+
+### Security
+- Secret redaction now catches quoted assignments whose quotes are JSON-escaped (for example
+  `export DB_PASSWORD=\"…\"` inside a captured tool input), which previously leaked the value.
+- The proxy sender and `last-sync` no longer follow HTTP redirects, so the `X-API-Key` header can't
+  be forwarded to a redirect target.
+- Resolved `npm audit` advisories in transitive dev dependencies (`brace-expansion`,
+  `browserslist`, `baseline-browser-mapping`, `qs`) via a lockfile update.
+
 ## [0.11.0] - 2026-09-16
 
 ### Added

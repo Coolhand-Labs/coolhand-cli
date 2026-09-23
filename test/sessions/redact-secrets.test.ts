@@ -57,6 +57,13 @@ describe('redactSecrets', () => {
     expect(out).toContain('[REDACTED]');
   });
 
+  test('redacts a quoted secret with spaces inside JSON-escaped quotes', () => {
+    const out = redactSecrets(JSON.stringify({ command: 'export DB_PASSWORD="hunter2 correct horse" && run' }));
+    expect(out).not.toContain('hunter2');
+    expect(out).not.toContain('correct horse');
+    expect(out).toContain('[REDACTED]');
+  });
+
   test('redacts a value hit by both the assignment and a token pattern', () => {
     const out = redactSecrets('OPENAI_API_KEY=sk-abcdef1234567890ABCDEF');
     expect(out).toContain('OPENAI_API_KEY=');
