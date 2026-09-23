@@ -18,7 +18,7 @@ to a `^x.y.z` range, run `npm install` to refresh `package-lock.json`, and note 
 
 ## Release Process
 
-Releases are built by running the `/prep-release` skill (`.claude/skills/prep-release/SKILL.md`). It triages open PRs, gets your sign-off on which ship, squash-merges them, and builds a `release/vX.Y.Z` branch that bumps `package.json`'s version, updates `CHANGELOG.md` and docs, and red-teams the whole package — then opens a release-prep PR for your review. Per `CLAUDE.md`'s "Changelog and versioning" rule, `package.json`'s version and `CHANGELOG.md` are only ever edited there, never on feature/fix branches.
+Releases are built by running the `/prep-release` skill (`.claude/skills/prep-release/SKILL.md`). It triages open PRs, gets your sign-off on which ship, squash-merges them, and builds a `release/vX.Y.Z` branch that bumps `package.json`'s version, updates `CHANGELOG.md` and docs, and red-teams the whole package — then opens a release-prep PR for your review. Per `AGENTS.md`'s "Changelog and versioning" rule, `package.json`'s version and `CHANGELOG.md` are only ever edited there, never on feature/fix branches.
 
 `/prep-release` never tags, pushes, or publishes. Once its release-prep PR is reviewed and merged into `main`, tag and push it yourself — this is what triggers the release:
 
