@@ -41,8 +41,10 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
 // "value"` — the key is itself quoted, unlike the YAML/shell-style `api_key: value`/`api_key=value`
 // this was originally written for), so plain JSON — the dominant config format under
 // `~/.claude` — is covered too, not just unquoted-key assignment syntax.
+// The opening quote may be backslash-escaped (`\\"value\\"`): session payloads are JSON.stringify'd
+// before redaction, so a quoted shell assignment inside a tool input arrives with escaped quotes.
 const ASSIGNMENT_QUOTED =
-  /((?:api[_-]?key|secret|token|password|passwd|access[_-]?key|private[_-]?key)\b["']?\s*[:=]\s*)(['"])[^'"]*\2/gi;
+  /((?:api[_-]?key|secret|token|password|passwd|access[_-]?key|private[_-]?key)\b["']?\s*[:=]\s*)(\\?['"])[^'"]*\2/gi;
 const ASSIGNMENT_BARE =
   /((?:api[_-]?key|secret|token|password|passwd|access[_-]?key|private[_-]?key)\b["']?\s*[:=]\s*)[^\s'"]+/gi;
 
