@@ -445,7 +445,7 @@ includes `truncated: true` and `total_chars` per field.
 ### search-logs
 
 ```bash
-coolhand search-logs [--template-id ID] [--workload-id ID] [--system-prompt-contains TEXT] [--user-prompt-contains TEXT] [--model VALUE] [--source-api VALUE] [--source-api-result VALUE] [--unmatched-only] [--days-back N] [--include-prompts] [--sort VALUE] [--page N] [--per-page N] [--client-id ID] [--json]
+coolhand search-logs [--template-id ID] [--workload-id ID] [--system-prompt-contains TEXT] [--user-prompt-contains TEXT] [--model VALUE] [--source-api VALUE] [--source-api-result VALUE] [--unmatched-only] [--days-back N] [--include-prompts] [--include-total] [--sort VALUE] [--page N] [--per-page N] [--client-id ID] [--json]
 ```
 
 Searches LLM request logs for the resolved client with flexible filters — useful for
@@ -455,6 +455,10 @@ content is omitted from results unless `--include-prompts` is passed. The respon
 `{ logs: [...], pagination: {...} }`, matching `search-feedback`'s shape — the backing REST
 endpoint renders `logs` as a bare array on the wire and exposes pagination via response headers
 instead of a body envelope, but the SDK reads those headers and assembles the same shape for you.
+`pagination.total_count`/`total_pages` are a conservative lower-bound estimate by default (cheap to
+compute); pass `--include-total` to ask the backend for the exact count instead, at the cost of a
+`COUNT(*)` — leave it off for high-frequency polling. Older backends that predate the
+`include_total` param ignore it and keep returning the estimate.
 
 | Flag | Description |
 |------|-------------|
@@ -468,6 +472,7 @@ instead of a body envelope, but the SDK reads those headers and assembles the sa
 | `--unmatched-only` | Only return logs with no assigned template |
 | `--days-back N` | Limit to logs created in the last N days (unrestricted if omitted) |
 | `--include-prompts` | Include `system_prompt` and `user_prompt` in results (may be large) |
+| `--include-total` | Ask the backend to compute the exact `total_count`/`total_pages` instead of the cheaper lower-bound estimate (costs a `COUNT(*)`; off by default) |
 | `--sort VALUE` | Sort expression, e.g. `created_at desc` (default: newest first) |
 | `--page N` | Page number (default: 1) |
 | `--per-page N` | Results per page (default: 25, max: 100) |

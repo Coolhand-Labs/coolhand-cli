@@ -73,7 +73,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-deprecated', 'force']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-total', 'include-deprecated', 'force']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
 const REPEATABLE_FLAGS = new Set(['project', 'exclude-project', 'skill', 'exclude-skill', 'source']);
@@ -364,6 +364,7 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--unmatched-only', description: 'Only return logs with no assigned template' },
       { flag: '--days-back N', description: 'Limit to logs created in the last N days (unrestricted if omitted)' },
       { flag: '--include-prompts', description: 'Include system_prompt and user_prompt in results (may be large)' },
+      { flag: '--include-total', description: 'Ask the backend to compute the exact total_count/total_pages instead of the cheaper lower-bound estimate (costs a COUNT(*) server-side; off by default)' },
       { flag: '--sort VALUE', description: "Sort expression, e.g. 'created_at desc' (default: newest first)" },
       { flag: '--page N', description: 'Page number (default: 1)' },
       { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
@@ -1104,6 +1105,9 @@ function searchLogsOptions(parsed: ParsedArgs): SearchLogsOptions {
   }
   if (parsed.flags['include-prompts'] === true) {
     opts.includePrompts = true;
+  }
+  if (parsed.flags['include-total'] === true) {
+    opts.includeTotal = true;
   }
   if (typeof parsed.flags['sort'] === 'string') {
     opts.sort = parsed.flags['sort'];

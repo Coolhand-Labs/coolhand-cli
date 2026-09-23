@@ -39,6 +39,9 @@ export async function run(opts: SearchLogsOptions): Promise<number> {
     if (opts.includePrompts) {
       params.includePrompts = true;
     }
+    if (opts.includeTotal) {
+      params.includeTotal = true;
+    }
     if (opts.sort !== undefined) {
       params.sort = opts.sort;
     }

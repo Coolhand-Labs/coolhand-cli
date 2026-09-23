@@ -20,6 +20,9 @@ jest.mock('../src/commands/search-feedback.js', () => ({
 jest.mock('../src/commands/get-feedback.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/search-logs.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
 jest.mock('../src/commands/search-templates.js', () => ({
   run: jest.fn(),
 }));
@@ -59,6 +62,7 @@ import { run as runMonitorCommand } from '../src/commands/monitor.js';
 import { run as runSearchOptimizationsCommand } from '../src/commands/search-optimizations.js';
 import { run as runSearchFeedbackCommand } from '../src/commands/search-feedback.js';
 import { run as runGetFeedbackCommand } from '../src/commands/get-feedback.js';
+import { run as runSearchLogsCommand } from '../src/commands/search-logs.js';
 import { run as runSearchTemplatesCommand } from '../src/commands/search-templates.js';
 import { run as runGetTemplateCommand } from '../src/commands/get-template.js';
 import { run as runSearchReferencedFilesCommand } from '../src/commands/search-referenced-files.js';
@@ -334,6 +338,18 @@ describe('run', () => {
   test('search-logs with non-numeric --days-back returns exit 1', async () => {
     const code = await run(['search-logs', '--days-back', 'abc']);
     expect(code).toBe(1);
+  });
+
+  test('search-logs --include-total is boolean and does not swallow a following token', async () => {
+    (runSearchLogsCommand as jest.Mock).mockClear();
+    await run(['search-logs', '--include-total', '--per-page', '5']);
+    expect(runSearchLogsCommand).toHaveBeenCalledWith(expect.objectContaining({ includeTotal: true, perPage: 5 }));
+  });
+
+  test('search-logs omits includeTotal by default', async () => {
+    (runSearchLogsCommand as jest.Mock).mockClear();
+    await run(['search-logs']);
+    expect(runSearchLogsCommand).toHaveBeenCalledWith(expect.not.objectContaining({ includeTotal: true }));
   });
 
   test('search-templates with an invalid --status returns exit 1', async () => {

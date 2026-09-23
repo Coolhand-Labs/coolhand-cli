@@ -42,6 +42,7 @@ describe('search-logs command', () => {
       unmatchedOnly: true,
       daysBack: 14,
       includePrompts: true,
+      includeTotal: true,
       sort: 'created_at desc',
       page: 2,
       perPage: 50,
@@ -57,14 +58,15 @@ describe('search-logs command', () => {
       unmatchedOnly: true,
       daysBack: 14,
       includePrompts: true,
+      includeTotal: true,
       sort: 'created_at desc',
       page: 2,
       per: 50,
     });
   });
 
-  test('omits unmatchedOnly and includePrompts when false', async () => {
-    await run({ unmatchedOnly: false, includePrompts: false });
+  test('omits unmatchedOnly, includePrompts, and includeTotal when false', async () => {
+    await run({ unmatchedOnly: false, includePrompts: false, includeTotal: false });
     expect(mockSearchLogs).toHaveBeenCalledWith({});
   });
 
