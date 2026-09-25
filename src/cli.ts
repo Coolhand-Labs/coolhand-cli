@@ -34,6 +34,7 @@ import { run as runGetFeedback } from './commands/get-feedback.js';
 import { run as runSearchHelpArticles } from './commands/search-help-articles.js';
 import { run as runGetHelpArticle } from './commands/get-help-article.js';
 import { run as runListHelpCategories } from './commands/list-help-categories.js';
+import { run as runLinkFeedback } from './commands/link-feedback.js';
 import { run as runSearchReferencedFiles } from './commands/search-referenced-files.js';
 import { run as runListReferencedFileSessions } from './commands/list-referenced-file-sessions.js';
 import { countPending, flushFailed } from './pending-store.js';
@@ -62,6 +63,7 @@ import type {
   UpdateWorkloadOptions,
   SearchFeedbackOptions,
   GetFeedbackOptions,
+  LinkFeedbackOptions,
   FetchLogOptions,
   SearchLogsOptions,
   SearchTemplatesOptions,
@@ -227,6 +229,17 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--sort-dir asc|desc', description: 'Sort direction (default: desc)' },
       { flag: '--page N', description: 'Page number (default: 1)' },
       { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'link-feedback',
+    oneLiner: 'Link feedback records to an optimization in bulk (requires a private key)',
+    usage: 'coolhand link-feedback <optimization-id> [feedback-id...] [--file PATH|--file=-] [--note TEXT] [options]',
+    options: [
+      { flag: '--file PATH', description: 'Read feedback ids from a file (whitespace/comma separated); use --file=- for stdin' },
+      { flag: '--note TEXT', description: 'Note attached to every link created' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -1706,6 +1719,29 @@ function searchFeedbackOptions(parsed: ParsedArgs): SearchFeedbackOptions {
   return opts;
 }
 
+function linkFeedbackOptions(parsed: ParsedArgs): LinkFeedbackOptions {
+  const optimizationId = parsed.positional[0];
+  if (!optimizationId) {
+    throw new CliError('INVALID_ARGS', 'link-feedback requires an <optimization-id> argument');
+  }
+  const opts: LinkFeedbackOptions = { optimizationId, feedbackIds: parsed.positional.slice(1) };
+  if (typeof parsed.flags.file === 'string') {
+    opts.file = parsed.flags.file;
+  } else if (parsed.flags.file === true) {
+    throw new CliError('INVALID_ARGS', 'link-feedback --file requires a path; use --file=- to read ids from stdin');
+  }
+  if (typeof parsed.flags.note === 'string') {
+    opts.note = parsed.flags.note;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 function getFeedbackOptions(parsed: ParsedArgs): GetFeedbackOptions {
   const id = parsed.positional[0];
   if (!id) {
@@ -1889,6 +1925,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runWildcard(wildcardOptions(parsed));
       case 'search-feedback':
         return await runSearchFeedback(searchFeedbackOptions(parsed));
+      case 'link-feedback':
+        return await runLinkFeedback(linkFeedbackOptions(parsed));
       case 'get-feedback':
         return await runGetFeedback(getFeedbackOptions(parsed));
       case 'analyze-claude-sessions':
