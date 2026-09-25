@@ -418,6 +418,23 @@ Fetches a single feedback record by ID, including `original_output`, `revised_ou
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
+### link-feedback
+
+```bash
+coolhand link-feedback <optimization-id> [feedback-id...] [--file PATH|--file=-] [--note TEXT] [--client-id ID] [--json]
+```
+
+Links feedback records to an optimization as evidence, using the bulk mode of `POST /api/v2/optimizations/{id}/feedback_links` (requires a private key). Ids come from arguments, from `--file` (whitespace- or comma-separated; `--file=-` reads stdin), or both. Lists over 100 ids are sent in batches of 100 and the counts summed; already-linked ids are counted rather than failing, so a partial run is safe to repeat.
+
+Prints `Linked`, `Already linked`, `Errored`, and any `Not found` ids. Exits non-zero when `Errored` is above zero or the request fails (a 401 says to re-run `coolhand login --scope private`). Unknown ids are reported but do not change the exit code.
+
+| Flag | Description |
+|------|-------------|
+| `--file PATH` | Read feedback ids from a file; `--file=-` for stdin |
+| `--note TEXT` | Note attached to every link created |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON: `{ ok, result: { linked, already_linked, errored, not_found } }` |
+
 ## Log Access
 
 ### fetch-log

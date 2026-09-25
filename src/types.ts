@@ -252,6 +252,15 @@ export interface SearchFeedbackOptions {
   clientId?: string;
 }
 
+export interface LinkFeedbackOptions {
+  optimizationId: string;
+  feedbackIds: string[];
+  file?: string;
+  note?: string;
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface GetFeedbackOptions {
   id: string;
   json?: boolean;

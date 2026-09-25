@@ -91,6 +91,7 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand close-optimization` | Close an optimization with a reason |
 | `coolhand search-feedback` | Search and filter feedback records |
 | `coolhand get-feedback` | Fetch a single feedback record by ID |
+| `coolhand link-feedback` | Link feedback records to an optimization in bulk |
 | `coolhand fetch-log` | Fetch the input/output content of a single LLM request log |
 | `coolhand search-logs` | Search LLM request logs with flexible filters |
 | `coolhand search-referenced-files` | List a client's referenced files, aggregated and ranked by reference count |

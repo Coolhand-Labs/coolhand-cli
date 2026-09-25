@@ -20,6 +20,9 @@ jest.mock('../src/commands/search-feedback.js', () => ({
 jest.mock('../src/commands/get-feedback.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/link-feedback.js', () => ({
+  run: jest.fn(),
+}));
 jest.mock('../src/commands/search-templates.js', () => ({
   run: jest.fn(),
 }));
@@ -59,6 +62,7 @@ import { run as runMonitorCommand } from '../src/commands/monitor.js';
 import { run as runSearchOptimizationsCommand } from '../src/commands/search-optimizations.js';
 import { run as runSearchFeedbackCommand } from '../src/commands/search-feedback.js';
 import { run as runGetFeedbackCommand } from '../src/commands/get-feedback.js';
+import { run as runLinkFeedbackCommand } from '../src/commands/link-feedback.js';
 import { run as runSearchTemplatesCommand } from '../src/commands/search-templates.js';
 import { run as runGetTemplateCommand } from '../src/commands/get-template.js';
 import { run as runSearchReferencedFilesCommand } from '../src/commands/search-referenced-files.js';
@@ -178,6 +182,7 @@ describe('run', () => {
     (runSearchOptimizationsCommand as jest.Mock).mockResolvedValue(0);
     (runSearchFeedbackCommand as jest.Mock).mockResolvedValue(0);
     (runGetFeedbackCommand as jest.Mock).mockResolvedValue(0);
+    (runLinkFeedbackCommand as jest.Mock).mockResolvedValue(0);
     (runSearchTemplatesCommand as jest.Mock).mockResolvedValue(0);
     (runGetTemplateCommand as jest.Mock).mockResolvedValue(0);
     (runSearchReferencedFilesCommand as jest.Mock).mockResolvedValue(0);
@@ -196,6 +201,7 @@ describe('run', () => {
     (runSearchOptimizationsCommand as jest.Mock).mockReset();
     (runSearchFeedbackCommand as jest.Mock).mockReset();
     (runGetFeedbackCommand as jest.Mock).mockReset();
+    (runLinkFeedbackCommand as jest.Mock).mockReset();
     (runSearchTemplatesCommand as jest.Mock).mockReset();
     (runGetTemplateCommand as jest.Mock).mockReset();
     (runSearchReferencedFilesCommand as jest.Mock).mockReset();
@@ -577,6 +583,26 @@ describe('run', () => {
     const code = await run(['get-feedback', 'fb-123', '--json', '--client-id', 'acme']);
     expect(code).toBe(0);
     expect(runGetFeedbackCommand).toHaveBeenCalledWith({ id: 'fb-123', json: true, clientId: 'acme' });
+  });
+
+  test('link-feedback requires an <optimization-id>', async () => {
+    const code = await run(['link-feedback']);
+    expect(code).toBe(1);
+    expect(runLinkFeedbackCommand).not.toHaveBeenCalled();
+  });
+
+  test('link-feedback dispatches with ids, --file=- and --note', async () => {
+    const code = await run(['link-feedback', 'opt-1', 'fb-1', 'fb-2', '--file=-', '--note', 'why', '--json', '--client-id', 'acme']);
+    expect(code).toBe(0);
+    expect(runLinkFeedbackCommand).toHaveBeenCalledWith({
+      optimizationId: 'opt-1', feedbackIds: ['fb-1', 'fb-2'], file: '-', note: 'why', json: true, clientId: 'acme',
+    });
+  });
+
+  test('link-feedback rejects a bare --file with no path', async () => {
+    const code = await run(['link-feedback', 'opt-1', '--file']);
+    expect(code).toBe(1);
+    expect(runLinkFeedbackCommand).not.toHaveBeenCalled();
   });
 
   test('search-referenced-files dispatches with parsed flags', async () => {
