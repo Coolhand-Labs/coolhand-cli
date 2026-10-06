@@ -76,7 +76,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-deprecated', 'include-metrics', 'force']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-deprecated', 'include-metrics', 'no-metrics', 'force']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
 const REPEATABLE_FLAGS = new Set(['project', 'exclude-project', 'skill', 'exclude-skill', 'source']);
@@ -385,6 +385,7 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--source-api-result VALUE', description: 'Filter by result status: success, failed, operational, unmatched' },
       { flag: '--unmatched-only', description: 'Only return logs with no assigned template' },
       { flag: '--project-path PATH', description: 'Exact match against metadata.project_path' },
+      { flag: '--source-application VALUE', description: 'Exact match against the log source application' },
       { flag: '--days-back N', description: 'Limit to logs created in the last N days (unrestricted if omitted); ignored when --since or --until is given' },
       { flag: '--since TS', description: 'Only logs created at or after TS (ISO8601; replaces --days-back)' },
       { flag: '--until TS', description: 'Only logs created before TS (ISO8601, exclusive; replaces --days-back)' },
@@ -422,7 +423,8 @@ const COMMANDS: CommandMeta[] = [
     oneLiner: 'Get a single LLM request template by ID, including its prompt patterns (requires a private key)',
     usage: 'coolhand get-template <template-id> [options]',
     options: [
-      { flag: '--days-back N', description: 'Metrics window (metrics are always shown): the last N days (default: 28, max: 365); ignored when --since is given' },
+      { flag: '--no-metrics', description: 'Omit the metrics object (it is included by default)' },
+      { flag: '--days-back N', description: 'Metrics window (metrics are shown by default): the last N days (default: 28, max: 365); ignored when --since is given' },
       { flag: '--since TS', description: 'Metrics window start, ISO8601, inclusive (overrides --days-back)' },
       { flag: '--until TS', description: 'Metrics window end, ISO8601, exclusive (default: now)' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
@@ -1156,6 +1158,9 @@ function getTemplateOptions(parsed: ParsedArgs): GetTemplateOptions {
     throw new CliError('INVALID_ARGS', 'get-template requires a <template-id> argument');
   }
   const opts: GetTemplateOptions = { id, ...metricsWindowFlags(parsed) };
+  if (parsed.flags['no-metrics'] === true) {
+    opts.noMetrics = true;
+  }
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
   }
@@ -1219,6 +1224,9 @@ function searchLogsOptions(parsed: ParsedArgs): SearchLogsOptions {
   }
   if (typeof parsed.flags['project-path'] === 'string') {
     opts.projectPath = parsed.flags['project-path'];
+  }
+  if (typeof parsed.flags['source-application'] === 'string') {
+    opts.sourceApplication = parsed.flags['source-application'];
   }
   if (parsed.flags['include-prompts'] === true) {
     opts.includePrompts = true;

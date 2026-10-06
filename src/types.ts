@@ -135,6 +135,8 @@ export interface SearchLogsOptions {
   order?: string;
   /** Exact match against `metadata.project_path`. */
   projectPath?: string;
+  /** Exact match against the log's source application. */
+  sourceApplication?: string;
   includePrompts?: boolean;
   sort?: string;
   page?: number;
@@ -162,6 +164,8 @@ export interface SearchTemplatesOptions extends MetricsWindowOptions {
 
 export interface GetTemplateOptions extends MetricsWindowOptions {
   id: string;
+  /** `--no-metrics`: omit `metrics` from the response (sends `includeMetrics: false`). */
+  noMetrics?: boolean;
   json?: boolean;
   clientId?: string;
 }

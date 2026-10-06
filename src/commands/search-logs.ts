@@ -53,6 +53,9 @@ export async function run(opts: SearchLogsOptions): Promise<number> {
     if (opts.projectPath !== undefined) {
       params.projectPath = opts.projectPath;
     }
+    if (opts.sourceApplication !== undefined) {
+      params.sourceApplication = opts.sourceApplication;
+    }
     if (opts.includePrompts) {
       params.includePrompts = true;
     }

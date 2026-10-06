@@ -146,7 +146,24 @@ describe('get-template command', () => {
     });
   });
 
-  test('prints the always-present metrics before the prompt patterns', async () => {
+  test('--no-metrics sends includeMetrics: false, alongside any window flags', async () => {
+    mockGetTemplate.mockResolvedValue(detail);
+    await run({ id: 'tmpl-1', noMetrics: true });
+    expect(mockGetTemplate).toHaveBeenCalledWith('tmpl-1', { includeMetrics: false });
+    await run({ id: 'tmpl-1', noMetrics: true, daysBack: 7 });
+    expect(mockGetTemplate).toHaveBeenLastCalledWith('tmpl-1', { includeMetrics: false, daysBack: 7 });
+  });
+
+  test('prints no Metrics block when the response omits metrics', async () => {
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ id: 'tmpl-1', noMetrics: true });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).not.toContain('Metrics');
+    spy.mockRestore();
+  });
+
+  test('prints the default metrics before the prompt patterns', async () => {
     mockGetTemplate.mockResolvedValue({ ...detail, metrics });
     const { logger } = await import('../../src/logger.js');
     const spy = jest.spyOn(logger, 'info');

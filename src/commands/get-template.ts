@@ -1,4 +1,4 @@
-import type { LlmRequestTemplateDetail } from 'coolhand-node';
+import type { GetTemplateOptions as GetTemplateParams, LlmRequestTemplateDetail } from 'coolhand-node';
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { getTemplateClient, mapTemplateHttpError } from '../api/template-client.js';
@@ -48,10 +48,13 @@ export async function run(opts: GetTemplateOptions): Promise<number> {
 
     let result: LlmRequestTemplateDetail;
     try {
-      const window = metricsWindowParams(opts);
+      const params: GetTemplateParams = metricsWindowParams(opts);
+      if (opts.noMetrics) {
+        params.includeMetrics = false;
+      }
       result =
-        Object.keys(window).length > 0
-          ? await coolhand.getTemplate(opts.id, window)
+        Object.keys(params).length > 0
+          ? await coolhand.getTemplate(opts.id, params)
           : await coolhand.getTemplate(opts.id);
     } catch (err) {
       throw mapTemplateHttpError(

@@ -313,7 +313,7 @@ Prompt patterns are **not** in this response; use `get-template` for those.
 ### get-template
 
 ```bash
-coolhand get-template <template-id> [--days-back N] [--since TS] [--until TS] [--client-id ID] [--json]
+coolhand get-template <template-id> [--no-metrics] [--days-back N] [--since TS] [--until TS] [--client-id ID] [--json]
 ```
 
 Fetches a single template by the hashid `search-templates` returns, printing every list field plus
@@ -321,10 +321,11 @@ Fetches a single template by the hashid `search-templates` returns, printing eve
 can be long; they are printed in their own labelled blocks rather than trimmed, since a partial regex
 is misleading. Use `--json` for machine-readable output.
 
-The response always includes `metrics` (no flag needed), printed as a block between the summary and
-the patterns: window, requests and failures, total cost (4 decimals, `n/a` when unpriced), priced
-requests and token totals. `--days-back`, `--since` and `--until` choose the window exactly as in
-`search-workloads`; an invalid value is a `422` whose message the command prints.
+The response includes `metrics` by default (no flag needed), printed as a block between the summary
+and the patterns: window, requests and failures, total cost (4 decimals, `n/a` when unpriced),
+priced requests and token totals. `--no-metrics` omits it (and skips window validation).
+`--days-back`, `--since` and `--until` choose the window exactly as in `search-workloads`; an invalid
+value is a `422` whose message the command prints.
 
 Unlike the list, this applies no filtering beyond client ownership: deprecated and system templates
 are reachable by id with no opt-in flag. A template belonging to another client returns "not found"
@@ -332,6 +333,7 @@ rather than a permission error — its existence is not disclosed.
 
 | Flag | Description |
 |------|-------------|
+| `--no-metrics` | Omit the `metrics` object (included by default) |
 | `--days-back N` | Metrics window: the last N days ending now (server default 28, max 365). Ignored when `--since` is given |
 | `--since TS` | Metrics window start, ISO8601, inclusive. Overrides `--days-back` |
 | `--until TS` | Metrics window end, ISO8601, exclusive (default: now). With only `--until`, the window is `--days-back` long ending there |
@@ -502,7 +504,7 @@ tokens or its model has no pricing.
 ### search-logs
 
 ```bash
-coolhand search-logs [--template-id ID] [--workload-id ID] [--system-prompt-contains TEXT] [--user-prompt-contains TEXT] [--model VALUE] [--source-api VALUE] [--source-api-result VALUE] [--unmatched-only] [--project-path PATH] [--days-back N] [--since TS] [--until TS] [--min-cost USD] [--order cost_desc] [--include-prompts] [--sort VALUE] [--page N] [--per-page N] [--client-id ID] [--json]
+coolhand search-logs [--template-id ID] [--workload-id ID] [--system-prompt-contains TEXT] [--user-prompt-contains TEXT] [--model VALUE] [--source-api VALUE] [--source-api-result VALUE] [--unmatched-only] [--project-path PATH] [--source-application VALUE] [--days-back N] [--since TS] [--until TS] [--min-cost USD] [--order cost_desc] [--include-prompts] [--sort VALUE] [--page N] [--per-page N] [--client-id ID] [--json]
 ```
 
 Searches LLM request logs for the resolved client with flexible filters — useful for
@@ -531,6 +533,7 @@ or a `--since` not before `--until` is a `422` whose message the command prints.
 | `--source-api-result VALUE` | Filter by result status: `success`, `failed`, `operational`, `unmatched` |
 | `--unmatched-only` | Only return logs with no assigned template |
 | `--project-path PATH` | Exact match against `metadata.project_path` |
+| `--source-application VALUE` | Exact match against the log's source application |
 | `--days-back N` | Limit to logs created in the last N days (unrestricted if omitted). Ignored when `--since` or `--until` is given |
 | `--since TS` | Only logs created at or after TS (ISO8601, inclusive) |
 | `--until TS` | Only logs created before TS (ISO8601, exclusive; must be after `--since`) |

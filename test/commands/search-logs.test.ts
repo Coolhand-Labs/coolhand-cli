@@ -128,6 +128,11 @@ describe('search-logs command', () => {
     });
   });
 
+  test('maps --source-application to sourceApplication', async () => {
+    await run({ sourceApplication: 'claude-code' });
+    expect(mockSearchLogs).toHaveBeenCalledWith({ sourceApplication: 'claude-code' });
+  });
+
   test('sends minCost 0 rather than dropping it as falsy', async () => {
     await run({ minCost: 0 });
     expect(mockSearchLogs).toHaveBeenCalledWith({ minCost: 0 });

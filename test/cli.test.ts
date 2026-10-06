@@ -431,6 +431,11 @@ describe('run', () => {
     });
   });
 
+  test('get-template --no-metrics parses as a boolean and does not swallow the id', async () => {
+    await run(['get-template', '--no-metrics', 'tmpl-1']);
+    expect(runGetTemplateCommand).toHaveBeenCalledWith({ id: 'tmpl-1', noMetrics: true });
+  });
+
   test.each([
     ['search-templates', '--days-back', 'abc'],
     ['search-templates', '--days-back', '0'],
@@ -512,6 +517,11 @@ describe('run', () => {
       minCost: 0.05,
       order: 'cost_desc',
     });
+  });
+
+  test('search-logs forwards --source-application', async () => {
+    await run(['search-logs', '--source-application', 'claude-code']);
+    expect(runSearchLogsCommand).toHaveBeenCalledWith({ sourceApplication: 'claude-code' });
   });
 
   test('search-logs sends --min-cost 0 rather than dropping it as falsy', async () => {
