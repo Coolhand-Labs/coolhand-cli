@@ -2,6 +2,7 @@ import type { SearchTemplatesParams, SearchTemplatesResponse } from 'coolhand-no
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { getTemplateClient, mapTemplateHttpError } from '../api/template-client.js';
+import { metricsWindowParams } from '../cost-format.js';
 import type { SearchTemplatesOptions } from '../types.js';
 
 const TIMEOUT_HINT =
@@ -11,7 +12,7 @@ export async function run(opts: SearchTemplatesOptions): Promise<number> {
   try {
     const coolhand = await getTemplateClient({ clientId: opts.clientId });
 
-    const params: SearchTemplatesParams = {};
+    const params: SearchTemplatesParams = metricsWindowParams(opts);
     if (opts.search !== undefined) {
       params.search = opts.search;
     }
@@ -26,6 +27,9 @@ export async function run(opts: SearchTemplatesOptions): Promise<number> {
     }
     if (opts.includeSystem) {
       params.includeSystem = true;
+    }
+    if (opts.includeMetrics) {
+      params.includeMetrics = true;
     }
     if (opts.page !== undefined) {
       params.page = opts.page;

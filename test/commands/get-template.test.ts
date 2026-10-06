@@ -124,4 +124,48 @@ describe('get-template command', () => {
       expect.any(String)
     );
   });
+
+  const metrics = {
+    days_back: null,
+    since: '2026-09-01T00:00:00Z',
+    until: '2026-10-01T00:00:00Z',
+    request_count: 40,
+    failure_count: 2,
+    total_cost: 0.98765,
+    priced_request_count: 38,
+    total_input_tokens: 900,
+    total_output_tokens: 300,
+  };
+
+  test('passes the window flags to getTemplate as typed', async () => {
+    await run({ id: 'tmpl-1', since: '2026-09-01T00:00:00+02:00', until: '2026-10-01', daysBack: 14 });
+    expect(mockGetTemplate).toHaveBeenCalledWith('tmpl-1', {
+      since: '2026-09-01T00:00:00+02:00',
+      until: '2026-10-01',
+      daysBack: 14,
+    });
+  });
+
+  test('prints the always-present metrics before the prompt patterns', async () => {
+    mockGetTemplate.mockResolvedValue({ ...detail, metrics });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ id: 'tmpl-1' });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('Window: 2026-09-01T00:00:00Z to 2026-10-01T00:00:00Z');
+    expect(output).toContain('Requests: 40  Failures: 2');
+    expect(output).toContain('Total cost (USD): 0.9877  Priced requests: 38');
+    expect(output).toContain('Input tokens: 900  Output tokens: 300');
+    expect(output.indexOf('Metrics')).toBeLessThan(output.indexOf('User Prompt Pattern'));
+    spy.mockRestore();
+  });
+
+  test('emits metrics unchanged inside the JSON envelope', async () => {
+    mockGetTemplate.mockResolvedValue({ ...detail, metrics });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'json');
+    await run({ id: 'tmpl-1', json: true });
+    expect(spy).toHaveBeenCalledWith({ ok: true, result: { ...detail, metrics } });
+    spy.mockRestore();
+  });
 });

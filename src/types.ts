@@ -60,6 +60,26 @@ export interface StatusOutput {
   default_client_id: string | null;
 }
 
+/** The metrics window flags shared by search-workloads, search-templates and get-template.
+ *  `since`/`until` are ISO8601 strings passed through for the server to validate. */
+export interface MetricsWindowOptions {
+  daysBack?: number;
+  since?: string;
+  until?: string;
+}
+
+export interface SearchWorkloadsOptions extends MetricsWindowOptions {
+  search?: string;
+  page?: number;
+  perPage?: number;
+  includeArchived?: boolean;
+  includeSystem?: boolean;
+  includeTemplates?: boolean;
+  includeMetrics?: boolean;
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface ListWorkloadsOptions {
   search?: string;
   page?: number;
@@ -105,6 +125,16 @@ export interface SearchLogsOptions {
   sourceApiResult?: string;
   unmatchedOnly?: boolean;
   daysBack?: number;
+  /** ISO8601 lower bound (inclusive) on `created_at`; replaces `daysBack`. */
+  since?: string;
+  /** ISO8601 upper bound (exclusive) on `created_at`; replaces `daysBack`. */
+  until?: string;
+  /** Only logs whose per-log cost (USD) is at least this; `0` is sent. */
+  minCost?: number;
+  /** Passed through for the server to validate (it accepts only `cost_desc`). */
+  order?: string;
+  /** Exact match against `metadata.project_path`. */
+  projectPath?: string;
   includePrompts?: boolean;
   sort?: string;
   page?: number;
@@ -113,7 +143,7 @@ export interface SearchLogsOptions {
   clientId?: string;
 }
 
-export interface SearchTemplatesOptions {
+export interface SearchTemplatesOptions extends MetricsWindowOptions {
   /** Literal, case-insensitive substring match on the template name. `%` and `_` are escaped
    *  server-side, so they match themselves and must not be escaped again here. */
   search?: string;
@@ -122,13 +152,15 @@ export interface SearchTemplatesOptions {
   includeDeprecated?: boolean;
   /** Include the `Unmatched` / `Ignored API Calls` buckets, hidden by default. */
   includeSystem?: boolean;
+  /** Add a cost/performance `metrics` object per template. */
+  includeMetrics?: boolean;
   page?: number;
   perPage?: number;
   json?: boolean;
   clientId?: string;
 }
 
-export interface GetTemplateOptions {
+export interface GetTemplateOptions extends MetricsWindowOptions {
   id: string;
   json?: boolean;
   clientId?: string;

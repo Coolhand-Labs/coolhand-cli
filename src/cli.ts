@@ -18,6 +18,7 @@ import { run as runMapClaudeProjects } from './commands/map-claude-projects.js';
 import { run as runUploadClientFile } from './commands/upload-client-file.js';
 import { run as runSyncSkills } from './commands/sync-skills.js';
 import { run as runListWorkloads } from './commands/list-workloads.js';
+import { run as runSearchWorkloads } from './commands/search-workloads.js';
 import { run as runGetWorkload } from './commands/get-workload.js';
 import { run as runUpdateWorkload } from './commands/update-workload.js';
 import { run as runFetchLog } from './commands/fetch-log.js';
@@ -47,6 +48,8 @@ import type {
   UploadClientFileOptions,
   SyncSkillsOptions,
   ListWorkloadsOptions,
+  SearchWorkloadsOptions,
+  MetricsWindowOptions,
   GetWorkloadOptions,
   UpdateWorkloadOptions,
   SearchFeedbackOptions,
@@ -73,7 +76,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-deprecated', 'force']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-deprecated', 'include-metrics', 'force']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
 const REPEATABLE_FLAGS = new Set(['project', 'exclude-project', 'skill', 'exclude-skill', 'source']);
@@ -315,6 +318,25 @@ const COMMANDS: CommandMeta[] = [
     ],
   },
   {
+    name: 'search-workloads',
+    oneLiner: 'List workloads with optional cost and performance metrics over a time window (requires a private key)',
+    usage: 'coolhand search-workloads [options]',
+    options: [
+      { flag: '--search TEXT', description: 'Filter by name substring (case-insensitive)' },
+      { flag: '--include-archived', description: 'Include archived workloads' },
+      { flag: '--include-system', description: 'Include system workloads (Unmatched, etc.)' },
+      { flag: '--include-templates', description: 'Include templates (with routing patterns) for each workload' },
+      { flag: '--include-metrics', description: 'Add request count, failures, cost, priced requests and token totals per workload' },
+      { flag: '--days-back N', description: 'Metrics window: the last N days (default: 28, max: 365); ignored when --since is given' },
+      { flag: '--since TS', description: 'Metrics window start, ISO8601, inclusive (overrides --days-back)' },
+      { flag: '--until TS', description: 'Metrics window end, ISO8601, exclusive (default: now)' },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
     name: 'get-workload',
     oneLiner: 'Get a single workload by ID',
     usage: 'coolhand get-workload --id <id> [options]',
@@ -362,7 +384,12 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--source-api VALUE', description: "Filter by source API (e.g. 'openai', 'anthropic', 'vertex')" },
       { flag: '--source-api-result VALUE', description: 'Filter by result status: success, failed, operational, unmatched' },
       { flag: '--unmatched-only', description: 'Only return logs with no assigned template' },
-      { flag: '--days-back N', description: 'Limit to logs created in the last N days (unrestricted if omitted)' },
+      { flag: '--project-path PATH', description: 'Exact match against metadata.project_path' },
+      { flag: '--days-back N', description: 'Limit to logs created in the last N days (unrestricted if omitted); ignored when --since or --until is given' },
+      { flag: '--since TS', description: 'Only logs created at or after TS (ISO8601; replaces --days-back)' },
+      { flag: '--until TS', description: 'Only logs created before TS (ISO8601, exclusive; replaces --days-back)' },
+      { flag: '--min-cost USD', description: 'Only logs whose cost is at least USD (unpriceable logs are excluded)' },
+      { flag: '--order cost_desc', description: 'Sort by per-log cost, highest first (replaces --sort; priceable logs only)' },
       { flag: '--include-prompts', description: 'Include system_prompt and user_prompt in results (may be large)' },
       { flag: '--sort VALUE', description: "Sort expression, e.g. 'created_at desc' (default: newest first)" },
       { flag: '--page N', description: 'Page number (default: 1)' },
@@ -381,6 +408,10 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--status VALUE', description: 'Filter by status: draft, published, or failure' },
       { flag: '--include-deprecated', description: 'Include deprecated templates (hidden by default)' },
       { flag: '--include-system', description: "Include the 'Unmatched' and 'Ignored API Calls' system buckets (hidden by default) — inspect 'Unmatched' when logs are misrouting" },
+      { flag: '--include-metrics', description: 'Add request count, failures, cost, priced requests and token totals per template' },
+      { flag: '--days-back N', description: 'Metrics window (with --include-metrics): the last N days (default: 28, max: 365); ignored when --since is given' },
+      { flag: '--since TS', description: 'Metrics window start (with --include-metrics), ISO8601, inclusive (overrides --days-back)' },
+      { flag: '--until TS', description: 'Metrics window end (with --include-metrics), ISO8601, exclusive (default: now)' },
       { flag: '--page N', description: 'Page number (default: 1)' },
       { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
@@ -391,6 +422,9 @@ const COMMANDS: CommandMeta[] = [
     oneLiner: 'Get a single LLM request template by ID, including its prompt patterns (requires a private key)',
     usage: 'coolhand get-template <template-id> [options]',
     options: [
+      { flag: '--days-back N', description: 'Metrics window (metrics are always shown): the last N days (default: 28, max: 365); ignored when --since is given' },
+      { flag: '--since TS', description: 'Metrics window start, ISO8601, inclusive (overrides --days-back)' },
+      { flag: '--until TS', description: 'Metrics window end, ISO8601, exclusive (default: now)' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -1007,6 +1041,65 @@ function fetchLogOptions(parsed: ParsedArgs): FetchLogOptions {
 
 const TEMPLATE_STATUSES = new Set(['draft', 'published', 'failure']);
 
+function positiveIntFlag(parsed: ParsedArgs, name: string): number | undefined {
+  const raw = parsed.flags[name];
+  if (typeof raw !== 'string') {
+    return undefined;
+  }
+  const n = parseInt(raw, 10);
+  if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+    throw new CliError('INVALID_ARGS', `--${name} must be a positive integer`);
+  }
+  return n;
+}
+
+function pageFlags(parsed: ParsedArgs): { page?: number; perPage?: number } {
+  const out: { page?: number; perPage?: number } = {};
+  const page = positiveIntFlag(parsed, 'page');
+  if (page !== undefined) {
+    out.page = page;
+  }
+  const perPage = positiveIntFlag(parsed, 'per-page');
+  if (perPage !== undefined) {
+    if (perPage > 100) {
+      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
+    }
+    out.perPage = perPage;
+  }
+  return out;
+}
+
+/** ISO8601 value passed through untouched: the server validates it and a bad one comes back as its 422. */
+function timestampFlag(parsed: ParsedArgs, name: string): string | undefined {
+  if (!(name in parsed.flags)) {
+    return undefined;
+  }
+  const raw = parsed.flags[name];
+  if (typeof raw !== 'string' || raw.length === 0) {
+    throw new CliError('INVALID_ARGS', `--${name} requires an ISO8601 timestamp value`);
+  }
+  return raw;
+}
+
+function metricsWindowFlags(parsed: ParsedArgs): MetricsWindowOptions {
+  const out: MetricsWindowOptions = {};
+  const daysBack = positiveIntFlag(parsed, 'days-back');
+  if (daysBack !== undefined) {
+    out.daysBack = daysBack;
+  }
+  const since = timestampFlag(parsed, 'since');
+  if (since !== undefined) {
+    out.since = since;
+  }
+  const until = timestampFlag(parsed, 'until');
+  if (until !== undefined) {
+    out.until = until;
+  }
+  return out;
+}
+
+const MIN_COST_PATTERN = /^(?:\d+(?:\.\d+)?|\.\d+)$/;
+
 function searchTemplatesOptions(parsed: ParsedArgs): SearchTemplatesOptions {
   const opts: SearchTemplatesOptions = {};
   if (typeof parsed.flags['search'] === 'string') {
@@ -1028,6 +1121,10 @@ function searchTemplatesOptions(parsed: ParsedArgs): SearchTemplatesOptions {
   if (parsed.flags['include-system'] === true) {
     opts.includeSystem = true;
   }
+  if (parsed.flags['include-metrics'] === true) {
+    opts.includeMetrics = true;
+  }
+  Object.assign(opts, metricsWindowFlags(parsed));
   if (typeof parsed.flags['page'] === 'string') {
     const raw = parsed.flags['page'];
     const n = parseInt(raw, 10);
@@ -1058,7 +1155,7 @@ function getTemplateOptions(parsed: ParsedArgs): GetTemplateOptions {
   if (!id) {
     throw new CliError('INVALID_ARGS', 'get-template requires a <template-id> argument');
   }
-  const opts: GetTemplateOptions = { id };
+  const opts: GetTemplateOptions = { id, ...metricsWindowFlags(parsed) };
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
   }
@@ -1101,6 +1198,27 @@ function searchLogsOptions(parsed: ParsedArgs): SearchLogsOptions {
       throw new CliError('INVALID_ARGS', '--days-back must be a positive integer');
     }
     opts.daysBack = n;
+  }
+  const since = timestampFlag(parsed, 'since');
+  if (since !== undefined) {
+    opts.since = since;
+  }
+  const until = timestampFlag(parsed, 'until');
+  if (until !== undefined) {
+    opts.until = until;
+  }
+  if ('min-cost' in parsed.flags) {
+    const raw = parsed.flags['min-cost'];
+    if (typeof raw !== 'string' || !MIN_COST_PATTERN.test(raw)) {
+      throw new CliError('INVALID_ARGS', '--min-cost must be a non-negative number (USD)');
+    }
+    opts.minCost = Number(raw);
+  }
+  if (typeof parsed.flags['order'] === 'string') {
+    opts.order = parsed.flags['order'];
+  }
+  if (typeof parsed.flags['project-path'] === 'string') {
+    opts.projectPath = parsed.flags['project-path'];
   }
   if (parsed.flags['include-prompts'] === true) {
     opts.includePrompts = true;
@@ -1229,6 +1347,32 @@ function listWorkloadsOptions(parsed: ParsedArgs): ListWorkloadsOptions {
   }
   if (parsed.flags['include-templates'] === true) {
     opts.includeTemplates = true;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+function searchWorkloadsOptions(parsed: ParsedArgs): SearchWorkloadsOptions {
+  const opts: SearchWorkloadsOptions = { ...metricsWindowFlags(parsed), ...pageFlags(parsed) };
+  if (typeof parsed.flags.search === 'string') {
+    opts.search = parsed.flags.search;
+  }
+  if (parsed.flags['include-archived'] === true) {
+    opts.includeArchived = true;
+  }
+  if (parsed.flags['include-system'] === true) {
+    opts.includeSystem = true;
+  }
+  if (parsed.flags['include-templates'] === true) {
+    opts.includeTemplates = true;
+  }
+  if (parsed.flags['include-metrics'] === true) {
+    opts.includeMetrics = true;
   }
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
@@ -1504,6 +1648,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runSyncSkills(syncSkillsOptions(parsed));
       case 'list-workloads':
         return await runListWorkloads(listWorkloadsOptions(parsed));
+      case 'search-workloads':
+        return await runSearchWorkloads(searchWorkloadsOptions(parsed));
       case 'get-workload':
         return await runGetWorkload(getWorkloadOptions(parsed));
       case 'update-workload':

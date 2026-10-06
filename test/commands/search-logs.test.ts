@@ -110,4 +110,51 @@ describe('search-logs command', () => {
     const code = await run({});
     expect(code).not.toBe(0);
   });
+
+  test('maps the new cost and window flags to SDK params, sending since/until as typed', async () => {
+    await run({
+      projectPath: '/Users/me/app',
+      since: '2026-09-01T00:00:00+02:00',
+      until: '2026-10-01',
+      minCost: 0.05,
+      order: 'cost_desc',
+    });
+    expect(mockSearchLogs).toHaveBeenCalledWith({
+      projectPath: '/Users/me/app',
+      since: '2026-09-01T00:00:00+02:00',
+      until: '2026-10-01',
+      minCost: 0.05,
+      order: 'cost_desc',
+    });
+  });
+
+  test('sends minCost 0 rather than dropping it as falsy', async () => {
+    await run({ minCost: 0 });
+    expect(mockSearchLogs).toHaveBeenCalledWith({ minCost: 0 });
+  });
+
+  test('prints cost per row to 4 decimals, and n/a when null', async () => {
+    mockSearchLogs.mockResolvedValue({
+      logs: [
+        { id: 'log-1', created_at: '2026-09-02T00:00:00Z', model: 'gpt-4o', cost: 0.12345 },
+        { id: 'log-2', created_at: '2026-09-03T00:00:00Z', model: null, cost: null },
+      ],
+      pagination: { ...emptyPagination, total_count: 2, total_pages: 1 },
+    });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({});
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('log-1  2026-09-02T00:00:00Z  gpt-4o  cost (USD): 0.1235');
+    expect(output).toContain('log-2  2026-09-03T00:00:00Z  n/a  cost (USD): n/a');
+    spy.mockRestore();
+  });
+
+  test('maps a server 422 through mapLogHttpError into a non-zero exit', async () => {
+    const { CliError } = await import('../../src/errors.js');
+    const { mapLogHttpError } = await import('../../src/api/log-client.js');
+    (mapLogHttpError as jest.Mock).mockReturnValue(new CliError('LOG_ERROR', 'Log request failed (422): bad order'));
+    mockSearchLogs.mockRejectedValue(new Error('422'));
+    expect(await run({ order: 'bogus' })).not.toBe(0);
+  });
 });

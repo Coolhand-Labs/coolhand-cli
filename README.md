@@ -81,6 +81,7 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand claude` | Run Claude CLI through the Coolhand proxy |
 | `coolhand monitor` | Run an arbitrary CLI through the Coolhand proxy |
 | `coolhand list-workloads` | List workloads with optional search and pagination |
+| `coolhand search-workloads` | List workloads with optional cost and performance metrics over a time window |
 | `coolhand get-workload` | Fetch a single workload by ID |
 | `coolhand update-workload` | Update a workload's name and/or description |
 | `coolhand search-templates` | List and search LLM request templates |

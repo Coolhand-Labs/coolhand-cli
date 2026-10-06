@@ -84,4 +84,44 @@ describe('fetch-log command', () => {
     const code = await run({ logId: 'bad-id' });
     expect(code).not.toBe(0);
   });
+
+  const breakdown = {
+    total_cost: 0.3,
+    input_cost: 0.1,
+    output_cost: 0.2,
+    cached_input_cost: 0,
+    cache_creation_input_cost: 0,
+    reasoning_output_cost: 0,
+  };
+
+  test('prints cost and the cost breakdown in text mode when present', async () => {
+    mockGetLogContent.mockResolvedValue({ ...fullContent, cost: 0.3, cost_breakdown: breakdown });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ logId: 'log-1' });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('Cost (USD): 0.3000');
+    expect(output).toContain('Cost breakdown (USD): input 0.1000, output 0.2000');
+    spy.mockRestore();
+  });
+
+  test('prints n/a cost and no breakdown line when the log cannot be priced', async () => {
+    mockGetLogContent.mockResolvedValue({ ...fullContent, cost: null, cost_breakdown: null });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ logId: 'log-1' });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('Cost (USD): n/a');
+    expect(output).not.toContain('Cost breakdown');
+    spy.mockRestore();
+  });
+
+  test('prints no cost lines when the server returned no cost field', async () => {
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ logId: 'log-1' });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).not.toContain('Cost (USD)');
+    spy.mockRestore();
+  });
 });

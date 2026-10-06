@@ -1,7 +1,8 @@
-import type { SearchLogsParams, SearchLogsResponse } from 'coolhand-node';
+import type { LlmRequestLogOrder, SearchLogsParams, SearchLogsResponse } from 'coolhand-node';
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { getLogClient, mapLogHttpError } from '../api/log-client.js';
+import { formatCost } from '../cost-format.js';
 import type { SearchLogsOptions } from '../types.js';
 
 export async function run(opts: SearchLogsOptions): Promise<number> {
@@ -36,6 +37,22 @@ export async function run(opts: SearchLogsOptions): Promise<number> {
     if (opts.daysBack !== undefined) {
       params.daysBack = opts.daysBack;
     }
+    if (opts.since !== undefined) {
+      params.since = opts.since;
+    }
+    if (opts.until !== undefined) {
+      params.until = opts.until;
+    }
+    if (opts.minCost !== undefined) {
+      params.minCost = opts.minCost;
+    }
+    if (opts.order !== undefined) {
+      // The server validates it and answers 422 for anything but `cost_desc`.
+      params.order = opts.order as LlmRequestLogOrder;
+    }
+    if (opts.projectPath !== undefined) {
+      params.projectPath = opts.projectPath;
+    }
     if (opts.includePrompts) {
       params.includePrompts = true;
     }
@@ -63,6 +80,9 @@ export async function run(opts: SearchLogsOptions): Promise<number> {
       logger.info(
         `Page ${pagination.current_page} of ${pagination.total_pages} (${pagination.total_count} total) — use --page N to navigate`
       );
+      for (const log of result.logs) {
+        logger.info(`${log.id}  ${log.created_at}  ${log.model ?? 'n/a'}  cost (USD): ${formatCost(log.cost)}`);
+      }
       logger.info(JSON.stringify(result, null, 2));
     }
     return ExitCode.OK;

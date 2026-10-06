@@ -1,32 +1,14 @@
-import { Coolhand, HttpError } from 'coolhand-node';
+import { type Coolhand, HttpError } from 'coolhand-node';
 import { CliError } from '../errors.js';
-import { loadConfig, resolveClient } from '../config.js';
+import { getPrivateClient } from './private-client.js';
 
 /**
  * Resolves the CLI's stored client and returns a `Coolhand` instance authenticated with its
  * *private* key. `getLogContent`/`searchLogs` require the private key — the public key used by
  * `monitor`/`logRequest` will 401 here.
  */
-export async function getLogClient(opts: { clientId?: string } = {}): Promise<Coolhand> {
-  const cfg = await loadConfig();
-  const client = await resolveClient(cfg, opts.clientId);
-
-  if (!client.private_key) {
-    throw new CliError(
-      'NO_PRIVATE_KEY',
-      "No private key configured. Run 'coolhand login --scope private' first."
-    );
-  }
-
-  try {
-    // Coolhand validates baseUrl in its constructor (https required; http only for localhost).
-    return new Coolhand({ apiKey: client.private_key, baseUrl: client.base_url, silent: true });
-  } catch (err) {
-    throw new CliError(
-      'INVALID_BASE_URL',
-      `Invalid base_url for client: ${client.base_url} (${(err as Error).message})`
-    );
-  }
+export function getLogClient(opts: { clientId?: string } = {}): Promise<Coolhand> {
+  return getPrivateClient(opts);
 }
 
 /**
@@ -45,7 +27,8 @@ export function mapLogHttpError(err: unknown, notFoundMessage: string): CliError
     if (err.status === 404) {
       return new CliError('LOG_ERROR', notFoundMessage);
     }
-    return new CliError('LOG_ERROR', `Log request failed (${err.status}): ${err.message}`);
+    // coolhand-node already formats this as `Log request failed (<status>): <body>`.
+    return new CliError('LOG_ERROR', err.message);
   }
   return new CliError('LOG_ERROR', `Log request failed: ${(err as Error).message}`);
 }

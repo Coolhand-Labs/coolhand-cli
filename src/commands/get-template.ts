@@ -2,6 +2,7 @@ import type { LlmRequestTemplateDetail } from 'coolhand-node';
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { getTemplateClient, mapTemplateHttpError } from '../api/template-client.js';
+import { metricsLines, metricsWindowParams } from '../cost-format.js';
 import type { GetTemplateOptions } from '../types.js';
 
 const TIMEOUT_HINT = 'It is retryable — try again shortly.';
@@ -28,6 +29,9 @@ function printSummary(t: LlmRequestTemplateDetail): void {
       logger.info(`${label}: ${v}`);
     }
   }
+  if (t.metrics) {
+    logger.info(`\nMetrics\n-------\n${metricsLines(t.metrics).join('\n')}`);
+  }
   // Printed in full rather than truncated: a partial regex is misleading, and `logger.info`
   // already strips ANSI escapes from server-supplied text before it reaches the terminal.
   if (t.user_prompt_pattern) {
@@ -44,7 +48,11 @@ export async function run(opts: GetTemplateOptions): Promise<number> {
 
     let result: LlmRequestTemplateDetail;
     try {
-      result = await coolhand.getTemplate(opts.id);
+      const window = metricsWindowParams(opts);
+      result =
+        Object.keys(window).length > 0
+          ? await coolhand.getTemplate(opts.id, window)
+          : await coolhand.getTemplate(opts.id);
     } catch (err) {
       throw mapTemplateHttpError(
         err,

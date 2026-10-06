@@ -213,6 +213,46 @@ Updates a workload's name and/or description. At least one of `--name` or `--des
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
+### search-workloads
+
+```bash
+coolhand search-workloads [--search TEXT] [--include-archived] [--include-system] [--include-templates]
+                          [--include-metrics] [--days-back N] [--since TS] [--until TS]
+                          [--page N] [--per-page N] [--client-id ID] [--json]
+```
+
+Lists workloads over the REST API, optionally with a cost and performance `metrics` rollup per
+workload across all of its templates. Requires a **private** key (`coolhand login --scope private`).
+`list-workloads` above uses a different path and is unchanged. Each `id` is the workload hashid —
+the value `--workload-id` expects on `search-templates` and `search-logs`.
+
+Human output is one line per workload (hashid, name, template and log counts). With
+`--include-metrics`, each is followed by the metrics window, request and failure counts, total cost
+in USD to 4 decimals (`n/a` when no log in the window could be priced), priced requests, and input
+and output token totals. `--json` returns the SDK result unchanged: `{ workloads: [...], pagination: {...} }`
+with the wire field names, including `failure_count`, `total_cost`, `priced_request_count`,
+`long_context_request_count`, `total_input_tokens` and `total_output_tokens` on each `metrics` object.
+The cost numbers come from the same pricing SQL as the dashboard.
+
+`--since` and `--until` are passed to the server exactly as typed, so a `+hh:mm` offset needs no
+escaping. A malformed value, a `--since` not before `--until`, or a window over 365 days is a `422`
+whose message the command prints. The window is only validated when `--include-metrics` is set.
+
+| Flag | Description |
+|------|-------------|
+| `--search TEXT` | Filter by name substring (case-insensitive) |
+| `--include-archived` | Include archived workloads |
+| `--include-system` | Include system workloads (e.g. Unmatched) |
+| `--include-templates` | Expand each workload with its templates and routing regex patterns |
+| `--include-metrics` | Add a `metrics` object per workload |
+| `--days-back N` | Metrics window: the last N days ending now (server default 28, max 365). Ignored when `--since` is given |
+| `--since TS` | Metrics window start, ISO8601, inclusive. Overrides `--days-back` |
+| `--until TS` | Metrics window end, ISO8601, exclusive (default: now). With only `--until`, the window is `--days-back` long ending there |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 25, max: 100) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
 ## Templates
 
 An LLM request template is the regex pair Coolhand uses to route incoming logs to a workload. These
@@ -223,7 +263,8 @@ here. Both require a **private** key (`coolhand login --scope private`).
 
 ```bash
 coolhand search-templates [--search TEXT] [--workload-id ID] [--status VALUE] [--include-deprecated]
-                          [--include-system] [--page N] [--per-page N] [--client-id ID] [--json]
+                          [--include-system] [--include-metrics] [--days-back N] [--since TS] [--until TS]
+                          [--page N] [--per-page N] [--client-id ID] [--json]
 ```
 
 Lists the resolved client's templates, newest first. Search is a filter on the list, not a separate
@@ -260,6 +301,10 @@ Prompt patterns are **not** in this response; use `get-template` for those.
 | `--status VALUE` | Filter by status: `draft`, `published`, or `failure` |
 | `--include-deprecated` | Include deprecated templates (hidden by default; a deprecated row has a non-null `deprecated_at`) |
 | `--include-system` | Include the `Unmatched` and `Ignored API Calls` system buckets (hidden by default) |
+| `--include-metrics` | Add a `metrics` object per template (same shape as in `search-workloads`) |
+| `--days-back N` | Metrics window: the last N days ending now (server default 28, max 365). Ignored when `--since` is given |
+| `--since TS` | Metrics window start, ISO8601, inclusive. Overrides `--days-back` |
+| `--until TS` | Metrics window end, ISO8601, exclusive (default: now). With only `--until`, the window is `--days-back` long ending there |
 | `--page N` | Page number (default: 1) |
 | `--per-page N` | Results per page (default: 25, max: 100) |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
@@ -268,7 +313,7 @@ Prompt patterns are **not** in this response; use `get-template` for those.
 ### get-template
 
 ```bash
-coolhand get-template <template-id> [--client-id ID] [--json]
+coolhand get-template <template-id> [--days-back N] [--since TS] [--until TS] [--client-id ID] [--json]
 ```
 
 Fetches a single template by the hashid `search-templates` returns, printing every list field plus
@@ -276,12 +321,20 @@ Fetches a single template by the hashid `search-templates` returns, printing eve
 can be long; they are printed in their own labelled blocks rather than trimmed, since a partial regex
 is misleading. Use `--json` for machine-readable output.
 
+The response always includes `metrics` (no flag needed), printed as a block between the summary and
+the patterns: window, requests and failures, total cost (4 decimals, `n/a` when unpriced), priced
+requests and token totals. `--days-back`, `--since` and `--until` choose the window exactly as in
+`search-workloads`; an invalid value is a `422` whose message the command prints.
+
 Unlike the list, this applies no filtering beyond client ownership: deprecated and system templates
 are reachable by id with no opt-in flag. A template belonging to another client returns "not found"
 rather than a permission error — its existence is not disclosed.
 
 | Flag | Description |
 |------|-------------|
+| `--days-back N` | Metrics window: the last N days ending now (server default 28, max 365). Ignored when `--since` is given |
+| `--since TS` | Metrics window start, ISO8601, inclusive. Overrides `--days-back` |
+| `--until TS` | Metrics window end, ISO8601, exclusive (default: now). With only `--until`, the window is `--days-back` long ending there |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
@@ -433,6 +486,10 @@ without loading the full log (returns up to 5 snippets per field with surroundin
 cannot be combined with `--section`/`--max-chars`). When partial retrieval is used, the response
 includes `truncated: true` and `total_chars` per field.
 
+The log's `cost` (USD) and `cost_breakdown` (input, output, cached input, cache creation and
+reasoning output components) are printed above the content, and are `null` when the log has no
+tokens or its model has no pricing.
+
 | Flag | Description |
 |------|-------------|
 | `--section VALUE` | Which part of each content field to return: `full` (default), `beginning`, or `end` |
@@ -445,7 +502,7 @@ includes `truncated: true` and `total_chars` per field.
 ### search-logs
 
 ```bash
-coolhand search-logs [--template-id ID] [--workload-id ID] [--system-prompt-contains TEXT] [--user-prompt-contains TEXT] [--model VALUE] [--source-api VALUE] [--source-api-result VALUE] [--unmatched-only] [--days-back N] [--include-prompts] [--sort VALUE] [--page N] [--per-page N] [--client-id ID] [--json]
+coolhand search-logs [--template-id ID] [--workload-id ID] [--system-prompt-contains TEXT] [--user-prompt-contains TEXT] [--model VALUE] [--source-api VALUE] [--source-api-result VALUE] [--unmatched-only] [--project-path PATH] [--days-back N] [--since TS] [--until TS] [--min-cost USD] [--order cost_desc] [--include-prompts] [--sort VALUE] [--page N] [--per-page N] [--client-id ID] [--json]
 ```
 
 Searches LLM request logs for the resolved client with flexible filters — useful for
@@ -455,6 +512,13 @@ content is omitted from results unless `--include-prompts` is passed. The respon
 `{ logs: [...], pagination: {...} }`, matching `search-feedback`'s shape — the backing REST
 endpoint renders `logs` as a bare array on the wire and exposes pagination via response headers
 instead of a body envelope, but the SDK reads those headers and assembles the same shape for you.
+
+Each row carries `cost` (USD, priced by the same SQL as the dashboard), printed to 4 decimals with
+`n/a` for a log that cannot be priced. `--since`/`--until` take ISO8601 timestamps passed to the server
+exactly as typed (so a `+hh:mm` offset needs no escaping) and replace `--days-back`; a malformed value
+or a `--since` not before `--until` is a `422` whose message the command prints. `--min-cost 0` is sent
+(it excludes only unpriceable logs). `--order` is not validated locally: the server accepts only
+`cost_desc` and answers `422` otherwise.
 
 | Flag | Description |
 |------|-------------|
@@ -466,7 +530,12 @@ instead of a body envelope, but the SDK reads those headers and assembles the sa
 | `--source-api VALUE` | Filter by source API (e.g. `openai`, `anthropic`, `vertex`) |
 | `--source-api-result VALUE` | Filter by result status: `success`, `failed`, `operational`, `unmatched` |
 | `--unmatched-only` | Only return logs with no assigned template |
-| `--days-back N` | Limit to logs created in the last N days (unrestricted if omitted) |
+| `--project-path PATH` | Exact match against `metadata.project_path` |
+| `--days-back N` | Limit to logs created in the last N days (unrestricted if omitted). Ignored when `--since` or `--until` is given |
+| `--since TS` | Only logs created at or after TS (ISO8601, inclusive) |
+| `--until TS` | Only logs created before TS (ISO8601, exclusive; must be after `--since`) |
+| `--min-cost USD` | Only logs whose `cost` is at least USD (non-negative decimal; unpriceable logs are excluded) |
+| `--order cost_desc` | Sort by per-log cost, highest first; replaces `--sort` and returns priceable logs only |
 | `--include-prompts` | Include `system_prompt` and `user_prompt` in results (may be large) |
 | `--sort VALUE` | Sort expression, e.g. `created_at desc` (default: newest first) |
 | `--page N` | Page number (default: 1) |

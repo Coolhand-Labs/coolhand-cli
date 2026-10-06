@@ -26,6 +26,12 @@ jest.mock('../src/commands/search-templates.js', () => ({
 jest.mock('../src/commands/get-template.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/search-logs.js', () => ({
+  run: jest.fn(),
+}));
+jest.mock('../src/commands/search-workloads.js', () => ({
+  run: jest.fn(),
+}));
 jest.mock('../src/commands/search-referenced-files.js', () => ({
   run: jest.fn().mockResolvedValue(0),
 }));
@@ -61,6 +67,8 @@ import { run as runSearchFeedbackCommand } from '../src/commands/search-feedback
 import { run as runGetFeedbackCommand } from '../src/commands/get-feedback.js';
 import { run as runSearchTemplatesCommand } from '../src/commands/search-templates.js';
 import { run as runGetTemplateCommand } from '../src/commands/get-template.js';
+import { run as runSearchLogsCommand } from '../src/commands/search-logs.js';
+import { run as runSearchWorkloadsCommand } from '../src/commands/search-workloads.js';
 import { run as runSearchReferencedFilesCommand } from '../src/commands/search-referenced-files.js';
 import { run as runListReferencedFileSessionsCommand } from '../src/commands/list-referenced-file-sessions.js';
 import { run as runUploadClientFileCommand } from '../src/commands/upload-client-file.js';
@@ -180,6 +188,8 @@ describe('run', () => {
     (runGetFeedbackCommand as jest.Mock).mockResolvedValue(0);
     (runSearchTemplatesCommand as jest.Mock).mockResolvedValue(0);
     (runGetTemplateCommand as jest.Mock).mockResolvedValue(0);
+    (runSearchLogsCommand as jest.Mock).mockResolvedValue(0);
+    (runSearchWorkloadsCommand as jest.Mock).mockResolvedValue(0);
     (runSearchReferencedFilesCommand as jest.Mock).mockResolvedValue(0);
     (runListReferencedFileSessionsCommand as jest.Mock).mockResolvedValue(0);
     (runUploadClientFileCommand as jest.Mock).mockResolvedValue(0);
@@ -198,6 +208,8 @@ describe('run', () => {
     (runGetFeedbackCommand as jest.Mock).mockReset();
     (runSearchTemplatesCommand as jest.Mock).mockReset();
     (runGetTemplateCommand as jest.Mock).mockReset();
+    (runSearchLogsCommand as jest.Mock).mockReset();
+    (runSearchWorkloadsCommand as jest.Mock).mockReset();
     (runSearchReferencedFilesCommand as jest.Mock).mockReset();
     (runListReferencedFileSessionsCommand as jest.Mock).mockReset();
     (runUploadClientFileCommand as jest.Mock).mockReset();
@@ -391,6 +403,129 @@ describe('run', () => {
     const code = await run(['get-template', 'tmpl-1', '--json']);
     expect(code).toBe(0);
     expect(runGetTemplateCommand).toHaveBeenCalledWith({ id: 'tmpl-1', json: true });
+  });
+
+  test('search-templates forwards --include-metrics and the window flags untouched', async () => {
+    const code = await run([
+      'search-templates',
+      '--include-metrics',
+      '--days-back', '7',
+      '--since', '2026-09-01T00:00:00+02:00',
+      '--until', '2026-10-01',
+    ]);
+    expect(code).toBe(0);
+    expect(runSearchTemplatesCommand).toHaveBeenCalledWith({
+      includeMetrics: true,
+      daysBack: 7,
+      since: '2026-09-01T00:00:00+02:00',
+      until: '2026-10-01',
+    });
+  });
+
+  test('get-template forwards the window flags alongside the id', async () => {
+    await run(['get-template', 'tmpl-1', '--since', '2026-09-01', '--days-back', '14']);
+    expect(runGetTemplateCommand).toHaveBeenCalledWith({
+      id: 'tmpl-1',
+      since: '2026-09-01',
+      daysBack: 14,
+    });
+  });
+
+  test.each([
+    ['search-templates', '--days-back', 'abc'],
+    ['search-templates', '--days-back', '0'],
+    ['get-template', '--days-back', '-3'],
+    ['search-workloads', '--days-back', '1.5'],
+  ])('%s with an invalid %s %s returns exit 1', async (command, flag, value) => {
+    const argv = command === 'get-template' ? [command, 'tmpl-1', `${flag}=${value}`] : [command, flag, value];
+    expect(await run(argv)).toBe(1);
+  });
+
+  test.each(['search-templates', 'search-workloads', 'search-logs'])(
+    '%s with a valueless --since returns exit 1',
+    async (command) => {
+      expect(await run([command, '--since'])).toBe(1);
+    }
+  );
+
+  test('search-workloads forwards every flag, with --per-page as perPage', async () => {
+    const code = await run([
+      'search-workloads',
+      '--search', 'agent',
+      '--include-archived',
+      '--include-system',
+      '--include-templates',
+      '--include-metrics',
+      '--days-back', '28',
+      '--since', '2026-09-01T00:00:00Z',
+      '--until', '2026-10-01T00:00:00Z',
+      '--page', '2',
+      '--per-page', '50',
+      '--client-id', 'acme',
+      '--json',
+    ]);
+    expect(code).toBe(0);
+    expect(runSearchWorkloadsCommand).toHaveBeenCalledWith({
+      search: 'agent',
+      includeArchived: true,
+      includeSystem: true,
+      includeTemplates: true,
+      includeMetrics: true,
+      daysBack: 28,
+      since: '2026-09-01T00:00:00Z',
+      until: '2026-10-01T00:00:00Z',
+      page: 2,
+      perPage: 50,
+      clientId: 'acme',
+      json: true,
+    });
+  });
+
+  test('search-workloads with no flags forwards an empty options object', async () => {
+    await run(['search-workloads']);
+    expect(runSearchWorkloadsCommand).toHaveBeenCalledWith({});
+  });
+
+  test('search-workloads with --per-page over 100 returns exit 1', async () => {
+    expect(await run(['search-workloads', '--per-page', '101'])).toBe(1);
+  });
+
+  test('--include-metrics parses as a boolean and does not swallow the next flag', async () => {
+    await run(['search-workloads', '--include-metrics', '--json']);
+    expect(runSearchWorkloadsCommand).toHaveBeenCalledWith({ includeMetrics: true, json: true });
+  });
+
+  test('search-logs forwards the cost and window flags', async () => {
+    const code = await run([
+      'search-logs',
+      '--project-path', '/Users/me/app',
+      '--since', '2026-09-01T00:00:00+02:00',
+      '--until', '2026-10-01T00:00:00Z',
+      '--min-cost', '0.05',
+      '--order', 'cost_desc',
+    ]);
+    expect(code).toBe(0);
+    expect(runSearchLogsCommand).toHaveBeenCalledWith({
+      projectPath: '/Users/me/app',
+      since: '2026-09-01T00:00:00+02:00',
+      until: '2026-10-01T00:00:00Z',
+      minCost: 0.05,
+      order: 'cost_desc',
+    });
+  });
+
+  test('search-logs sends --min-cost 0 rather than dropping it as falsy', async () => {
+    await run(['search-logs', '--min-cost', '0']);
+    expect(runSearchLogsCommand).toHaveBeenCalledWith({ minCost: 0 });
+  });
+
+  test('search-logs passes an unknown --order through for the server to reject', async () => {
+    await run(['search-logs', '--order', 'cost_asc']);
+    expect(runSearchLogsCommand).toHaveBeenCalledWith({ order: 'cost_asc' });
+  });
+
+  test.each(['-1', 'abc', '1e3', '', '1.'])('search-logs with --min-cost "%s" returns exit 1', async (value) => {
+    expect(await run(['search-logs', `--min-cost=${value}`])).toBe(1);
   });
 
   test('global --client-id with no value returns exit 1', async () => {

@@ -171,4 +171,32 @@ describe('search-templates command', () => {
       expect.stringContaining('--workload-id')
     );
   });
+
+  test('maps --include-metrics and the window flags to SDK params, sending since/until as typed', async () => {
+    await run({ includeMetrics: true, daysBack: 7, since: '2026-09-01T00:00:00+02:00', until: '2026-10-01' });
+    expect(mockSearchTemplates).toHaveBeenCalledWith({
+      includeMetrics: true,
+      daysBack: 7,
+      since: '2026-09-01T00:00:00+02:00',
+      until: '2026-10-01',
+    });
+  });
+
+  test('omits includeMetrics when false', async () => {
+    await run({ includeMetrics: false });
+    expect(mockSearchTemplates).toHaveBeenCalledWith({});
+  });
+
+  test('emits per-template metrics unchanged with --json', async () => {
+    const withMetrics = {
+      ...oneTemplateResult,
+      templates: [{ ...oneTemplateResult.templates[0], metrics: { request_count: 4, total_cost: null } }],
+    };
+    mockSearchTemplates.mockResolvedValue(withMetrics);
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'json');
+    await run({ includeMetrics: true, json: true });
+    expect(spy).toHaveBeenCalledWith({ ok: true, result: withMetrics });
+    spy.mockRestore();
+  });
 });
