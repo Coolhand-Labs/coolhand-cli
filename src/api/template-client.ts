@@ -1,21 +1,13 @@
-import { type Coolhand, HttpError } from 'coolhand-node';
+import { HttpError } from 'coolhand-node';
 import { CliError } from '../errors.js';
-import { getPrivateClient } from './private-client.js';
 
-/**
- * Resolves the CLI's stored client and returns a `Coolhand` instance authenticated with its
- * *private* key. `searchTemplates`/`getTemplate` require the private key — the public key used by
- * `monitor`/`logRequest` is write-only on this API and will 401 here.
- */
-export function getTemplateClient(opts: { clientId?: string } = {}): Promise<Coolhand> {
-  return getPrivateClient(opts);
-}
+export { getPrivateClient as getTemplateClient } from './private-client.js';
 
 /**
  * Maps an error thrown by `Coolhand#searchTemplates`/`getTemplate` to a `CliError`.
  *
- * A `504` is not a crash: both endpoints aggregate `log_count` over `llm_request_logs` under a
- * 10-second statement timeout, so a slow aggregate is expected and retryable. `timeoutHint` is the
+ * A `504` is not a crash: both endpoints aggregate `log_count` and the window metrics over
+ * `llm_request_logs` under a 10-second statement timeout, so a slow aggregate is expected and retryable. `timeoutHint` is the
  * caller's advice for making the same call cheaper, which differs between list and show.
  */
 export function mapTemplateHttpError(
@@ -36,7 +28,7 @@ export function mapTemplateHttpError(
     if (err.status === 504) {
       return new CliError(
         'TEMPLATE_ERROR',
-        `The server timed out counting logs (log_count) for this request. ${timeoutHint}`
+        `The server timed out computing log counts and metrics for this request. ${timeoutHint}`
       );
     }
     // coolhand-node already formats this as `Template request failed (<status>): <body>`;

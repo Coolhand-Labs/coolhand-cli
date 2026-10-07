@@ -35,6 +35,13 @@ describe('mapLogHttpError', () => {
     expect(err.message).toBe(message);
   });
 
+  test('maps a 504 to a retryable hint', () => {
+    const err = mapLogHttpError(new HttpError('Log request failed (504): {}', 504), 'not found');
+    expect(err.code).toBe('LOG_ERROR');
+    expect(err.message).toContain('timed out');
+    expect(err.message).toContain('--per-page');
+  });
+
   test('maps a non-HttpError (e.g. network failure) to a generic message', () => {
     const err = mapLogHttpError(new Error('fetch failed'), 'not found');
     expect(err.message).toContain('fetch failed');

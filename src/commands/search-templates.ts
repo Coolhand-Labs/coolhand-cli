@@ -6,7 +6,7 @@ import { metricsWindowParams } from '../cost-format.js';
 import type { SearchTemplatesOptions } from '../types.js';
 
 const TIMEOUT_HINT =
-  'Narrow it with --workload-id, --search, or a smaller --per-page, then retry.';
+  'Narrow it with --workload-id, --search, a smaller --per-page or a shorter metrics window (--since/--until), or drop --include-metrics, then retry.';
 
 export async function run(opts: SearchTemplatesOptions): Promise<number> {
   try {

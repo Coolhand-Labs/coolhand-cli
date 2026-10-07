@@ -1,15 +1,7 @@
-import { type Coolhand, HttpError } from 'coolhand-node';
+import { HttpError } from 'coolhand-node';
 import { CliError } from '../errors.js';
-import { getPrivateClient } from './private-client.js';
 
-/**
- * Resolves the CLI's stored client and returns a `Coolhand` instance authenticated with its
- * *private* key. `getLogContent`/`searchLogs` require the private key — the public key used by
- * `monitor`/`logRequest` will 401 here.
- */
-export function getLogClient(opts: { clientId?: string } = {}): Promise<Coolhand> {
-  return getPrivateClient(opts);
-}
+export { getPrivateClient as getLogClient } from './private-client.js';
 
 /**
  * Maps an error thrown by `Coolhand#getLogContent`/`searchLogs` to a `CliError` with a clear,
@@ -26,6 +18,12 @@ export function mapLogHttpError(err: unknown, notFoundMessage: string): CliError
     }
     if (err.status === 404) {
       return new CliError('LOG_ERROR', notFoundMessage);
+    }
+    if (err.status === 504) {
+      return new CliError(
+        'LOG_ERROR',
+        'The server timed out. It is retryable — try again, or narrow the request (for search-logs: a shorter --since/--until window, more filters, or a smaller --per-page).'
+      );
     }
     // coolhand-node already formats this as `Log request failed (<status>): <body>`.
     return new CliError('LOG_ERROR', err.message);

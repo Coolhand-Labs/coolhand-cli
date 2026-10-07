@@ -5,7 +5,7 @@ import { getTemplateClient, mapTemplateHttpError } from '../api/template-client.
 import { metricsLines, metricsWindowParams } from '../cost-format.js';
 import type { GetTemplateOptions } from '../types.js';
 
-const TIMEOUT_HINT = 'It is retryable — try again shortly.';
+const TIMEOUT_HINT = 'Retry with --no-metrics, or a shorter --since/--until window.';
 
 const SUMMARY_FIELDS: Array<{ key: keyof LlmRequestTemplateDetail; label: string }> = [
   { key: 'id', label: 'ID' },

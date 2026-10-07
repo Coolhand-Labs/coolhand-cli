@@ -229,25 +229,28 @@ the value `--workload-id` expects on `search-templates` and `search-logs`.
 Human output is one line per workload (hashid, name, template and log counts). With
 `--include-metrics`, each is followed by the metrics window, request and failure counts, total cost
 in USD to 4 decimals (`n/a` when no log in the window could be priced), priced requests, and input
-and output token totals. `--json` returns the SDK result unchanged: `{ workloads: [...], pagination: {...} }`
-with the wire field names, including `failure_count`, `total_cost`, `priced_request_count`,
-`long_context_request_count`, `total_input_tokens` and `total_output_tokens` on each `metrics` object.
-The cost numbers come from the same pricing SQL as the dashboard.
+and output token totals. `--json` prints `{ "ok": true, "result": ... }` where `result` is the SDK
+result unchanged, `{ workloads: [...], pagination: {...} }`, with the wire field names, including
+`failure_count`, `total_cost`, `priced_request_count`, `long_context_request_count`,
+`total_input_tokens` and `total_output_tokens` on each `metrics` object. The cost numbers come from
+the same pricing SQL as the dashboard. Human output does not list templates; `--include-templates`
+is visible with `--json`.
 
 `--since` and `--until` are passed to the server exactly as typed, so a `+hh:mm` offset needs no
 escaping. A malformed value, a `--since` not before `--until`, or a window over 365 days is a `422`
-whose message the command prints. The window is only validated when `--include-metrics` is set.
+whose message the command prints. The window flags are ignored (and not validated) unless
+`--include-metrics` is set.
 
 | Flag | Description |
 |------|-------------|
 | `--search TEXT` | Filter by name substring (case-insensitive) |
 | `--include-archived` | Include archived workloads |
 | `--include-system` | Include system workloads (e.g. Unmatched) |
-| `--include-templates` | Expand each workload with its templates and routing regex patterns |
+| `--include-templates` | Expand each workload with its templates and routing regex patterns (visible with `--json`) |
 | `--include-metrics` | Add a `metrics` object per workload |
-| `--days-back N` | Metrics window: the last N days ending now (server default 28, max 365). Ignored when `--since` is given |
-| `--since TS` | Metrics window start, ISO8601, inclusive. Overrides `--days-back` |
-| `--until TS` | Metrics window end, ISO8601, exclusive (default: now). With only `--until`, the window is `--days-back` long ending there |
+| `--days-back N` | Metrics window (with `--include-metrics`): the last N days ending now (server default 28, max 365). Ignored when `--since` is given |
+| `--since TS` | Metrics window start (with `--include-metrics`), ISO8601, inclusive. Overrides `--days-back` |
+| `--until TS` | Metrics window end (with `--include-metrics`), ISO8601, exclusive (default: now). With only `--until`, the window is `--days-back` long ending there |
 | `--page N` | Page number (default: 1) |
 | `--per-page N` | Results per page (default: 25, max: 100) |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
@@ -287,10 +290,11 @@ excluded, so this can be lower than the count the `search_templates` MCP tool re
 not equivalent surfaces: the MCP tool also hides templates whose workload has been archived, and this
 command does not.
 
-Aggregating `log_count` is the expensive part of the response and is bounded by a server-side
-10-second statement timeout. If you exceed it the command reports the timeout as itself and tells you
-to narrow the query with `--workload-id`, `--search`, or a smaller `--per-page` — it is retryable, not
-a failure of the command.
+Aggregating `log_count` (and, with `--include-metrics`, the window metrics) is the expensive part of the
+response and is bounded by a server-side 10-second statement timeout. If you exceed it the command
+reports the timeout as itself and tells you to narrow the query with `--workload-id`, `--search`, a
+smaller `--per-page` or a shorter `--since`/`--until` window, or to drop `--include-metrics` — it is
+retryable, not a failure of the command.
 
 Prompt patterns are **not** in this response; use `get-template` for those.
 
@@ -302,9 +306,9 @@ Prompt patterns are **not** in this response; use `get-template` for those.
 | `--include-deprecated` | Include deprecated templates (hidden by default; a deprecated row has a non-null `deprecated_at`) |
 | `--include-system` | Include the `Unmatched` and `Ignored API Calls` system buckets (hidden by default) |
 | `--include-metrics` | Add a `metrics` object per template (same shape as in `search-workloads`) |
-| `--days-back N` | Metrics window: the last N days ending now (server default 28, max 365). Ignored when `--since` is given |
-| `--since TS` | Metrics window start, ISO8601, inclusive. Overrides `--days-back` |
-| `--until TS` | Metrics window end, ISO8601, exclusive (default: now). With only `--until`, the window is `--days-back` long ending there |
+| `--days-back N` | Metrics window (with `--include-metrics`): the last N days ending now (server default 28, max 365). Ignored when `--since` is given |
+| `--since TS` | Metrics window start (with `--include-metrics`), ISO8601, inclusive. Overrides `--days-back` |
+| `--until TS` | Metrics window end (with `--include-metrics`), ISO8601, exclusive (default: now). With only `--until`, the window is `--days-back` long ending there |
 | `--page N` | Page number (default: 1) |
 | `--per-page N` | Results per page (default: 25, max: 100) |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
@@ -325,7 +329,8 @@ The response includes `metrics` by default (no flag needed), printed as a block 
 and the patterns: window, requests and failures, total cost (4 decimals, `n/a` when unpriced),
 priced requests and token totals. `--no-metrics` omits it (and skips window validation).
 `--days-back`, `--since` and `--until` choose the window exactly as in `search-workloads`; an invalid
-value is a `422` whose message the command prints.
+value is a `422` whose message the command prints. A `504` (the metrics aggregate timed out) is
+reported as retryable, with a hint to use `--no-metrics` or a shorter `--since`/`--until` window.
 
 Unlike the list, this applies no filtering beyond client ownership: deprecated and system templates
 are reachable by id with no opt-in flag. A template belonging to another client returns "not found"
@@ -516,9 +521,11 @@ endpoint renders `logs` as a bare array on the wire and exposes pagination via r
 instead of a body envelope, but the SDK reads those headers and assembles the same shape for you.
 
 Each row carries `cost` (USD, priced by the same SQL as the dashboard), printed to 4 decimals with
-`n/a` for a log that cannot be priced. `--since`/`--until` take ISO8601 timestamps passed to the server
-exactly as typed (so a `+hh:mm` offset needs no escaping) and replace `--days-back`; a malformed value
-or a `--since` not before `--until` is a `422` whose message the command prints. `--min-cost 0` is sent
+`n/a` for a log that cannot be priced. Human output prints one summary line per log (id, creation
+time, model, cost) before the full JSON dump. `--since`/`--until` take ISO8601 timestamps passed to
+the server exactly as typed (so a `+hh:mm` offset needs no escaping). `--since` overrides `--days-back`; with only
+`--until`, `--days-back` sets how far back the window starts. A malformed value or a `--since` not
+before `--until` is a `422` whose message the command prints. `--min-cost 0` is sent
 (it excludes only unpriceable logs). `--order` is not validated locally: the server accepts only
 `cost_desc` and answers `422` otherwise.
 
@@ -534,8 +541,8 @@ or a `--since` not before `--until` is a `422` whose message the command prints.
 | `--unmatched-only` | Only return logs with no assigned template |
 | `--project-path PATH` | Exact match against `metadata.project_path` |
 | `--source-application VALUE` | Exact match against the log's source application |
-| `--days-back N` | Limit to logs created in the last N days (unrestricted if omitted). Ignored when `--since` or `--until` is given |
-| `--since TS` | Only logs created at or after TS (ISO8601, inclusive) |
+| `--days-back N` | Limit to logs created in the last N days (unrestricted if omitted). Ignored when `--since` is given; with only `--until`, sets how far back the window starts |
+| `--since TS` | Only logs created at or after TS (ISO8601, inclusive). Overrides `--days-back` |
 | `--until TS` | Only logs created before TS (ISO8601, exclusive; must be after `--since`) |
 | `--min-cost USD` | Only logs whose `cost` is at least USD (non-negative decimal; unpriceable logs are excluded) |
 | `--order cost_desc` | Sort by per-log cost, highest first; replaces `--sort` and returns priceable logs only |

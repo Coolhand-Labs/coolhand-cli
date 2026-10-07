@@ -86,14 +86,15 @@ describe('mapTemplateHttpError', () => {
     expect(err.message).toBe('Template "abc" not found.');
   });
 
-  test('maps a 504 to the log_count timeout explanation plus the caller-supplied hint', () => {
+  test('maps a 504 to the timeout explanation plus the caller-supplied hint', () => {
     const err = mapTemplateHttpError(
       new HttpError('Gateway Timeout', 504),
       'not found',
       'Narrow it with --workload-id, --search, or a smaller --per-page, then retry.'
     );
     expect(err.code).toBe('TEMPLATE_ERROR');
-    expect(err.message).toContain('log_count');
+    expect(err.message).toContain('timed out');
+    expect(err.message).not.toContain('log_count)');
     expect(err.message).toContain('--workload-id');
     expect(err.message).toContain('--per-page');
   });
@@ -112,6 +113,13 @@ describe('mapTemplateHttpError', () => {
     );
     expect(err.code).toBe('TEMPLATE_ERROR');
     expect(err.message).toBe('Template request failed (422): {"errors":{"workload_id":["Workload not found"]}}');
+  });
+
+  test('passes a 422 from a bad --since/--until through with the server body', () => {
+    const message = 'Template request failed (422): {"errors":{"since":["is not a valid ISO8601 timestamp"]}}';
+    const err = mapTemplateHttpError(new HttpError(message, 422), 'not found', 'narrow it');
+    expect(err.code).toBe('TEMPLATE_ERROR');
+    expect(err.message).toBe(message);
   });
 
   test('does not repeat the status prefix the SDK already added', () => {

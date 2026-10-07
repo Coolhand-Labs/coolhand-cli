@@ -325,11 +325,11 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--search TEXT', description: 'Filter by name substring (case-insensitive)' },
       { flag: '--include-archived', description: 'Include archived workloads' },
       { flag: '--include-system', description: 'Include system workloads (Unmatched, etc.)' },
-      { flag: '--include-templates', description: 'Include templates (with routing patterns) for each workload' },
+      { flag: '--include-templates', description: 'Include templates (with routing patterns) for each workload (visible with --json)' },
       { flag: '--include-metrics', description: 'Add request count, failures, cost, priced requests and token totals per workload' },
-      { flag: '--days-back N', description: 'Metrics window: the last N days (default: 28, max: 365); ignored when --since is given' },
-      { flag: '--since TS', description: 'Metrics window start, ISO8601, inclusive (overrides --days-back)' },
-      { flag: '--until TS', description: 'Metrics window end, ISO8601, exclusive (default: now)' },
+      { flag: '--days-back N', description: 'Metrics window (with --include-metrics): the last N days (default: 28, max: 365); ignored when --since is given' },
+      { flag: '--since TS', description: 'Metrics window start (with --include-metrics), ISO8601, inclusive (overrides --days-back)' },
+      { flag: '--until TS', description: 'Metrics window end (with --include-metrics), ISO8601, exclusive (default: now)' },
       { flag: '--page N', description: 'Page number (default: 1)' },
       { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
@@ -386,9 +386,9 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--unmatched-only', description: 'Only return logs with no assigned template' },
       { flag: '--project-path PATH', description: 'Exact match against metadata.project_path' },
       { flag: '--source-application VALUE', description: 'Exact match against the log source application' },
-      { flag: '--days-back N', description: 'Limit to logs created in the last N days (unrestricted if omitted); ignored when --since or --until is given' },
-      { flag: '--since TS', description: 'Only logs created at or after TS (ISO8601; replaces --days-back)' },
-      { flag: '--until TS', description: 'Only logs created before TS (ISO8601, exclusive; replaces --days-back)' },
+      { flag: '--days-back N', description: 'Limit to logs created in the last N days (unrestricted if omitted); ignored when --since is given' },
+      { flag: '--since TS', description: 'Only logs created at or after TS (ISO8601, inclusive; overrides --days-back)' },
+      { flag: '--until TS', description: 'Only logs created before TS (ISO8601, exclusive); with only --until, --days-back sets how far back the window starts' },
       { flag: '--min-cost USD', description: 'Only logs whose cost is at least USD (unpriceable logs are excluded)' },
       { flag: '--order cost_desc', description: 'Sort by per-log cost, highest first (replaces --sort; priceable logs only)' },
       { flag: '--include-prompts', description: 'Include system_prompt and user_prompt in results (may be large)' },
@@ -1043,14 +1043,17 @@ function fetchLogOptions(parsed: ParsedArgs): FetchLogOptions {
 
 const TEMPLATE_STATUSES = new Set(['draft', 'published', 'failure']);
 
-function positiveIntFlag(parsed: ParsedArgs, name: string): number | undefined {
+function positiveIntFlag(parsed: ParsedArgs, name: string, max?: number): number | undefined {
   const raw = parsed.flags[name];
   if (typeof raw !== 'string') {
     return undefined;
   }
   const n = parseInt(raw, 10);
-  if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
-    throw new CliError('INVALID_ARGS', `--${name} must be a positive integer`);
+  if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || (max !== undefined && n > max)) {
+    throw new CliError(
+      'INVALID_ARGS',
+      max === undefined ? `--${name} must be a positive integer` : `--${name} must be an integer between 1 and ${max}`
+    );
   }
   return n;
 }
@@ -1061,11 +1064,8 @@ function pageFlags(parsed: ParsedArgs): { page?: number; perPage?: number } {
   if (page !== undefined) {
     out.page = page;
   }
-  const perPage = positiveIntFlag(parsed, 'per-page');
+  const perPage = positiveIntFlag(parsed, 'per-page', 100);
   if (perPage !== undefined) {
-    if (perPage > 100) {
-      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
-    }
     out.perPage = perPage;
   }
   return out;
@@ -1079,6 +1079,18 @@ function timestampFlag(parsed: ParsedArgs, name: string): string | undefined {
   const raw = parsed.flags[name];
   if (typeof raw !== 'string' || raw.length === 0) {
     throw new CliError('INVALID_ARGS', `--${name} requires an ISO8601 timestamp value`);
+  }
+  return raw;
+}
+
+/** A value-taking flag that was passed bare (parsed as `true`) is an error rather than silently dropped. */
+function requiredValueFlag(parsed: ParsedArgs, name: string): string | undefined {
+  if (!(name in parsed.flags)) {
+    return undefined;
+  }
+  const raw = parsed.flags[name];
+  if (typeof raw !== 'string' || raw.length === 0) {
+    throw new CliError('INVALID_ARGS', `--${name} requires a value`);
   }
   return raw;
 }
@@ -1127,22 +1139,7 @@ function searchTemplatesOptions(parsed: ParsedArgs): SearchTemplatesOptions {
     opts.includeMetrics = true;
   }
   Object.assign(opts, metricsWindowFlags(parsed));
-  if (typeof parsed.flags['page'] === 'string') {
-    const raw = parsed.flags['page'];
-    const n = parseInt(raw, 10);
-    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
-      throw new CliError('INVALID_ARGS', '--page must be a positive integer');
-    }
-    opts.page = n;
-  }
-  if (typeof parsed.flags['per-page'] === 'string') {
-    const raw = parsed.flags['per-page'];
-    const n = parseInt(raw, 10);
-    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 100) {
-      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
-    }
-    opts.perPage = n;
-  }
+  Object.assign(opts, pageFlags(parsed));
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
   }
@@ -1196,22 +1193,7 @@ function searchLogsOptions(parsed: ParsedArgs): SearchLogsOptions {
   if (parsed.flags['unmatched-only'] === true) {
     opts.unmatchedOnly = true;
   }
-  if (typeof parsed.flags['days-back'] === 'string') {
-    const raw = parsed.flags['days-back'];
-    const n = parseInt(raw, 10);
-    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
-      throw new CliError('INVALID_ARGS', '--days-back must be a positive integer');
-    }
-    opts.daysBack = n;
-  }
-  const since = timestampFlag(parsed, 'since');
-  if (since !== undefined) {
-    opts.since = since;
-  }
-  const until = timestampFlag(parsed, 'until');
-  if (until !== undefined) {
-    opts.until = until;
-  }
+  Object.assign(opts, metricsWindowFlags(parsed));
   if ('min-cost' in parsed.flags) {
     const raw = parsed.flags['min-cost'];
     if (typeof raw !== 'string' || !MIN_COST_PATTERN.test(raw)) {
@@ -1219,14 +1201,17 @@ function searchLogsOptions(parsed: ParsedArgs): SearchLogsOptions {
     }
     opts.minCost = Number(raw);
   }
-  if (typeof parsed.flags['order'] === 'string') {
-    opts.order = parsed.flags['order'];
+  const order = requiredValueFlag(parsed, 'order');
+  if (order !== undefined) {
+    opts.order = order;
   }
-  if (typeof parsed.flags['project-path'] === 'string') {
-    opts.projectPath = parsed.flags['project-path'];
+  const projectPath = requiredValueFlag(parsed, 'project-path');
+  if (projectPath !== undefined) {
+    opts.projectPath = projectPath;
   }
-  if (typeof parsed.flags['source-application'] === 'string') {
-    opts.sourceApplication = parsed.flags['source-application'];
+  const sourceApplication = requiredValueFlag(parsed, 'source-application');
+  if (sourceApplication !== undefined) {
+    opts.sourceApplication = sourceApplication;
   }
   if (parsed.flags['include-prompts'] === true) {
     opts.includePrompts = true;

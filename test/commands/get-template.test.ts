@@ -152,6 +152,8 @@ describe('get-template command', () => {
     expect(mockGetTemplate).toHaveBeenCalledWith('tmpl-1', { includeMetrics: false });
     await run({ id: 'tmpl-1', noMetrics: true, daysBack: 7 });
     expect(mockGetTemplate).toHaveBeenLastCalledWith('tmpl-1', { includeMetrics: false, daysBack: 7 });
+    await run({ id: 'tmpl-1', noMetrics: true, since: '2026-09-01' });
+    expect(mockGetTemplate).toHaveBeenLastCalledWith('tmpl-1', { includeMetrics: false, since: '2026-09-01' });
   });
 
   test('prints no Metrics block when the response omits metrics', async () => {

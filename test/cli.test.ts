@@ -538,6 +538,21 @@ describe('run', () => {
     expect(await run(['search-logs', `--min-cost=${value}`])).toBe(1);
   });
 
+  test.each(['--order', '--project-path', '--source-application'])(
+    'search-logs with a bare %s returns exit 1 without calling the command',
+    async (flag) => {
+      expect(await run(['search-logs', flag])).toBe(1);
+      expect(runSearchLogsCommand).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each(['--order=', '--project-path=', '--source-application='])(
+    'search-logs with an empty %s returns exit 1',
+    async (flag) => {
+      expect(await run(['search-logs', flag])).toBe(1);
+    }
+  );
+
   test('global --client-id with no value returns exit 1', async () => {
     const code = await run(['--client-id']);
     expect(code).toBe(1);
