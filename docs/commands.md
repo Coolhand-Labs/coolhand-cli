@@ -239,7 +239,8 @@ is visible with `--json`.
 `--since` and `--until` are passed to the server exactly as typed, so a `+hh:mm` offset needs no
 escaping. A malformed value, a `--since` not before `--until`, or a window over 365 days is a `422`
 whose message the command prints. The window flags are ignored (and not validated) unless
-`--include-metrics` is set.
+`--include-metrics` is set. A `504` (the metrics aggregate timed out) is retryable: narrow it with
+`--search`, a smaller `--per-page` or a shorter `--since`/`--until` window, or drop `--include-metrics`.
 
 | Flag | Description |
 |------|-------------|
@@ -494,7 +495,8 @@ cannot be combined with `--section`/`--max-chars`). When partial retrieval is us
 includes `truncated: true` and `total_chars` per field.
 
 The log's `cost` (USD) and `cost_breakdown` (input, output, cached input, cache creation and
-reasoning output components) are printed above the content, and are `null` when the log has no
+reasoning output components) are printed above the content (4 decimals; a priced amount under
+$0.0001 shows as `<0.0001` rather than `0.0000`), and are `null` when the log has no
 tokens or its model has no pricing.
 
 | Flag | Description |
@@ -520,14 +522,16 @@ content is omitted from results unless `--include-prompts` is passed. The respon
 endpoint renders `logs` as a bare array on the wire and exposes pagination via response headers
 instead of a body envelope, but the SDK reads those headers and assembles the same shape for you.
 
-Each row carries `cost` (USD, priced by the same SQL as the dashboard), printed to 4 decimals with
-`n/a` for a log that cannot be priced. Human output prints one summary line per log (id, creation
+Each row carries `cost` (USD, priced by the same SQL as the dashboard), printed to 4 decimals (a priced
+log under $0.0001 shows as `<0.0001`, never `0.0000`) with `n/a` for a log that cannot be priced. Human output prints one summary line per log (id, creation
 time, model, cost) before the full JSON dump. `--since`/`--until` take ISO8601 timestamps passed to
 the server exactly as typed (so a `+hh:mm` offset needs no escaping). `--since` overrides `--days-back`; with only
 `--until`, `--days-back` sets how far back the window starts. A malformed value or a `--since` not
 before `--until` is a `422` whose message the command prints. `--min-cost 0` is sent
 (it excludes only unpriceable logs). `--order` is not validated locally: the server accepts only
-`cost_desc` and answers `422` otherwise.
+`cost_desc` and answers `422` otherwise. A `504` is retryable: narrow it with a smaller `--per-page`,
+the filters above, or a shorter `--since`/`--until` window. Pair `--min-cost` or `--order cost_desc`
+with `--since` or `--days-back`, since an unbounded cost sort over all logs is the likeliest to time out.
 
 | Flag | Description |
 |------|-------------|

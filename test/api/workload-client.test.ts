@@ -28,7 +28,9 @@ describe('mapWorkloadHttpError', () => {
     const err = mapWorkloadHttpError(new HttpError('Gateway Timeout', 504));
     expect(err.code).toBe('WORKLOAD_ERROR');
     expect(err.message).toContain('timed out');
-    expect(err.message).toContain('--per-page');
+    expect(err.message).toContain(
+      'Narrow it with --search, a smaller --per-page or a shorter --since/--until window, or drop --include-metrics, then retry.'
+    );
   });
 
   test('passes a 422 through with the server message intact', () => {

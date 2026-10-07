@@ -40,7 +40,7 @@ describe('get-template command', () => {
   test('calls getTemplate with the given id', async () => {
     const code = await run({ id: 'tmpl-1' });
     expect(code).toBe(0);
-    expect(mockGetTemplate).toHaveBeenCalledWith('tmpl-1');
+    expect(mockGetTemplate).toHaveBeenCalledWith('tmpl-1', {});
   });
 
   test('forwards --client-id to getTemplateClient', async () => {

@@ -7,6 +7,17 @@ export function formatCost(cost: number | null | undefined): string {
 }
 
 /**
+ * Like `formatCost`, for a single log's cost: a priced cost that would round to `0.0000` renders as
+ * `<0.0001`, so a cheap but priced log is not mistaken for a free one. Totals keep `formatCost`.
+ */
+export function formatLogCost(cost: number | null | undefined): string {
+  if (typeof cost === 'number' && cost > 0 && cost.toFixed(4) === '0.0000') {
+    return '<0.0001';
+  }
+  return formatCost(cost);
+}
+
+/**
  * Maps the CLI's window flags to the SDK's. `since`/`until` pass through as the user typed them —
  * the server validates them, so a bad value comes back as its 422 rather than a local guess.
  */
@@ -35,8 +46,8 @@ export function metricsLines(m: LlmMetrics): string[] {
 
 export function costBreakdownLine(b: LlmRequestLogCostBreakdown): string {
   return (
-    `Cost breakdown (USD): input ${formatCost(b.input_cost)}, output ${formatCost(b.output_cost)}, ` +
-    `cached input ${formatCost(b.cached_input_cost)}, cache creation ${formatCost(b.cache_creation_input_cost)}, ` +
-    `reasoning output ${formatCost(b.reasoning_output_cost)}`
+    `Cost breakdown (USD): input ${formatLogCost(b.input_cost)}, output ${formatLogCost(b.output_cost)}, ` +
+    `cached input ${formatLogCost(b.cached_input_cost)}, cache creation ${formatLogCost(b.cache_creation_input_cost)}, ` +
+    `reasoning output ${formatLogCost(b.reasoning_output_cost)}`
   );
 }

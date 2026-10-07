@@ -2,7 +2,7 @@ import type { LlmRequestLogOrder, SearchLogsParams, SearchLogsResponse } from 'c
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { getLogClient, mapLogHttpError } from '../api/log-client.js';
-import { formatCost } from '../cost-format.js';
+import { formatLogCost } from '../cost-format.js';
 import type { SearchLogsOptions } from '../types.js';
 
 export async function run(opts: SearchLogsOptions): Promise<number> {
@@ -84,7 +84,7 @@ export async function run(opts: SearchLogsOptions): Promise<number> {
         `Page ${pagination.current_page} of ${pagination.total_pages} (${pagination.total_count} total) — use --page N to navigate`
       );
       for (const log of result.logs) {
-        logger.info(`${log.id}  ${log.created_at}  ${log.model ?? 'n/a'}  cost (USD): ${formatCost(log.cost)}`);
+        logger.info(`${log.id}  ${log.created_at}  ${log.model ?? 'n/a'}  cost (USD): ${formatLogCost(log.cost)}`);
       }
       logger.info(JSON.stringify(result, null, 2));
     }

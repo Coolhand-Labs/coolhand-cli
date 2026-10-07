@@ -1,4 +1,4 @@
-import { costBreakdownLine, formatCost, metricsLines, metricsWindowParams } from '../src/cost-format.js';
+import { costBreakdownLine, formatCost, formatLogCost, metricsLines, metricsWindowParams } from '../src/cost-format.js';
 import type { LlmMetrics } from 'coolhand-node';
 
 describe('formatCost', () => {
@@ -10,6 +10,21 @@ describe('formatCost', () => {
   test('renders n/a for null or undefined, so a zero cost is never confused with an unpriced one', () => {
     expect(formatCost(null)).toBe('n/a');
     expect(formatCost(undefined)).toBe('n/a');
+  });
+});
+
+describe('formatLogCost', () => {
+  test('matches formatCost for values that survive 4-decimal rounding and for unknown costs', () => {
+    expect(formatLogCost(1.23456)).toBe('1.2346');
+    expect(formatLogCost(0.00006)).toBe('0.0001');
+    expect(formatLogCost(0)).toBe('0.0000');
+    expect(formatLogCost(null)).toBe('n/a');
+    expect(formatLogCost(undefined)).toBe('n/a');
+  });
+
+  test('marks a priced cost that would round to zero as <0.0001, never 0.0000', () => {
+    expect(formatLogCost(0.00004)).toBe('<0.0001');
+    expect(formatLogCost(0.0000001)).toBe('<0.0001');
   });
 });
 
@@ -48,6 +63,20 @@ describe('metricsLines', () => {
 });
 
 describe('costBreakdownLine', () => {
+  test('marks a priced component under $0.0001 instead of showing 0.0000', () => {
+    const line = costBreakdownLine({
+      total_cost: 0.00004,
+      input_cost: 0.00003,
+      output_cost: 0.00001,
+      cached_input_cost: 0,
+      cache_creation_input_cost: 0,
+      reasoning_output_cost: 0,
+    });
+    expect(line).toBe(
+      'Cost breakdown (USD): input <0.0001, output <0.0001, cached input 0.0000, cache creation 0.0000, reasoning output 0.0000'
+    );
+  });
+
   test('lists every component to 4 decimals', () => {
     const line = costBreakdownLine({
       total_cost: 0.3,

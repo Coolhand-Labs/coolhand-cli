@@ -52,10 +52,7 @@ export async function run(opts: GetTemplateOptions): Promise<number> {
       if (opts.noMetrics) {
         params.includeMetrics = false;
       }
-      result =
-        Object.keys(params).length > 0
-          ? await coolhand.getTemplate(opts.id, params)
-          : await coolhand.getTemplate(opts.id);
+      result = await coolhand.getTemplate(opts.id, params);
     } catch (err) {
       throw mapTemplateHttpError(
         err,

@@ -19,7 +19,7 @@ export function mapWorkloadHttpError(err: unknown): CliError {
     if (err.status === 504) {
       return new CliError(
         'WORKLOAD_ERROR',
-        'The server timed out computing metrics for this request. Narrow it with --search, a smaller --per-page or a shorter window, then retry.'
+        'The server timed out computing metrics for this request. Narrow it with --search, a smaller --per-page or a shorter --since/--until window, or drop --include-metrics, then retry.'
       );
     }
     return new CliError('WORKLOAD_ERROR', err.message);
