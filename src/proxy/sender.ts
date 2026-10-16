@@ -74,6 +74,7 @@ export async function sendToCoolhand(
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
+      redirect: "error",
     });
     // Cancel the abort timer as soon as the response headers arrive so that
     // slow error-body reads (response.text() below) don't trigger it.

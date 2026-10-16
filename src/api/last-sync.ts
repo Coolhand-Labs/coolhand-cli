@@ -56,6 +56,8 @@ export async function fetchLastSync(opts: { clientId?: string } = {}): Promise<D
     res = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json', 'X-API-Key': apiKey },
+      // Never follow redirects: fetch would forward X-API-Key to the redirect target.
+      redirect: 'error',
     });
   } catch {
     // Network failure — degrade to local state.

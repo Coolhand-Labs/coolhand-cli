@@ -44,7 +44,7 @@ node <workspaceRoot>/coolhand/harness/harness.mjs my-issue --run <RUN_DIR> --rep
 2. `<workspaceRoot>/coolhand/harness/RESIST_RULES.md` — the refuse list.
 3. The API definition at `specPath` — useful for understanding the endpoint, but you do
    not call it directly. You call it through the node package (section 3).
-4. `coolhand-cli/CLAUDE.md` — this repo's conventions.
+4. `coolhand-cli/AGENTS.md` — this repo's conventions.
 
 ## 2. Build against node's unpublished branch
 

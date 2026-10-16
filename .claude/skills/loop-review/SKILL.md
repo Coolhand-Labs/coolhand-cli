@@ -36,7 +36,7 @@ Run `git diff $(git merge-base origin/main HEAD)` to get the current branch diff
 - Correctness bugs and logic errors
 - Missing/broken error handling
 - Inefficiencies or unnecessary complexity
-- Violations of project conventions in CLAUDE.md
+- Violations of project conventions in AGENTS.md
 - Code reuse opportunities (existing utilities being duplicated)
 
 **Security**

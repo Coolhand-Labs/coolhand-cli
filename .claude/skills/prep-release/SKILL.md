@@ -23,7 +23,7 @@ merged since the last tag, not just one diff. For an iterative diff-scoped
 review during normal development, use `/loop-review` instead; this skill is
 for the release event itself.
 
-Per `CLAUDE.md`'s "Changelog and versioning" rule, feature/fix branches never
+Per `AGENTS.md`'s "Changelog and versioning" rule, feature/fix branches never
 touch `CHANGELOG.md` or `package.json`'s `version` field — this skill is the
 only place those get written. If a chosen PR's diff does touch either file,
 treat it as a normal part of that PR's diff (don't strip it), but don't let
@@ -38,7 +38,7 @@ authoritative regardless of what an individual PR's diff already contains.
    - **Quality** (High/Medium/Low): does the diff include test coverage
      proportional to the `src/` change, is the code consistent with this
      repo's style/conventions (including the "Client selection convention"
-     in `CLAUDE.md` for any command touching the API), does the PR
+     in `AGENTS.md` for any command touching the API), does the PR
      description read as complete work rather than a stub or "WIP, not
      ready" note.
    - **Risk** (High/Medium/Low): does it touch a security- or
@@ -112,19 +112,19 @@ freshly synced `main` and do all of the following as commits on that branch
      title) for anything not merged in this run. If a change genuinely has
      no discoverable PR (a direct commit to `main`), write the entry
      without one rather than skipping it.
-   - `docs/commands.md` — the canonical flag reference. Per `CLAUDE.md`'s
+   - `docs/commands.md` — the canonical flag reference. Per `AGENTS.md`'s
      "Docs" and "Client selection convention" sections, any new/changed CLI
      command or flag (including `--client-id` on commands that call the
      API) must be documented here.
    - `README.md` — only the short command table and quick-start bits per
-     `CLAUDE.md`'s "README and docs philosophy" (auth flow, config schema,
+     `AGENTS.md`'s "README and docs philosophy" (auth flow, config schema,
      and session-capture details belong in their dedicated `docs/*.md`
      files, not the README).
 4. **Clean, don't just append.** Look for docs that are now stale,
    contradictory, or redundant given the accumulated changes since the last
    tag — consolidate/rewrite rather than layering a new paragraph on top of
    an outdated one. Remove docs for anything removed from the CLI.
-5. **Bump the version.** Since `CLAUDE.md` now forbids per-PR bumps, this
+5. **Bump the version.** Since `AGENTS.md` now forbids per-PR bumps, this
    should always be needed — but check `package.json`'s `version` against
    the last tag first as a defensive sanity check in case something bumped
    it out of band. Determine the SemVer bump type from `git log
@@ -180,7 +180,7 @@ same "hand it to a human" rule `/loop-review` uses for stuck findings.
 ## Phase 4: Validate the release branch
 
 1. Run the project's standard verify pass on `release/vX.Y.Z`, per
-   `CLAUDE.md`: `npm run build && npm run lint && npm run typecheck && npm
+   `AGENTS.md`: `npm run build && npm run lint && npm run typecheck && npm
    test`, plus `npm audit` for known dependency vulnerabilities. Everything
    must be clean before continuing — a release doesn't ship on a red build
    or an unaudited dependency tree. If anything fails, stop here and report
