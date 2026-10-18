@@ -204,6 +204,34 @@ export interface UploadClientFileOptions {
   description?: string;
 }
 
+export type ClientFileStatusOption = 'draft' | 'published' | 'archived';
+
+export interface ListClientFilesOptions {
+  status?: ClientFileStatusOption;
+  fileType?: 'slide_deck' | 'report' | 'document';
+  page?: number;
+  perPage?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface DownloadClientFileOptions {
+  id: string;
+  /** Destination path (a directory keeps the server-provided filename); defaults to that filename in the cwd. */
+  output?: string;
+  /** Overwrite an existing destination file. */
+  force?: boolean;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface UpdateClientFileOptions {
+  id: string;
+  status: ClientFileStatusOption;
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface MapClaudeProjectsOptions {
   clientId?: string;
   json?: boolean;

@@ -98,6 +98,9 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand analyze-claude-sessions` | Submit Claude sessions for pattern and cost analysis |
 | `coolhand map-claude-projects` | Upload a file-tree map (names + metadata only) of every folder named "claude" |
 | `coolhand upload-client-file` | Upload a local file to Coolhand as a client file |
+| `coolhand list-client-files` | List the client's uploaded files, with status and type filters |
+| `coolhand download-client-file` | Download a client file's contents to disk |
+| `coolhand update-client-file` | Change a client file's status to draft, published, or archived |
 | `coolhand sync-skills` | Upload locally-built Claude skills (SKILL.md files) to Coolhand as client files |
 | `coolhand wildcard` | Record an agent blocker and exit cleanly |
 

@@ -35,6 +35,15 @@ jest.mock('../src/commands/list-referenced-file-sessions.js', () => ({
 jest.mock('../src/commands/upload-client-file.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/list-client-files.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
+jest.mock('../src/commands/download-client-file.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
+jest.mock('../src/commands/update-client-file.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
 jest.mock('../src/commands/map-claude-projects.js', () => ({
   run: jest.fn(),
 }));
@@ -64,6 +73,9 @@ import { run as runGetTemplateCommand } from '../src/commands/get-template.js';
 import { run as runSearchReferencedFilesCommand } from '../src/commands/search-referenced-files.js';
 import { run as runListReferencedFileSessionsCommand } from '../src/commands/list-referenced-file-sessions.js';
 import { run as runUploadClientFileCommand } from '../src/commands/upload-client-file.js';
+import { run as runListClientFilesCommand } from '../src/commands/list-client-files.js';
+import { run as runDownloadClientFileCommand } from '../src/commands/download-client-file.js';
+import { run as runUpdateClientFileCommand } from '../src/commands/update-client-file.js';
 import { run as runMapClaudeProjectsCommand } from '../src/commands/map-claude-projects.js';
 import { run as runAnalyzeClaudeSessions } from '../src/commands/analyze-claude-sessions.js';
 
@@ -670,6 +682,75 @@ describe('run', () => {
       description: 'desc',
       json: true,
       clientId: 'acme',
+    });
+  });
+
+  test('list-client-files rejects an invalid --status value', async () => {
+    const code = await run(['list-client-files', '--status', 'failure']);
+    expect(code).toBe(1);
+    expect(runListClientFilesCommand).not.toHaveBeenCalled();
+  });
+
+  test('list-client-files rejects an invalid --file-type value', async () => {
+    const code = await run(['list-client-files', '--file-type', 'bogus']);
+    expect(code).toBe(1);
+    expect(runListClientFilesCommand).not.toHaveBeenCalled();
+  });
+
+  test('list-client-files rejects a non-numeric --page and an out-of-range --per-page', async () => {
+    expect(await run(['list-client-files', '--page', 'abc'])).toBe(1);
+    expect(await run(['list-client-files', '--per-page', '101'])).toBe(1);
+    expect(runListClientFilesCommand).not.toHaveBeenCalled();
+  });
+
+  test('list-client-files dispatches with its filter flags', async () => {
+    const code = await run([
+      'list-client-files', '--status', 'draft', '--file-type', 'report',
+      '--page', '2', '--per-page', '10', '--json', '--client-id', 'acme',
+    ]);
+    expect(code).toBe(0);
+    expect(runListClientFilesCommand).toHaveBeenCalledWith({
+      status: 'draft', fileType: 'report', page: 2, perPage: 10, json: true, clientId: 'acme',
+    });
+  });
+
+  test('download-client-file requires a positional <file-id>', async () => {
+    const code = await run(['download-client-file']);
+    expect(code).toBe(1);
+    expect(runDownloadClientFileCommand).not.toHaveBeenCalled();
+  });
+
+  test('download-client-file dispatches with the id, --output and --force', async () => {
+    const code = await run(['download-client-file', 'abc123', '--output', '/tmp/x.bin', '--force', '--json', '--client-id', 'acme']);
+    expect(code).toBe(0);
+    expect(runDownloadClientFileCommand).toHaveBeenCalledWith({
+      id: 'abc123', output: '/tmp/x.bin', force: true, json: true, clientId: 'acme',
+    });
+  });
+
+  test('update-client-file requires a positional <file-id>', async () => {
+    const code = await run(['update-client-file', '--status', 'draft']);
+    expect(code).toBe(1);
+    expect(runUpdateClientFileCommand).not.toHaveBeenCalled();
+  });
+
+  test('update-client-file requires --status', async () => {
+    const code = await run(['update-client-file', 'abc123']);
+    expect(code).toBe(1);
+    expect(runUpdateClientFileCommand).not.toHaveBeenCalled();
+  });
+
+  test('update-client-file rejects an invalid --status value', async () => {
+    const code = await run(['update-client-file', 'abc123', '--status', 'deleted']);
+    expect(code).toBe(1);
+    expect(runUpdateClientFileCommand).not.toHaveBeenCalled();
+  });
+
+  test('update-client-file dispatches with the id and status', async () => {
+    const code = await run(['update-client-file', 'abc123', '--status', 'archived', '--json', '--client-id', 'acme']);
+    expect(code).toBe(0);
+    expect(runUpdateClientFileCommand).toHaveBeenCalledWith({
+      id: 'abc123', status: 'archived', json: true, clientId: 'acme',
     });
   });
 
