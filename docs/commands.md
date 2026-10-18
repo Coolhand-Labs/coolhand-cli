@@ -639,9 +639,10 @@ coolhand list-client-files [--status VALUE] [--file-type TYPE] [--page N] [--per
 
 Lists the resolved client's files of every status (`draft`, `published`, `archived`), newest first,
 via `Coolhand#listClientFiles`. Human output is a page summary followed by one
-`<id>  <status>  <file_type>  <name>` line per file; `--json` emits `{ files: [...], pagination: {...} }`
-(the REST endpoint renders a bare array and sends pagination in response headers, which the SDK
-reads back into the envelope). The `id` is the hashid that `download-client-file` and
+`<id>  <status>  <file_type>  <name>` line per file; `--json` emits
+`{ ok: true, result: { files: [...], pagination: {...} } }` (the REST endpoint renders a bare array
+and sends pagination in response headers, which the SDK reads back into `pagination`), or
+`{ ok: false, error, message }` on failure. The `id` is the hashid that `download-client-file` and
 `update-client-file` take.
 
 | Flag | Description |
@@ -669,7 +670,7 @@ passed (`OUTPUT_EXISTS`).
 
 | Flag | Description |
 |------|-------------|
-| `--output PATH` | Where to write the file; a directory keeps the server-provided filename |
+| `--output PATH` | Where to write the file (reported as an absolute path); an existing directory keeps the server-provided filename |
 | `--force` | Overwrite the destination if it already exists |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output: `{ ok, result: { id, path, sizeBytes, contentType } }` |
@@ -681,8 +682,8 @@ coolhand update-client-file <file-id> --status <draft|published|archived> [--cli
 ```
 
 Changes a file's status (`Coolhand#updateClientFileStatus`). Any status can be set from any other;
-setting the current status again succeeds as a no-op. Prints the updated file's name and new status,
-or the full file record with `--json`.
+setting the current status again succeeds as a no-op. Prints the updated file's name and new status;
+`--json` emits `{ ok: true, result: <full file record> }` (or `{ ok: false, error, message }` on failure).
 
 | Flag | Description |
 |------|-------------|

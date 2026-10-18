@@ -1097,8 +1097,12 @@ function downloadClientFileOptions(parsed: ParsedArgs): DownloadClientFileOption
     throw new CliError('INVALID_ARGS', 'download-client-file requires a <file-id> argument');
   }
   const opts: DownloadClientFileOptions = { id };
-  if (typeof parsed.flags['output'] === 'string') {
-    opts.output = parsed.flags['output'];
+  if ('output' in parsed.flags) {
+    const v = parsed.flags['output'];
+    if (typeof v !== 'string' || v.length === 0) {
+      throw new CliError('INVALID_ARGS', '--output requires a path argument');
+    }
+    opts.output = v;
   }
   if (parsed.flags['force'] === true) {
     opts.force = true;

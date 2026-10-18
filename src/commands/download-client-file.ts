@@ -7,24 +7,24 @@ import { getClientFileClient, mapClientFileHttpError } from '../api/client-file-
 import type { DownloadClientFileOptions } from '../types.js';
 
 /**
- * Reduces a server-supplied filename to a safe single path segment. `path.basename` alone leaves
- * Windows-style `\` separators intact on POSIX and passes `.`/`..` through, either of which could
- * place the file outside the intended directory.
+ * Reduces a server-supplied filename to a safe single path segment. Splitting on both `/` and `\`
+ * is what drops Windows-style separators on POSIX (`path.basename` would leave them intact), and
+ * `.`/`..` are rejected because either could place the file outside the intended directory.
  */
 export function safeFilename(raw: string | null, fallback: string): string {
   const last = (raw ?? '').split(/[\\/]/).pop() ?? '';
   // eslint-disable-next-line no-control-regex
-  const cleaned = path.basename(last).replace(/[\x00-\x1f\x7f]/g, '_').trim();
+  const cleaned = last.replace(/[\x00-\x1f\x7f]/g, '_').trim();
   return cleaned === '' || cleaned === '.' || cleaned === '..' ? fallback : cleaned;
 }
 
 async function resolveDestination(opts: DownloadClientFileOptions, downloaded: DownloadedClientFile): Promise<string> {
-  const filename = safeFilename(downloaded.filename, `client-file-${opts.id}`);
+  const filename = safeFilename(downloaded.filename, safeFilename(`client-file-${opts.id}`, 'client-file'));
   if (opts.output === undefined) {
     return path.resolve(filename);
   }
   const existing = await fs.stat(opts.output).catch(() => null);
-  return existing?.isDirectory() ? path.join(opts.output, filename) : opts.output;
+  return path.resolve(existing?.isDirectory() ? path.join(opts.output, filename) : opts.output);
 }
 
 export async function run(opts: DownloadClientFileOptions): Promise<number> {

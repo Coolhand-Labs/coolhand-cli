@@ -24,6 +24,10 @@ describe('safeFilename', () => {
     expect(safeFilename('/abs/path/report.pdf', 'fb')).toBe('report.pdf');
   });
 
+  test('strips directory components from a traversal path', () => {
+    expect(safeFilename('../../x', 'fb')).toBe('x');
+  });
+
   test('falls back for null, empty and dot-segment names', () => {
     expect(safeFilename(null, 'fb')).toBe('fb');
     expect(safeFilename('', 'fb')).toBe('fb');
@@ -92,6 +96,13 @@ describe('download-client-file command', () => {
     expect((await fs.stat(path.join(dir, 'client-file-f1'))).isFile()).toBe(true);
   });
 
+  test('keeps a hostile id out of the fallback filename as a single path segment', async () => {
+    mockDownloadClientFile.mockResolvedValue({ content: Buffer.from('x'), contentType: null, filename: null });
+    expect(await run({ id: '../evil' })).toBe(0);
+    expect((await fs.stat(path.join(dir, 'evil'))).isFile()).toBe(true);
+    await expect(fs.stat(path.join(dir, '..', 'evil'))).rejects.toThrow();
+  });
+
   test('refuses to overwrite an existing file without --force and leaves it untouched', async () => {
     await fs.writeFile(path.join(dir, 'deck.bin'), 'original');
     const spy = jest.spyOn(logger, 'json');
@@ -106,6 +117,16 @@ describe('download-client-file command', () => {
     await fs.writeFile(path.join(dir, 'deck.bin'), 'original');
     expect(await run({ id: 'f1', force: true })).toBe(0);
     expect(await fs.readFile(path.join(dir, 'deck.bin'))).toHaveLength(4);
+  });
+
+  test('reports an absolute path even for a relative --output', async () => {
+    const spy = jest.spyOn(logger, 'json');
+    await run({ id: 'f1', output: 'rel.bin', json: true });
+    expect(spy).toHaveBeenCalledWith({
+      ok: true,
+      result: expect.objectContaining({ path: path.join(await fs.realpath(dir), 'rel.bin') }),
+    });
+    spy.mockRestore();
   });
 
   test('reports path and size, and a JSON envelope with --json', async () => {

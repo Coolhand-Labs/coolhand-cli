@@ -728,6 +728,13 @@ describe('run', () => {
     });
   });
 
+  test.each([[['--output']], [['--output', '']]])('download-client-file rejects a missing --output value %j', async (...[flagArgs]) => {
+    (runDownloadClientFileCommand as jest.Mock).mockClear();
+    const code = await run(['download-client-file', 'abc123', ...flagArgs]);
+    expect(code).toBe(1);
+    expect(runDownloadClientFileCommand).not.toHaveBeenCalled();
+  });
+
   test('update-client-file requires a positional <file-id>', async () => {
     const code = await run(['update-client-file', '--status', 'draft']);
     expect(code).toBe(1);
