@@ -84,4 +84,29 @@ describe('fetch-log command', () => {
     const code = await run({ logId: 'bad-id' });
     expect(code).not.toBe(0);
   });
+
+  test('prints cost and cost_breakdown when present', async () => {
+    mockGetLogContent.mockResolvedValue({
+      ...fullContent,
+      cost: 0.5,
+      cost_breakdown: { total_cost: 0.5, input_cost: 0.2, output_cost: 0.3 },
+    });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ logId: 'log-1' });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('Cost: $0.5000');
+    expect(output).toContain('input_cost: $0.2000');
+    spy.mockRestore();
+  });
+
+  test('prints Cost: n/a when the log could not be priced', async () => {
+    mockGetLogContent.mockResolvedValue({ ...fullContent, cost: null, cost_breakdown: null });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ logId: 'log-1' });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('Cost: n/a');
+    spy.mockRestore();
+  });
 });

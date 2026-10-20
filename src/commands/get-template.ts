@@ -1,7 +1,8 @@
-import type { LlmRequestTemplateDetail } from 'coolhand-node';
+import type { GetTemplateOptions as GetTemplateParams, LlmRequestTemplateDetail } from 'coolhand-node';
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { getTemplateClient, mapTemplateHttpError } from '../api/template-client.js';
+import { metricsLines } from '../format-cost.js';
 import type { GetTemplateOptions } from '../types.js';
 
 const TIMEOUT_HINT = 'It is retryable — try again shortly.';
@@ -36,15 +37,32 @@ function printSummary(t: LlmRequestTemplateDetail): void {
   if (t.system_prompt_pattern) {
     logger.info(`\nSystem Prompt Pattern\n---------------------\n${t.system_prompt_pattern}`);
   }
+  if (t.metrics) {
+    logger.info(`\nMetrics\n-------\n${metricsLines(t.metrics).join('\n')}`);
+  }
 }
 
 export async function run(opts: GetTemplateOptions): Promise<number> {
   try {
     const coolhand = await getTemplateClient({ clientId: opts.clientId });
 
+    const params: GetTemplateParams = {};
+    if (opts.noMetrics) {
+      params.includeMetrics = false;
+    }
+    if (opts.daysBack !== undefined) {
+      params.daysBack = opts.daysBack;
+    }
+    if (opts.since !== undefined) {
+      params.since = opts.since;
+    }
+    if (opts.until !== undefined) {
+      params.until = opts.until;
+    }
+
     let result: LlmRequestTemplateDetail;
     try {
-      result = await coolhand.getTemplate(opts.id);
+      result = await coolhand.getTemplate(opts.id, params);
     } catch (err) {
       throw mapTemplateHttpError(
         err,

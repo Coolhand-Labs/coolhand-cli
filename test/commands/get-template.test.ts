@@ -40,7 +40,7 @@ describe('get-template command', () => {
   test('calls getTemplate with the given id', async () => {
     const code = await run({ id: 'tmpl-1' });
     expect(code).toBe(0);
-    expect(mockGetTemplate).toHaveBeenCalledWith('tmpl-1');
+    expect(mockGetTemplate).toHaveBeenCalledWith('tmpl-1', {});
   });
 
   test('forwards --client-id to getTemplateClient', async () => {
@@ -123,5 +123,44 @@ describe('get-template command', () => {
       expect.stringContaining('"missing"'),
       expect.any(String)
     );
+  });
+
+  test('--no-metrics sends includeMetrics: false', async () => {
+    await run({ id: 'tmpl-1', noMetrics: true });
+    expect(mockGetTemplate).toHaveBeenCalledWith('tmpl-1', { includeMetrics: false });
+  });
+
+  test('passes the metrics window through, since/until as raw strings', async () => {
+    await run({ id: 'tmpl-1', daysBack: 7, since: '2026-09-01T00:00:00+02:00', until: 'bad' });
+    expect(mockGetTemplate).toHaveBeenCalledWith('tmpl-1', {
+      daysBack: 7,
+      since: '2026-09-01T00:00:00+02:00',
+      until: 'bad',
+    });
+  });
+
+  test('prints the metrics block, with n/a for a null total cost', async () => {
+    mockGetTemplate.mockResolvedValue({
+      ...detail,
+      metrics: {
+        days_back: 28,
+        since: '2026-09-18T00:00:00Z',
+        until: '2026-10-16T00:00:00Z',
+        request_count: 10,
+        failure_count: 2,
+        total_cost: null,
+        priced_request_count: 0,
+        total_input_tokens: 1200,
+        total_output_tokens: 300,
+      },
+    });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ id: 'tmpl-1' });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('Requests: 10 (2 failed)');
+    expect(output).toContain('Total cost: n/a (0 priced requests)');
+    expect(output).toContain('Tokens: 1200 in / 300 out');
+    spy.mockRestore();
   });
 });
