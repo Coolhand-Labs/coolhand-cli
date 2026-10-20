@@ -56,7 +56,8 @@
     "lint:fix": "eslint src test --fix",
     "dev": "tsc --watch",
     "clean": "rm -rf dist coverage",
-    "smoke": "node dist/bin.js --version"
+    "smoke": "node dist/bin.js --version",
+    "live-smoke": "bash scripts/run-live-smoke.sh"
   },
   "dependencies": {
     "coolhand-node": "^0.14.0",

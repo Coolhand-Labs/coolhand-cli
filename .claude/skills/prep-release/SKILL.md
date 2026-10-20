@@ -187,21 +187,29 @@ same "hand it to a human" rule `/loop-review` uses for stuck findings.
    it; fixing genuine bugs takes priority over the rest of this phase and
    Phase 5.
 
-2. If Phase 4.1 is green, run `bash examples/live-smoke-test.sh` (after the
-   build in 4.1 has already produced `dist/`). It runs a handful of
-   read-only `coolhand` commands (`whoami`, `list-workloads`,
+2. If Phase 4.1 is green, run `npm run live-smoke` (after the build in 4.1
+   has already produced `dist/`). It re-runs `examples/live-smoke-test.sh`
+   under `zsh -ic` when zsh is installed, so credentials exported from the
+   developer's zsh profile are visible even from your non-interactive tool
+   shell (`COOLHAND_EXAMPLES_NO_ZSH=1` opts out). The script runs a handful
+   of read-only `coolhand` commands (`whoami`, `list-workloads`,
    `search-templates`, `search-logs`) against whatever client is configured
-   locally, hitting the real Coolhand API. The whole script skips cleanly
-   (exit 0, clear message) if no client is configured at all; individual
-   commands also report a per-command `SKIP` (not a `FAIL`) when the
-   failure is a local config-state issue rather than an API problem —
-   `NO_PRIVATE_KEY` (the default `coolhand login` only grants a public key;
-   `list-workloads`/`search-templates`/`search-logs` need a private one) or
-   `NOT_CONFIGURED` (e.g. multiple stored clients with no default set).
-   Treat both the whole-script skip and any per-command `SKIP` as a skip,
-   not a failure, but investigate any command that reports `FAIL` — that's
-   a real API-level problem this release would ship with. Record
-   pass/skip/fail per command.
+   locally, hitting the real Coolhand API, and prints a `Credential source:`
+   line saying whether it used a stored login or an environment variable
+   (an env-only `COOLHAND_PRIVATE_KEY` covers just `list-workloads`; the
+   other API checks will `SKIP`, so call that out as partial coverage).
+   If it finds no credentials it exits 0 with a `SKIPPED (no live call was
+   made)` block listing what it looked at (config path, which env vars are
+   set, which shell); individual commands also report a per-command `SKIP`
+   (not a `FAIL`) when the failure is a local config-state issue rather than
+   an API problem — `NO_PRIVATE_KEY` (the default `coolhand login` only
+   grants a public key; `list-workloads`/`search-templates`/`search-logs`
+   need a private one) or `NOT_CONFIGURED` (e.g. multiple stored clients
+   with no default set). Treat the whole-script skip and any per-command
+   `SKIP` as a skip, not a failure — but a skip means the release was *not*
+   live-validated, so say so plainly in Phase 5. Investigate any command
+   that reports `FAIL` — that's a real API-level problem this release would
+   ship with. Record the credential source and pass/skip/fail per command.
 
 ## Phase 5: Open the release-prep PR, report everything
 
@@ -217,7 +225,8 @@ same "hand it to a human" rule `/loop-review` uses for stuck findings.
    - Docs updated.
    - Red-team findings split into fixed vs. flagged-for-decision.
    - Phase 4.1's build/lint/typecheck/test/audit result.
-   - Phase 4.2's live-smoke-test pass/skip/fail per command.
+   - Phase 4.2's live-smoke-test credential source and pass/skip/fail per command
+     (or the skip reason, stated as "not live-validated").
 
 ## Safety
 
@@ -255,4 +264,7 @@ same "hand it to a human" rule `/loop-review` uses for stuck findings.
 - *"No client is configured locally, so I'll skip the smoke test entirely
   instead of running it."* Run it anyway — the script itself decides
   whether to skip, and its skip message is part of what Phase 5 reports.
-  Silently omitting the step hides that decision from the user.
+  Silently omitting the step hides that decision from the user. Run it via
+  `npm run live-smoke`, not bare `bash`, so a key exported from the
+  developer's zsh profile isn't missed just because your shell is
+  non-interactive.
