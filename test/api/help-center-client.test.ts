@@ -108,6 +108,12 @@ describe('getHelpCenterClient', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('anonymously'));
   });
 
+  test('with no stored client, a --base-url call is anonymous and node may not read COOLHAND_API_KEY', async () => {
+    (loadConfig as jest.Mock).mockResolvedValue(config([]));
+    await getHelpCenterClient({ baseUrl: 'http://127.0.0.1:3111' });
+    expect(mockServiceCtor).toHaveBeenCalledWith({ apiKey: '', baseUrl: 'http://127.0.0.1:3111', silent: true });
+  });
+
   test('still sends the stored key when --base-url names the same server (trailing slash ignored)', async () => {
     await getHelpCenterClient({ baseUrl: 'https://coolhandlabs.com/' });
     expect(mockServiceCtor).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'pub_key' }));

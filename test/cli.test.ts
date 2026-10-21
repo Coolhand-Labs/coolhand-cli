@@ -428,6 +428,12 @@ describe('run', () => {
     expect(runSearchHelpArticlesCommand).not.toHaveBeenCalled();
   });
 
+  test('search-help-articles rejects a --query with no value (e.g. a leading-dash query)', async () => {
+    const code = await run(['search-help-articles', '--query', '-openai']);
+    expect(code).not.toBe(0);
+    expect(runSearchHelpArticlesCommand).not.toHaveBeenCalled();
+  });
+
   test('search-help-articles forwards --query, --category, paging, --base-url and --json', async () => {
     await run([
       'search-help-articles',

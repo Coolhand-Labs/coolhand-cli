@@ -44,8 +44,8 @@ function selectStoredClient(cfg: ConfigFile, clientId?: string): ClientEntry | u
  * Builds the help center reader. Reads are public, so no stored client is not an error: the
  * service is constructed without a key and the call is anonymous. When a client is selected its key
  * is sent (it lifts the anonymous rate limit), unless `--base-url` points at a different server —
- * a stored key must never be sent to a host the user did not log in to, so in that case the key is
- * withheld and `COOLHAND_API_KEY` is not consulted either.
+ * a stored key must never be sent to a host the user did not log in to, so in that case the call is
+ * anonymous: the key is withheld and `COOLHAND_API_KEY` is not consulted either.
  */
 export async function getHelpCenterClient(
   opts: { clientId?: string; baseUrl?: string } = {}
@@ -70,8 +70,8 @@ export async function getHelpCenterClient(
   }
 
   try {
-    // '' (not undefined) tells node not to fall back to COOLHAND_API_KEY for a host the user did not log in to.
-    const service = new PublicContentService({ apiKey: client && !keyAllowed ? '' : key, baseUrl, silent: true });
+    // '' (not undefined) tells node not to fall back to COOLHAND_API_KEY for a host no key was issued for.
+    const service = new PublicContentService({ apiKey: opts.baseUrl !== undefined && !keyAllowed ? '' : key, baseUrl, silent: true });
     return { service, usesStoredKey: key !== undefined };
   } catch (err) {
     throw new CliError('INVALID_BASE_URL', `Invalid base URL: ${baseUrl} (${(err as Error).message})`);

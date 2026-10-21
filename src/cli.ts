@@ -1124,6 +1124,9 @@ function helpCenterReadOptions(parsed: ParsedArgs): HelpCenterReadOptions {
 
 function searchHelpArticlesOptions(parsed: ParsedArgs): SearchHelpArticlesOptions {
   const opts: SearchHelpArticlesOptions = helpCenterReadOptions(parsed);
+  if (parsed.flags['query'] === true) {
+    throw new CliError('INVALID_ARGS', '--query requires a value (attach a leading-dash query as --query=-text)');
+  }
   const positionalQuery = parsed.positional.join(' ');
   if (typeof parsed.flags['query'] === 'string' && positionalQuery.trim()) {
     throw new CliError('INVALID_ARGS', 'Pass the search text either as --query or as positional text, not both');
