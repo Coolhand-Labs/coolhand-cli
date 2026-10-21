@@ -422,6 +422,12 @@ describe('run', () => {
     expect(runSearchHelpArticlesCommand).toHaveBeenCalledWith({ query: 'prompt caching' });
   });
 
+  test('search-help-articles rejects --query combined with positional text', async () => {
+    const code = await run(['search-help-articles', '--query', 'a', 'b']);
+    expect(code).not.toBe(0);
+    expect(runSearchHelpArticlesCommand).not.toHaveBeenCalled();
+  });
+
   test('search-help-articles forwards --query, --category, paging, --base-url and --json', async () => {
     await run([
       'search-help-articles',

@@ -1124,7 +1124,11 @@ function helpCenterReadOptions(parsed: ParsedArgs): HelpCenterReadOptions {
 
 function searchHelpArticlesOptions(parsed: ParsedArgs): SearchHelpArticlesOptions {
   const opts: SearchHelpArticlesOptions = helpCenterReadOptions(parsed);
-  const query = typeof parsed.flags['query'] === 'string' ? parsed.flags['query'] : parsed.positional.join(' ');
+  const positionalQuery = parsed.positional.join(' ');
+  if (typeof parsed.flags['query'] === 'string' && positionalQuery.trim()) {
+    throw new CliError('INVALID_ARGS', 'Pass the search text either as --query or as positional text, not both');
+  }
+  const query = typeof parsed.flags['query'] === 'string' ? parsed.flags['query'] : positionalQuery;
   if (query.trim()) {
     opts.query = query;
   }

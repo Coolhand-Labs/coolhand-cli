@@ -1,12 +1,13 @@
 import { HttpError, PublicContentService } from 'coolhand-node';
 import { CliError } from '../errors.js';
-import { loadConfig, resolveClientForDryRun } from '../config.js';
-import { DEFAULT_BASE_URL } from '../types.js';
+import { loadConfig } from '../config.js';
+import { logger, stripAnsiEscapes } from '../logger.js';
+import { ClientEntry, ConfigFile, DEFAULT_BASE_URL } from '../types.js';
 
 export interface HelpCenterClient {
   service: PublicContentService;
-  /** True when a stored client's key is sent; false when the call goes out with no key header
-   *  (node may still add `COOLHAND_API_KEY` from the environment). */
+  /** True when a stored client's key is sent; false when the call has no stored key (node may still
+   *  add `COOLHAND_API_KEY` from the environment, except for a `--base-url` the key was not issued for). */
   usesStoredKey: boolean;
 }
 
@@ -15,23 +16,62 @@ function sameServer(a: string, b: string): boolean {
 }
 
 /**
+ * Picks the stored client whose key to send, without ever prompting or failing for lack of one:
+ * `--client-id` (unknown id is an error, the user named it), then `COOLHAND_CLIENT_ID` and the
+ * configured default (a stale value is ignored, the read is public), then the sole stored client.
+ * Several clients with no usable default means anonymous rather than the interactive picker that
+ * `resolveClient` would open.
+ */
+function selectStoredClient(cfg: ConfigFile, clientId?: string): ClientEntry | undefined {
+  if (clientId !== undefined) {
+    const entry = cfg.clients[clientId];
+    if (!entry) {
+      throw new CliError('CLIENT_NOT_FOUND', `No client "${clientId}" is configured.`);
+    }
+    return entry;
+  }
+  const preferred = [process.env.COOLHAND_CLIENT_ID, cfg.default_client_id];
+  for (const id of preferred) {
+    if (id && cfg.clients[id]) {
+      return cfg.clients[id];
+    }
+  }
+  const clients = Object.values(cfg.clients);
+  return clients.length === 1 ? clients[0] : undefined;
+}
+
+/**
  * Builds the help center reader. Reads are public, so no stored client is not an error: the
- * service is constructed without a key and the call is anonymous. When a client is stored its key
+ * service is constructed without a key and the call is anonymous. When a client is selected its key
  * is sent (it lifts the anonymous rate limit), unless `--base-url` points at a different server —
- * a stored key must never be sent to a host the user did not log in to.
+ * a stored key must never be sent to a host the user did not log in to, so in that case the key is
+ * withheld and `COOLHAND_API_KEY` is not consulted either.
  */
 export async function getHelpCenterClient(
   opts: { clientId?: string; baseUrl?: string } = {}
 ): Promise<HelpCenterClient> {
+  if (opts.clientId === '') {
+    throw new CliError('INVALID_ARGS', 'clientId must not be empty');
+  }
   const cfg = await loadConfig();
-  const client = await resolveClientForDryRun(cfg, opts.clientId);
+  const client = selectStoredClient(cfg, opts.clientId);
 
   const baseUrl = opts.baseUrl ?? client?.base_url ?? DEFAULT_BASE_URL;
-  const key = client && sameServer(baseUrl, client.base_url) ? (client.api_key ?? client.private_key) : undefined;
+  const storedKey = client ? (client.api_key ?? client.private_key) : undefined;
+  const keyAllowed = client !== undefined && sameServer(baseUrl, client.base_url);
+  if (client && storedKey && !keyAllowed) {
+    logger.warn(
+      `Reading ${baseUrl} anonymously: client "${stripAnsiEscapes(client.client_name)}" is stored for ${client.base_url}, so its key is not sent.`
+    );
+  }
+  const key = keyAllowed ? storedKey : undefined;
+  if (client && key) {
+    process.stderr.write(`Client: ${stripAnsiEscapes(client.client_name)} (${client.client_id})\n`);
+  }
 
   try {
-    // PublicContentService validates baseUrl in its constructor (https required; http only for localhost).
-    const service = new PublicContentService({ apiKey: key, baseUrl, silent: true });
+    // '' (not undefined) tells node not to fall back to COOLHAND_API_KEY for a host the user did not log in to.
+    const service = new PublicContentService({ apiKey: client && !keyAllowed ? '' : key, baseUrl, silent: true });
     return { service, usesStoredKey: key !== undefined };
   } catch (err) {
     throw new CliError('INVALID_BASE_URL', `Invalid base URL: ${baseUrl} (${(err as Error).message})`);

@@ -17,11 +17,11 @@ jest.mock('coolhand-node', () => ({
 }));
 jest.mock('../../src/config.js', () => ({
   loadConfig: jest.fn(),
-  resolveClientForDryRun: jest.fn(),
 }));
 
 import { getHelpCenterClient, mapHelpCenterHttpError } from '../../src/api/help-center-client.js';
-import { loadConfig, resolveClientForDryRun } from '../../src/config.js';
+import { loadConfig } from '../../src/config.js';
+import { logger } from '../../src/logger.js';
 import { HttpError } from 'coolhand-node';
 
 const storedClient = {
@@ -32,17 +32,40 @@ const storedClient = {
   base_url: 'https://coolhandlabs.com',
   saved_at: new Date().toISOString(),
 };
+const otherClient = { ...storedClient, client_id: 'client-2', client_name: 'Other', api_key: 'other_pub' };
+
+function config(clients: Array<typeof storedClient>, defaultId?: string): unknown {
+  return {
+    clients: Object.fromEntries(clients.map((c) => [c.client_id, c])),
+    default_client_id: defaultId,
+  };
+}
 
 describe('getHelpCenterClient', () => {
+  let warnSpy: jest.SpyInstance;
+  let stderrSpy: jest.SpyInstance;
+  let savedClientIdEnv: string | undefined;
+
   beforeEach(() => {
     jest.resetAllMocks();
-    (loadConfig as jest.Mock).mockResolvedValue({});
-    (resolveClientForDryRun as jest.Mock).mockResolvedValue(storedClient);
+    (loadConfig as jest.Mock).mockResolvedValue(config([storedClient]));
     mockServiceCtor.mockImplementation((opts) => ({ __opts: opts }));
+    warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+    stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    savedClientIdEnv = process.env.COOLHAND_CLIENT_ID;
+    delete process.env.COOLHAND_CLIENT_ID;
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+    stderrSpy.mockRestore();
+    if (savedClientIdEnv !== undefined) {
+      process.env.COOLHAND_CLIENT_ID = savedClientIdEnv;
+    }
   });
 
   test('with no stored client, builds the service with no key against the default server', async () => {
-    (resolveClientForDryRun as jest.Mock).mockResolvedValue(undefined);
+    (loadConfig as jest.Mock).mockResolvedValue(config([]));
     const { usesStoredKey } = await getHelpCenterClient();
     expect(mockServiceCtor).toHaveBeenCalledWith({
       apiKey: undefined,
@@ -61,43 +84,88 @@ describe('getHelpCenterClient', () => {
   });
 
   test('falls back to the private key when the client has no public key', async () => {
-    (resolveClientForDryRun as jest.Mock).mockResolvedValue({ ...storedClient, api_key: undefined });
+    (loadConfig as jest.Mock).mockResolvedValue(config([{ ...storedClient, api_key: undefined as never }]));
     await getHelpCenterClient();
     expect(mockServiceCtor).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'priv_key_abc' }));
   });
 
   test('uses the stored client base_url', async () => {
-    (resolveClientForDryRun as jest.Mock).mockResolvedValue({ ...storedClient, base_url: 'https://staging.example.com' });
+    (loadConfig as jest.Mock).mockResolvedValue(config([{ ...storedClient, base_url: 'https://staging.example.com' }]));
     await getHelpCenterClient();
     expect(mockServiceCtor).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: 'pub_key', baseUrl: 'https://staging.example.com' })
     );
   });
 
-  test('never sends the stored key to a different --base-url', async () => {
+  test('never sends the stored key to a different --base-url, nor lets node read COOLHAND_API_KEY there', async () => {
     const { usesStoredKey } = await getHelpCenterClient({ baseUrl: 'http://127.0.0.1:3111' });
     expect(mockServiceCtor).toHaveBeenCalledWith({
-      apiKey: undefined,
+      apiKey: '',
       baseUrl: 'http://127.0.0.1:3111',
       silent: true,
     });
     expect(usesStoredKey).toBe(false);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('anonymously'));
   });
 
   test('still sends the stored key when --base-url names the same server (trailing slash ignored)', async () => {
     await getHelpCenterClient({ baseUrl: 'https://coolhandlabs.com/' });
     expect(mockServiceCtor).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'pub_key' }));
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  test('passes clientId through to client resolution', async () => {
-    await getHelpCenterClient({ clientId: 'acme' });
-    expect(resolveClientForDryRun).toHaveBeenCalledWith({}, 'acme');
-  });
+  describe('selecting among stored clients never prompts', () => {
+    const many = config([storedClient, otherClient]);
 
-  test('propagates a CliError from client resolution (e.g. CLIENT_NOT_FOUND)', async () => {
-    const { CliError } = await import('../../src/errors.js');
-    (resolveClientForDryRun as jest.Mock).mockRejectedValue(new CliError('CLIENT_NOT_FOUND', 'No client "x".'));
-    await expect(getHelpCenterClient({ clientId: 'x' })).rejects.toMatchObject({ code: 'CLIENT_NOT_FOUND' });
+    test('--client-id picks that client', async () => {
+      (loadConfig as jest.Mock).mockResolvedValue(many);
+      await getHelpCenterClient({ clientId: 'client-2' });
+      expect(mockServiceCtor).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'other_pub' }));
+    });
+
+    test('an unknown --client-id is CLIENT_NOT_FOUND', async () => {
+      await expect(getHelpCenterClient({ clientId: 'nope' })).rejects.toMatchObject({ code: 'CLIENT_NOT_FOUND' });
+    });
+
+    test('an empty --client-id is INVALID_ARGS', async () => {
+      await expect(getHelpCenterClient({ clientId: '' })).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+    });
+
+    test('several clients and no default read anonymously instead of prompting', async () => {
+      (loadConfig as jest.Mock).mockResolvedValue(many);
+      const { usesStoredKey } = await getHelpCenterClient();
+      expect(mockServiceCtor).toHaveBeenCalledWith(expect.objectContaining({ apiKey: undefined }));
+      expect(usesStoredKey).toBe(false);
+    });
+
+    test('a stale default with several clients reads anonymously', async () => {
+      (loadConfig as jest.Mock).mockResolvedValue(config([storedClient, otherClient], 'deleted'));
+      const { usesStoredKey } = await getHelpCenterClient();
+      expect(usesStoredKey).toBe(false);
+    });
+
+    test('a stale default with exactly one client uses that client', async () => {
+      (loadConfig as jest.Mock).mockResolvedValue(config([storedClient], 'deleted'));
+      const { usesStoredKey } = await getHelpCenterClient();
+      expect(usesStoredKey).toBe(true);
+    });
+
+    test('the configured default wins among several clients', async () => {
+      (loadConfig as jest.Mock).mockResolvedValue(config([storedClient, otherClient], 'client-2'));
+      await getHelpCenterClient();
+      expect(mockServiceCtor).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'other_pub' }));
+    });
+
+    test('COOLHAND_CLIENT_ID wins over the default, and an unknown value is ignored', async () => {
+      (loadConfig as jest.Mock).mockResolvedValue(config([storedClient, otherClient], 'client-1'));
+      process.env.COOLHAND_CLIENT_ID = 'client-2';
+      await getHelpCenterClient();
+      expect(mockServiceCtor).toHaveBeenLastCalledWith(expect.objectContaining({ apiKey: 'other_pub' }));
+
+      process.env.COOLHAND_CLIENT_ID = 'missing';
+      await getHelpCenterClient();
+      expect(mockServiceCtor).toHaveBeenLastCalledWith(expect.objectContaining({ apiKey: 'pub_key' }));
+    });
   });
 
   test('throws INVALID_BASE_URL when the SDK constructor rejects the base URL', async () => {

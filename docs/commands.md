@@ -296,7 +296,12 @@ prompt you to log in. Authoring (create, update, archive) is not part of the CLI
 
 `--base-url URL` reads from another Coolhand server (for example `http://127.0.0.1:3000`; `http` is
 only accepted for localhost). The stored key is only sent to the server you logged in to, so with a
-different `--base-url` the call goes out without it.
+different `--base-url` the call goes out without it (a warning says so, and `COOLHAND_API_KEY` is not
+sent there either).
+
+Which stored client's key is used never involves a prompt: `--client-id` (an unknown id is an
+error), then `COOLHAND_CLIENT_ID` and the configured default, then the only stored client. With
+several clients and no usable default the call is anonymous.
 
 ### search-help-articles
 
@@ -307,7 +312,8 @@ coolhand search-help-articles [query] [--query TEXT] [--category SLUG] [--page N
 
 Searches published articles by relevance (Postgres full-text search: quoted phrases, `-exclusions`
 and `or` work), or lists every article when no query is given. The query can be passed as
-positional text or with `--query`. `--category` limits results to one section; a query plus a
+positional text or with `--query`, not both. A query that starts with `-` must be attached to the
+flag (`--query=-openai`) or quoted with other words (`"anthropic -openai"`), or it is read as a flag. `--category` limits results to one section; a query plus a
 category searches within that section. Each result shows the slug, title, kind, section, answer,
 the matching passage when you searched, and the URL. With `--json` the result is
 `{ articles: [...], pagination: {...} }`; the endpoint exposes pagination via response headers, which

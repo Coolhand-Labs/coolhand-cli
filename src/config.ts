@@ -286,8 +286,7 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
  *
  * Shared by every command whose `--dry-run` mode should work without any stored credentials
  * (`analyze-claude-sessions`, `map-claude-projects`, `upload-client-file`, and anything built on
- * `uploadClientFile`'s shared core), and the public help center reads, which work with no
- * credentials at all).
+ * `uploadClientFile`'s shared core).
  */
 export async function resolveClientForDryRun(cfg: ConfigFile, clientId?: string): Promise<ClientEntry | undefined> {
   try {
