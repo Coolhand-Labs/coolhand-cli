@@ -113,6 +113,16 @@ describe('findSkillFiles', () => {
       await fs.chmod(filePath, 0o644);
     }
   });
+
+  test('skips a symlinked SKILL.md instead of reading its target', async () => {
+    const secret = path.join(dir, 'outside-secret.txt');
+    await fs.writeFile(secret, 'TOP SECRET');
+    const root = path.join(dir, 'root');
+    await fs.mkdir(path.join(root, 'evil'), { recursive: true });
+    await fs.symlink(secret, path.join(root, 'evil', 'SKILL.md'));
+    const found = await findSkillFiles([{ root, sourceKind: 'custom' }]);
+    expect(found).toEqual([]);
+  });
 });
 
 describe('dedupeSkillFiles', () => {

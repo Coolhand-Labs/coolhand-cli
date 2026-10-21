@@ -98,7 +98,9 @@ export async function findSkillFiles(
       let stat;
       let content: Buffer;
       try {
-        stat = await fs.stat(filePath);
+        // lstat, not stat: a symlinked SKILL.md (git stores symlinks) would otherwise upload
+        // whatever it points at, e.g. ~/.ssh/id_rsa, unredacted.
+        stat = await fs.lstat(filePath);
         if (!stat.isFile()) {
           continue;
         }

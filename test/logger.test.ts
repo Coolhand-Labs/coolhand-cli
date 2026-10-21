@@ -93,4 +93,19 @@ describe('stripAnsiEscapes', () => {
     expect(out).not.toContain(ESC);
     expect(out).toBe('hello');
   });
+
+  test('does not let nested sequences reassemble after stripping', () => {
+    const out = stripAnsiEscapes(`${ESC}[2${ESC}[0mJ`);
+    expect(out).not.toContain(ESC);
+  });
+
+  test('removes DCS and unterminated OSC introducers and other control bytes', () => {
+    expect(stripAnsiEscapes(`${ESC}Pq${ESC}\\ok`)).not.toContain(ESC);
+    expect(stripAnsiEscapes(`${ESC}]0;title`)).not.toContain(ESC);
+    expect(stripAnsiEscapes('a\x07b\x08c')).toBe('abc');
+  });
+
+  test('keeps tabs and newlines', () => {
+    expect(stripAnsiEscapes('a\tb\nc')).toBe('a\tb\nc');
+  });
 });

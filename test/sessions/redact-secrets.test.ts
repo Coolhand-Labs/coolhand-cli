@@ -157,4 +157,29 @@ describe('redactSecrets', () => {
     expect(out).toContain('[REDACTED]');
     expect(out).not.toContain('abcDEF-token');
   });
+
+  test('redacts SECRET_KEY, auth_key and passphrase assignments', () => {
+    for (const line of ['SECRET_KEY=abc123def', 'auth_key=abc123def', 'passphrase: hunter2hunter2']) {
+      const out = redactSecrets(line);
+      expect(out).toContain('[REDACTED]');
+      expect(out).not.toMatch(/abc123def|hunter2/);
+    }
+  });
+
+  test('redacts credentials embedded in a URL but keeps the host', () => {
+    const out = redactSecrets('postgres://admin:s3cr3tpass@db.internal:5432/app');
+    expect(out).not.toContain('s3cr3tpass');
+    expect(out).toContain('db.internal:5432/app');
+  });
+
+  test('redacts npm, GitLab and Hugging Face tokens', () => {
+    const tokens = [`npm_${'a'.repeat(36)}`, `glpat-${'b'.repeat(20)}`, `hf_${'c'.repeat(34)}`];
+    for (const token of tokens) {
+      expect(redactSecrets(`token is ${token} ok`)).not.toContain(token);
+    }
+  });
+
+  test('does not mangle ordinary text with a scheme and no credentials', () => {
+    expect(redactSecrets('see https://example.com/a/b for details')).toBe('see https://example.com/a/b for details');
+  });
 });

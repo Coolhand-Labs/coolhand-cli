@@ -27,6 +27,22 @@ All notable changes to `coolhand-cli` will be documented in this file.
   (#173) and `actions/download-artifact` to 8.0.2 (#172).
 - Clarified the review handshake in `AGENTS.harness.md`. (#168)
 
+### Security
+- `sync-skills` no longer follows a symlinked `SKILL.md`, which could upload an arbitrary local
+  file (for example a private key) to the client's account.
+- Session and proxy secret redaction now also catches `SECRET_KEY`, `auth_key`, `passphrase`,
+  `signing_key` and `encryption_key` assignments, credentials embedded in URLs
+  (`scheme://user:pass@host`), and npm, GitLab, Hugging Face, Google OAuth and PyPI tokens.
+- Terminal-escape stripping of server-supplied text now repeats until stable (so nested sequences
+  can't reassemble into a live one) and removes remaining control bytes, including DCS/APC/PM/SOS
+  and unterminated OSC introducers.
+- The login callback server answers a malformed request target with `400` instead of throwing and
+  ending the login, and its response sends `Referrer-Policy: no-referrer` and `Cache-Control:
+  no-store`.
+- `analyze-claude-sessions`' last-sync request now times out after 10 seconds instead of hanging.
+- Cleared `npm audit` advisories in `mockttp`'s transitive tree (`proxy-addr`,
+  `@graphql-tools/utils`, `ip-address`, and `basic-ftp` via an override), so the CI audit step passes.
+
 ## [0.11.1] - 2026-09-23
 
 ### Changed

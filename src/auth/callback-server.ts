@@ -41,7 +41,15 @@ export async function startCallbackServer(opts: StartCallbackServerOptions): Pro
   }
 
   function handleRequest(req: IncomingMessage, res: ServerResponse): void {
-    const url = new URL(req.url ?? '/', `http://${LOOPBACK}`);
+    let url: URL;
+    try {
+      url = new URL(req.url ?? '/', `http://${LOOPBACK}`);
+    } catch {
+      // A malformed request target (`GET //[`) must not throw out of the handler and kill the login.
+      res.statusCode = 400;
+      res.end();
+      return;
+    }
 
     if (req.method !== 'GET') {
       res.statusCode = 405;
@@ -97,6 +105,9 @@ export async function startCallbackServer(opts: StartCallbackServerOptions): Pro
     consumed = true;
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    // The callback URL carries the tokens: keep it out of Referer headers and caches.
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Cache-Control', 'no-store');
     res.end(SUCCESS_HTML);
     resolveResult({ token: token ?? undefined, clientName, clientId, private_token: privateToken });
     closeServerSoon();
