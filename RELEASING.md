@@ -16,6 +16,20 @@ If that prints anything other than `[]`, stop: wait for the upstream release, ch
 to a `^x.y.z` range, run `npm install` to refresh `package-lock.json`, and note the un-pin under
 `### Changed` in `CHANGELOG.md`.
 
+## Live smoke test
+
+Before a release, run the live smoke test against a real configured client:
+
+```bash
+npm run build && npm run live-smoke
+```
+
+It runs read-only `coolhand` commands (`whoami`, `list-workloads`, `search-templates`, `search-logs`) against the real Coolhand API. `npm run live-smoke` re-runs [`examples/live-smoke-test.sh`](./examples/live-smoke-test.sh) under `zsh -ic` when `zsh` is installed, so credentials exported from your zsh profile (`COOLHAND_PRIVATE_KEY`, `COOLHAND_CLIENT_ID`, …) are visible even from a non-interactive shell such as an agent's tool shell. Your `.zshrc` runs in full, so it can change `PATH` (nvm, asdf) or print banners; if it hangs or misbehaves in a non-TTY shell, set `COOLHAND_EXAMPLES_NO_ZSH=1` to skip the re-exec and use the current shell's environment as-is.
+
+Credentials come from a stored login (`~/.coolhand/config.json`, or `COOLHAND_CONFIG_DIR`) or from the environment (`COOLHAND_PRIVATE_KEY` when no client is stored; `COOLHAND_CLIENT_ID` selects among stored clients). The output starts with a `Credential source:` line saying which was used. An env-only `COOLHAND_PRIVATE_KEY` exercises just `list-workloads`; `search-templates` and `search-logs` need a stored login and will `SKIP`.
+
+If no credentials are found, the script exits 0 but prints `SKIPPED (no live call was made)` followed by what it looked at (config path, which env vars are set, which shell). A skip means the release was **not** live-validated — fix the cause and re-run rather than treating it as a pass.
+
 ## Release Process
 
 Releases are built by running the `/prep-release` skill (`.claude/skills/prep-release/SKILL.md`). It triages open PRs, gets your sign-off on which ship, squash-merges them, and builds a `release/vX.Y.Z` branch that bumps `package.json`'s version, updates `CHANGELOG.md` and docs, and red-teams the whole package — then opens a release-prep PR for your review. Per `AGENTS.md`'s "Changelog and versioning" rule, `package.json`'s version and `CHANGELOG.md` are only ever edited there, never on feature/fix branches.
