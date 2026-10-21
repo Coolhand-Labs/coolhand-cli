@@ -234,7 +234,8 @@ same "hand it to a human" rule `/loop-review` uses for stuck findings.
   Tagging and pushing (which triggers `.github/workflows/publish.yml`'s
   Trusted Publishing run, per `RELEASING.md`) are the user's action once
   they've reviewed and merged this skill's PR, not something this skill
-  does.
+  does. `/finish-release` is that follow-up: the user invokes it after
+  merging, and it tags and publishes the GitHub release.
 
 ## Rationalizations to resist
 
