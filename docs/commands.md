@@ -285,6 +285,83 @@ rather than a permission error — its existence is not disclosed.
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
+## Help center
+
+Read the Coolhand help center (the same pages served at `/help` and `/updates`) from the terminal.
+These three commands are read-only and need **no login**: with no stored client they call the
+public endpoints anonymously, limited to 30 requests per minute per IP (a `429` means wait a
+minute). When a client is stored its API key is sent automatically and lifts the limit; a stored
+key the server rejects (`401`) is reported as an error and is not retried anonymously. They never
+prompt you to log in. Authoring (create, update, archive) is not part of the CLI.
+
+`--base-url URL` reads from another Coolhand server (for example `http://127.0.0.1:3000`; `http` is
+only accepted for localhost). The stored key is only sent to the server you logged in to, so with a
+different `--base-url` the call is anonymous: neither the stored key nor `COOLHAND_API_KEY` is sent
+(a warning says so when a stored key was withheld).
+
+Which stored client's key is used never involves a prompt: `--client-id` (an unknown id is an
+error), then `COOLHAND_CLIENT_ID` and the configured default, then the only stored client. With
+several clients and no usable default the call is anonymous.
+
+### search-help-articles
+
+```bash
+coolhand search-help-articles [query] [--query TEXT] [--category SLUG] [--page N] [--per-page N]
+                              [--base-url URL] [--client-id ID] [--json]
+```
+
+Searches published articles by relevance (Postgres full-text search: quoted phrases, `-exclusions`
+and `or` work), or lists every article when no query is given. The query can be passed as
+positional text or with `--query`, not both. A query that starts with `-` must be attached to
+the flag (`--query=-openai`) or quoted with other words (`"anthropic -openai"`), or it is read as
+a flag. `--category` limits results to one section; a query plus a
+category searches within that section. Each result shows the slug, title, kind, section, answer,
+the matching passage when you searched, and the URL. With `--json` the result is
+`{ articles: [...], pagination: {...} }`; the endpoint exposes pagination via response headers, which
+the SDK reads back into `pagination` for you.
+
+| Flag | Description |
+|------|-------------|
+| `--query TEXT` | Relevance search (or pass it as positional text); omit to list everything |
+| `--category SLUG` | Only articles in this section (see `list-help-categories`) |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 25, max: 100) |
+| `--base-url URL` | Read from another Coolhand server |
+| `--client-id ID` | Use a specific stored client (optional; reads work anonymously) |
+| `--json` | Emit JSON output |
+
+### get-help-article
+
+```bash
+coolhand get-help-article <slug> [--base-url URL] [--client-id ID] [--json]
+```
+
+Prints one article's metadata and its full markdown body. An unknown or unpublished slug is
+reported as an error (exit code 1). With `--json` the result is the article object, including
+`body`, `noindex` and `toc`.
+
+| Flag | Description |
+|------|-------------|
+| `--base-url URL` | Read from another Coolhand server |
+| `--client-id ID` | Use a specific stored client (optional; reads work anonymously) |
+| `--json` | Emit JSON output |
+
+### list-help-categories
+
+```bash
+coolhand list-help-categories [--base-url URL] [--client-id ID] [--json]
+```
+
+Lists the sections articles are filed under, each with its URL prefix (`/help` or `/updates`) and,
+where the section restricts tags, its allowed tags. Use a section's slug as `--category` on
+`search-help-articles`.
+
+| Flag | Description |
+|------|-------------|
+| `--base-url URL` | Read from another Coolhand server |
+| `--client-id ID` | Use a specific stored client (optional; reads work anonymously) |
+| `--json` | Emit JSON output |
+
 ## Optimizations
 
 Coolhand stores LLM-generated optimization suggestions as structured records. These commands let you query, update, and act on them from the terminal or from agent workflows.
