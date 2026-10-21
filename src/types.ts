@@ -106,6 +106,7 @@ export interface SearchLogsOptions {
   unmatchedOnly?: boolean;
   daysBack?: number;
   includePrompts?: boolean;
+  includeTotal?: boolean;
   sort?: string;
   page?: number;
   perPage?: number;
