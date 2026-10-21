@@ -25,6 +25,7 @@ export type ErrorCode =
   | 'LOG_ERROR'
   | 'TEMPLATE_ERROR'
   | 'LLM_REFERENCE_ERROR'
+  | 'HELP_CENTER_ERROR'
   | 'CERT_FILE_INSECURE'
   | 'UPLOAD_ERROR'
   | 'OUTPUT_EXISTS';
