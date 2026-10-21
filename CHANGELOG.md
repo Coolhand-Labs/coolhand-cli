@@ -4,6 +4,29 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-21
+
+### Added
+- `list-client-files`, `download-client-file` and `update-client-file` commands: list a client's
+  uploaded files, download a file's contents to disk (never overwriting an existing destination
+  without `--force`, and reducing the server-provided filename to a single safe path segment), and
+  change a file's status between `draft`, `published` and `archived`. They require a client admin's
+  private key. See [docs/commands.md](./docs/commands.md#list-client-files). (#177)
+- `search-logs --include-total` asks the backend for the exact `total_count`/`total_pages`; older
+  backends ignore it. (#159)
+- `npm run live-smoke` runs the live smoke test under `zsh -ic` when zsh is installed, so credentials
+  exported from a zsh profile are visible from non-interactive shells. The smoke test now prints its
+  credential source and, when it skips, says why (config path, which env vars are set, which shell
+  ran). (#181)
+
+### Changed
+- Upgraded `coolhand-node` from `^0.14.0` to `^0.16.0`. (#182)
+- Bumped dependencies: `mockttp` to 4.6.3 (#161), and dev dependencies `eslint` to 10.11.0 (#162),
+  `@types/node` to 26.6.2 (#163) and `jest` to 30.5.2 (#164).
+- Bumped GitHub Actions: `actions/setup-node` to 7.1.0 (#174), `actions/upload-artifact` to 7.0.2
+  (#173) and `actions/download-artifact` to 8.0.2 (#172).
+- Clarified the review handshake in `AGENTS.harness.md`. (#168)
+
 ## [0.11.1] - 2026-09-23
 
 ### Changed
