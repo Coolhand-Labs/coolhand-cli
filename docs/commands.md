@@ -713,6 +713,72 @@ supported"). Uploads always land as `status: draft` client files — see
 Requires a **private** API key (`coolhand login --scope private`) — the public key used for LLM
 capture (`monitor`/`claude`/`analyze-claude-sessions`) 401s on `client_files`.
 
+### list-client-files
+
+```bash
+coolhand list-client-files [--status VALUE] [--file-type TYPE] [--page N] [--per-page N] [--client-id ID] [--json]
+```
+
+Lists the resolved client's files of every status (`draft`, `published`, `archived`), newest first,
+via `Coolhand#listClientFiles`. Human output is a page summary followed by one
+`<id>  <status>  <file_type>  <name>` line per file; `--json` emits
+`{ ok: true, result: { files: [...], pagination: {...} } }` (the REST endpoint renders a bare array
+and sends pagination in response headers, which the SDK reads back into `pagination`), or
+`{ ok: false, error, message }` on failure. The `id` is the hashid that `download-client-file` and
+`update-client-file` take.
+
+| Flag | Description |
+|------|-------------|
+| `--status VALUE` | Filter by status: `draft`, `published`, or `archived` |
+| `--file-type TYPE` | Filter by type: `slide_deck`, `report`, or `document` |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 25, max: 100) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+### download-client-file
+
+```bash
+coolhand download-client-file <file-id> [--output PATH] [--force] [--client-id ID] [--json]
+```
+
+Downloads a file's raw bytes, whatever its status (`Coolhand#downloadClientFile`), writes them to
+disk and reports the path and size. Without `--output` the file is written to the server-provided
+filename in the current directory; if `--output` is an existing directory the server-provided
+filename is kept inside it. The server-provided filename is reduced to a single safe path segment
+(directory components and control characters are dropped), so a hostile filename cannot write
+outside the target directory. An existing destination is **never overwritten** unless `--force` is
+passed (`OUTPUT_EXISTS`).
+
+| Flag | Description |
+|------|-------------|
+| `--output PATH` | Where to write the file (reported as an absolute path); an existing directory keeps the server-provided filename |
+| `--force` | Overwrite the destination if it already exists |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output: `{ ok, result: { id, path, sizeBytes, contentType } }` |
+
+### update-client-file
+
+```bash
+coolhand update-client-file <file-id> --status <draft|published|archived> [--client-id ID] [--json]
+```
+
+Changes a file's status (`Coolhand#updateClientFileStatus`). Any status can be set from any other;
+setting the current status again succeeds as a no-op. Prints the updated file's name and new status;
+`--json` emits `{ ok: true, result: <full file record> }` (or `{ ok: false, error, message }` on failure).
+
+| Flag | Description |
+|------|-------------|
+| `--status VALUE` | New status: `draft`, `published`, or `archived` (required) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+**Auth for these three commands.** They require the **per-user private key of a client admin** of
+the client — exactly what `coolhand login --scope private` stores when a client admin signs in. The
+client-level key, the public key, OAuth tokens and the keys of non-admin members are refused: a `401`
+is reported as "the stored private key was rejected", a `403` as "needs a client admin's per-user
+private key". An unknown id, or one belonging to another client, is reported as not found.
+
 ### sync-skills
 
 ```bash

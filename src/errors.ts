@@ -28,6 +28,7 @@ export type ErrorCode =
   | 'HELP_CENTER_ERROR'
   | 'CERT_FILE_INSECURE'
   | 'UPLOAD_ERROR'
+  | 'CLIENT_FILE_ERROR'
   | 'OUTPUT_EXISTS';
 
 export class CliError extends Error {

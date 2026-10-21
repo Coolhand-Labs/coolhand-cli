@@ -16,6 +16,9 @@ import { run as runMonitor } from './commands/monitor.js';
 import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
 import { run as runMapClaudeProjects } from './commands/map-claude-projects.js';
 import { run as runUploadClientFile } from './commands/upload-client-file.js';
+import { run as runListClientFiles } from './commands/list-client-files.js';
+import { run as runDownloadClientFile } from './commands/download-client-file.js';
+import { run as runUpdateClientFile } from './commands/update-client-file.js';
 import { run as runSyncSkills } from './commands/sync-skills.js';
 import { run as runListWorkloads } from './commands/list-workloads.js';
 import { run as runGetWorkload } from './commands/get-workload.js';
@@ -48,6 +51,10 @@ import type {
   AnalyzeClaudeSessionsOptions,
   MapClaudeProjectsOptions,
   UploadClientFileOptions,
+  ClientFileStatusOption,
+  ListClientFilesOptions,
+  DownloadClientFileOptions,
+  UpdateClientFileOptions,
   SyncSkillsOptions,
   ListWorkloadsOptions,
   GetWorkloadOptions,
@@ -268,6 +275,40 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--file-type TYPE', description: 'One of: slide_deck, report, document (defaults to document)' },
       { flag: '--description TEXT', description: 'Optional description' },
       { flag: '--dry-run', description: 'Validate and size the file without uploading' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'list-client-files',
+    oneLiner: "List the client's uploaded files, newest first (requires a client admin's private key)",
+    usage: 'coolhand list-client-files [options]',
+    options: [
+      { flag: '--status VALUE', description: 'Filter by status: draft, published, or archived' },
+      { flag: '--file-type TYPE', description: 'Filter by type: slide_deck, report, or document' },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'download-client-file',
+    oneLiner: "Download a client file's contents to disk (requires a client admin's private key)",
+    usage: 'coolhand download-client-file <file-id> [options]',
+    options: [
+      { flag: '--output PATH', description: 'Where to write the file; a directory keeps the server-provided filename (default: that filename in the current directory)' },
+      { flag: '--force', description: 'Overwrite the destination if it already exists' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'update-client-file',
+    oneLiner: "Change a client file's status (requires a client admin's private key)",
+    usage: 'coolhand update-client-file <file-id> --status <draft|published|archived> [options]',
+    options: [
+      { flag: '--status VALUE', description: 'New status: draft, published, or archived (required)' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -1046,6 +1087,95 @@ function fetchLogOptions(parsed: ParsedArgs): FetchLogOptions {
   return opts;
 }
 
+const CLIENT_FILE_STATUSES = new Set(['draft', 'published', 'archived']);
+
+function parseClientFileStatus(raw: string): ClientFileStatusOption {
+  if (!CLIENT_FILE_STATUSES.has(raw)) {
+    throw new CliError('INVALID_ARGS', '--status must be one of: draft, published, archived');
+  }
+  return raw as ClientFileStatusOption;
+}
+
+function listClientFilesOptions(parsed: ParsedArgs): ListClientFilesOptions {
+  const opts: ListClientFilesOptions = {};
+  if (typeof parsed.flags['status'] === 'string') {
+    opts.status = parseClientFileStatus(parsed.flags['status']);
+  }
+  if (typeof parsed.flags['file-type'] === 'string') {
+    if (!CLIENT_FILE_TYPES.has(parsed.flags['file-type'])) {
+      throw new CliError('INVALID_ARGS', '--file-type must be one of: slide_deck, report, document');
+    }
+    opts.fileType = parsed.flags['file-type'] as ListClientFilesOptions['fileType'];
+  }
+  if (typeof parsed.flags['page'] === 'string') {
+    const raw = parsed.flags['page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--page must be a positive integer');
+    }
+    opts.page = n;
+  }
+  if (typeof parsed.flags['per-page'] === 'string') {
+    const raw = parsed.flags['per-page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 100) {
+      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
+    }
+    opts.perPage = n;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+function downloadClientFileOptions(parsed: ParsedArgs): DownloadClientFileOptions {
+  const id = parsed.positional[0];
+  if (!id) {
+    throw new CliError('INVALID_ARGS', 'download-client-file requires a <file-id> argument');
+  }
+  const opts: DownloadClientFileOptions = { id };
+  if ('output' in parsed.flags) {
+    const v = parsed.flags['output'];
+    if (typeof v !== 'string' || v.length === 0) {
+      throw new CliError('INVALID_ARGS', '--output requires a path argument');
+    }
+    opts.output = v;
+  }
+  if (parsed.flags['force'] === true) {
+    opts.force = true;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+function updateClientFileOptions(parsed: ParsedArgs): UpdateClientFileOptions {
+  const id = parsed.positional[0];
+  if (!id) {
+    throw new CliError('INVALID_ARGS', 'update-client-file requires a <file-id> argument');
+  }
+  const rawStatus = parsed.flags['status'];
+  if (typeof rawStatus !== 'string') {
+    throw new CliError('INVALID_ARGS', 'update-client-file requires --status (draft, published, or archived)');
+  }
+  const opts: UpdateClientFileOptions = { id, status: parseClientFileStatus(rawStatus) };
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 const TEMPLATE_STATUSES = new Set(['draft', 'published', 'failure']);
 
 function searchTemplatesOptions(parsed: ParsedArgs): SearchTemplatesOptions {
@@ -1601,6 +1731,12 @@ export async function run(argv: string[]): Promise<number> {
         return await runMapClaudeProjects(mapClaudeProjectsOptions(parsed));
       case 'upload-client-file':
         return await runUploadClientFile(uploadClientFileOptions(parsed));
+      case 'list-client-files':
+        return await runListClientFiles(listClientFilesOptions(parsed));
+      case 'download-client-file':
+        return await runDownloadClientFile(downloadClientFileOptions(parsed));
+      case 'update-client-file':
+        return await runUpdateClientFile(updateClientFileOptions(parsed));
       case 'sync-skills':
         return await runSyncSkills(syncSkillsOptions(parsed));
       case 'list-workloads':
