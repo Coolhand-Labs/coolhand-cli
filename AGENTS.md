@@ -47,8 +47,6 @@ Every command that calls the Coolhand API must accept and forward `--client-id`.
 
 Commands where `resolveClient` is NOT appropriate (they use `getClient` or no client at all): `status`, `whoami`, `logout` — these are informational or credential-management commands that intentionally work without a fully resolved client.
 
-The help center reads (`search-help-articles`, `get-help-article`, `list-help-categories`) are also exempt: the endpoints are public, so they must work with no stored client and never prompt. They accept `--client-id` and use `selectStoredClient` in `src/api/help-center-client.ts`, a non-prompting variant of the same priority chain.
-
 ## Docs
 
 When adding, removing, or changing any CLI command or its flags, update `docs/commands.md` to match. This is the canonical flag reference — the README only has a short command table that links to it.

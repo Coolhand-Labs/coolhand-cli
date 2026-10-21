@@ -29,15 +29,6 @@ jest.mock('../src/commands/search-templates.js', () => ({
 jest.mock('../src/commands/get-template.js', () => ({
   run: jest.fn(),
 }));
-jest.mock('../src/commands/search-help-articles.js', () => ({
-  run: jest.fn().mockResolvedValue(0),
-}));
-jest.mock('../src/commands/get-help-article.js', () => ({
-  run: jest.fn().mockResolvedValue(0),
-}));
-jest.mock('../src/commands/list-help-categories.js', () => ({
-  run: jest.fn().mockResolvedValue(0),
-}));
 jest.mock('../src/commands/search-referenced-files.js', () => ({
   run: jest.fn().mockResolvedValue(0),
 }));
@@ -83,9 +74,6 @@ import { run as runGetFeedbackCommand } from '../src/commands/get-feedback.js';
 import { run as runSearchLogsCommand } from '../src/commands/search-logs.js';
 import { run as runSearchTemplatesCommand } from '../src/commands/search-templates.js';
 import { run as runGetTemplateCommand } from '../src/commands/get-template.js';
-import { run as runSearchHelpArticlesCommand } from '../src/commands/search-help-articles.js';
-import { run as runGetHelpArticleCommand } from '../src/commands/get-help-article.js';
-import { run as runListHelpCategoriesCommand } from '../src/commands/list-help-categories.js';
 import { run as runSearchReferencedFilesCommand } from '../src/commands/search-referenced-files.js';
 import { run as runListReferencedFileSessionsCommand } from '../src/commands/list-referenced-file-sessions.js';
 import { run as runUploadClientFileCommand } from '../src/commands/upload-client-file.js';
@@ -208,9 +196,6 @@ describe('run', () => {
     (runGetFeedbackCommand as jest.Mock).mockResolvedValue(0);
     (runSearchTemplatesCommand as jest.Mock).mockResolvedValue(0);
     (runGetTemplateCommand as jest.Mock).mockResolvedValue(0);
-    (runSearchHelpArticlesCommand as jest.Mock).mockResolvedValue(0);
-    (runGetHelpArticleCommand as jest.Mock).mockResolvedValue(0);
-    (runListHelpCategoriesCommand as jest.Mock).mockResolvedValue(0);
     (runSearchReferencedFilesCommand as jest.Mock).mockResolvedValue(0);
     (runListReferencedFileSessionsCommand as jest.Mock).mockResolvedValue(0);
     (runUploadClientFileCommand as jest.Mock).mockResolvedValue(0);
@@ -229,9 +214,6 @@ describe('run', () => {
     (runGetFeedbackCommand as jest.Mock).mockReset();
     (runSearchTemplatesCommand as jest.Mock).mockReset();
     (runGetTemplateCommand as jest.Mock).mockReset();
-    (runSearchHelpArticlesCommand as jest.Mock).mockReset();
-    (runGetHelpArticleCommand as jest.Mock).mockReset();
-    (runListHelpCategoriesCommand as jest.Mock).mockReset();
     (runSearchReferencedFilesCommand as jest.Mock).mockReset();
     (runListReferencedFileSessionsCommand as jest.Mock).mockReset();
     (runUploadClientFileCommand as jest.Mock).mockReset();
@@ -437,83 +419,6 @@ describe('run', () => {
     const code = await run(['get-template', 'tmpl-1', '--json']);
     expect(code).toBe(0);
     expect(runGetTemplateCommand).toHaveBeenCalledWith({ id: 'tmpl-1', json: true });
-  });
-
-  test('search-help-articles with no args lists everything (no query sent)', async () => {
-    const code = await run(['search-help-articles']);
-    expect(code).toBe(0);
-    expect(runSearchHelpArticlesCommand).toHaveBeenCalledWith({});
-  });
-
-  test('search-help-articles takes positional text as the query', async () => {
-    await run(['search-help-articles', 'prompt', 'caching']);
-    expect(runSearchHelpArticlesCommand).toHaveBeenCalledWith({ query: 'prompt caching' });
-  });
-
-  test('search-help-articles rejects --query combined with positional text', async () => {
-    const code = await run(['search-help-articles', '--query', 'a', 'b']);
-    expect(code).not.toBe(0);
-    expect(runSearchHelpArticlesCommand).not.toHaveBeenCalled();
-  });
-
-  test('search-help-articles rejects a --query with no value (e.g. a leading-dash query)', async () => {
-    const code = await run(['search-help-articles', '--query', '-openai']);
-    expect(code).not.toBe(0);
-    expect(runSearchHelpArticlesCommand).not.toHaveBeenCalled();
-  });
-
-  test('search-help-articles forwards --query, --category, paging, --base-url and --json', async () => {
-    await run([
-      'search-help-articles',
-      '--query', 'anthropic',
-      '--category', 'providers',
-      '--page', '2',
-      '--per-page', '10',
-      '--base-url', 'http://127.0.0.1:3111',
-      '--json',
-    ]);
-    expect(runSearchHelpArticlesCommand).toHaveBeenCalledWith({
-      query: 'anthropic',
-      category: 'providers',
-      page: 2,
-      perPage: 10,
-      baseUrl: 'http://127.0.0.1:3111',
-      json: true,
-    });
-  });
-
-  test('search-help-articles treats a blank --query as omitted', async () => {
-    await run(['search-help-articles', '--query', '  ']);
-    expect(runSearchHelpArticlesCommand).toHaveBeenCalledWith({});
-  });
-
-  test('search-help-articles with --per-page over 100 returns exit 1', async () => {
-    const code = await run(['search-help-articles', '--per-page', '101']);
-    expect(code).toBe(1);
-    expect(runSearchHelpArticlesCommand).not.toHaveBeenCalled();
-  });
-
-  test('search-help-articles with non-numeric --page returns exit 1', async () => {
-    const code = await run(['search-help-articles', '--page', 'abc']);
-    expect(code).toBe(1);
-    expect(runSearchHelpArticlesCommand).not.toHaveBeenCalled();
-  });
-
-  test('get-help-article without <slug> returns exit 1', async () => {
-    const code = await run(['get-help-article']);
-    expect(code).toBe(1);
-    expect(runGetHelpArticleCommand).not.toHaveBeenCalled();
-  });
-
-  test('get-help-article forwards the positional slug to the command', async () => {
-    const code = await run(['get-help-article', 'what-is-feedback-match-rate', '--json']);
-    expect(code).toBe(0);
-    expect(runGetHelpArticleCommand).toHaveBeenCalledWith({ slug: 'what-is-feedback-match-rate', json: true });
-  });
-
-  test('list-help-categories forwards --client-id and --json', async () => {
-    await run(['list-help-categories', '--client-id', 'acme', '--json']);
-    expect(runListHelpCategoriesCommand).toHaveBeenCalledWith({ clientId: 'acme', json: true });
   });
 
   test('global --client-id with no value returns exit 1', async () => {
