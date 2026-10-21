@@ -231,10 +231,12 @@ same "hand it to a human" rule `/loop-review` uses for stuck findings.
   `main` only via the Phase 5 PR, which the user reviews and merges
   themselves.
 - Never create or push a git tag, and never merge the Phase 5 PR yourself.
-  Tagging and pushing (which triggers `.github/workflows/publish.yml`'s
-  Trusted Publishing run, per `RELEASING.md`) are the user's action once
-  they've reviewed and merged this skill's PR, not something this skill
-  does.
+  Merging it, tagging and pushing (which triggers
+  `.github/workflows/publish.yml`'s Trusted Publishing run, per
+  `RELEASING.md`) are the user's action, not something this skill does. The
+  user can do them by hand, or invoke `/finish-release` after reviewing the
+  release PR: that skill then merges the PR, tags, and publishes the GitHub
+  release.
 
 ## Rationalizations to resist
 
