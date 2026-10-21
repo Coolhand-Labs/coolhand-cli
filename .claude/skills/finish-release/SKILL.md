@@ -65,10 +65,9 @@ approval. The workflow does **not** create a GitHub release; Phase 4 does.
 
 1. Save the PR body verbatim: `gh pr view <n> --json body --jq .body >
    /tmp/release-pr-body-vX.Y.Z.md`.
-2. `gh pr merge <n> --squash --delete-branch --subject "chore: release vX.Y.Z
-   (#<n>)" --body-file /tmp/release-pr-body-vX.Y.Z.md`. That is the repo's
-   convention (`chore: release v0.11.1 (#151)`); `--subject` is used verbatim, so
-   keep the `(#<n>)`. No AI attribution. Never `--admin` or bypass checks; if
+2. `gh pr merge <n> --squash --delete-branch --subject "release vX.Y.Z
+   (#<n>)" --body-file /tmp/release-pr-body-vX.Y.Z.md`. The user-chosen squash
+   title has no `chore:` prefix; `--subject` is used verbatim, so keep the `(#<n>)`. No AI attribution. Never `--admin` or bypass checks; if
    the merge is refused, stop and report.
 3. `git fetch origin main --tags`; the merge commit is `gh pr view <n> --json
    mergeCommit --jq .mergeCommit.oid`. Confirm `git show <sha>:package.json` still
