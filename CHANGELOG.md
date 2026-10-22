@@ -12,6 +12,17 @@ All notable changes to `coolhand-cli` will be documented in this file.
   are public, so they work without `coolhand login`; a stored client's key is sent when one is
   selected (it lifts the anonymous 30-requests-per-minute limit) but never to a `--base-url` the key
   was not issued for. See [docs/commands.md](./docs/commands.md#search-help-articles). (#183)
+- `search-workloads` command: lists and searches workloads over REST, with optional per-workload
+  cost and performance metrics (`--include-metrics`, `--days-back`, `--since`, `--until`).
+  `search-templates` and `get-template` take the same metrics window flags (`get-template` includes
+  metrics by default; `--no-metrics` omits them). `search-logs` gains `--since`, `--until`,
+  `--min-cost`, `--order cost_desc`, `--project-path` and `--source-application`, and shows each
+  row's `cost` (`n/a` when the log could not be priced); `fetch-log` prints cost and cost breakdown.
+  The new parameters need a backend that supports them; older servers ignore them. See
+  [docs/commands.md](./docs/commands.md#search-workloads). (#180)
+- `link-feedback` command: links many feedback records to an optimization in one call, with ids from
+  arguments or a file, optional `--note`, and `--json` output. Requires a private API key.
+  See [docs/commands.md](./docs/commands.md#link-feedback). (#167)
 - `list-client-files`, `download-client-file` and `update-client-file` commands: list a client's
   uploaded files, download a file's contents to disk (never overwriting an existing destination
   without `--force`, and reducing the server-provided filename to a single safe path segment), and
