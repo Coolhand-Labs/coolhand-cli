@@ -135,6 +135,27 @@ export interface GetTemplateOptions {
   clientId?: string;
 }
 
+/** Options shared by every help center read. They work with no stored client. */
+export interface HelpCenterReadOptions {
+  json?: boolean;
+  clientId?: string;
+  /** Overrides the stored client's server. The stored key is only sent when this matches it. */
+  baseUrl?: string;
+}
+
+export interface SearchHelpArticlesOptions extends HelpCenterReadOptions {
+  query?: string;
+  category?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export interface GetHelpArticleOptions extends HelpCenterReadOptions {
+  slug: string;
+}
+
+export type ListHelpCategoriesOptions = HelpCenterReadOptions;
+
 export interface SearchOptimizationsOptions {
   status?: string;
   type?: string;

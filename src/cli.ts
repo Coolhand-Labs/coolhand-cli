@@ -30,6 +30,9 @@ import { run as runGetTemplate } from './commands/get-template.js';
 import { run as runFlushPending, spawnBackgroundFlush } from './commands/flush-pending.js';
 import { run as runSearchFeedback } from './commands/search-feedback.js';
 import { run as runGetFeedback } from './commands/get-feedback.js';
+import { run as runSearchHelpArticles } from './commands/search-help-articles.js';
+import { run as runGetHelpArticle } from './commands/get-help-article.js';
+import { run as runListHelpCategories } from './commands/list-help-categories.js';
 import { run as runSearchReferencedFiles } from './commands/search-referenced-files.js';
 import { run as runListReferencedFileSessions } from './commands/list-referenced-file-sessions.js';
 import { countPending, flushFailed } from './pending-store.js';
@@ -64,6 +67,9 @@ import type {
   GetTemplateOptions,
   SearchReferencedFilesOptions,
   ListReferencedFileSessionsOptions,
+  HelpCenterReadOptions,
+  SearchHelpArticlesOptions,
+  GetHelpArticleOptions,
 } from './types.js';
 
 interface ParsedArgs {
@@ -458,6 +464,40 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--page N', description: 'Page number (default: 1)' },
       { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'search-help-articles',
+    oneLiner: 'Search or list Coolhand help center articles (no login needed)',
+    usage: 'coolhand search-help-articles [query] [options]',
+    options: [
+      { flag: '--query TEXT', description: 'Relevance search: quoted phrases, -exclusions and "or" work (or pass it as positional text). Omit to list every article' },
+      { flag: '--category SLUG', description: 'Only articles in one section (see list-help-categories)' },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--base-url URL', description: 'Read from another Coolhand server; the stored key is only sent to the server you logged in to' },
+      { flag: '--client-id ID', description: 'Use a specific stored client (optional — reads work anonymously)' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'get-help-article',
+    oneLiner: 'Read one help center article by slug, with its full markdown body (no login needed)',
+    usage: 'coolhand get-help-article <slug> [options]',
+    options: [
+      { flag: '--base-url URL', description: 'Read from another Coolhand server; the stored key is only sent to the server you logged in to' },
+      { flag: '--client-id ID', description: 'Use a specific stored client (optional — reads work anonymously)' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'list-help-categories',
+    oneLiner: 'List help center sections and their allowed tags (no login needed)',
+    usage: 'coolhand list-help-categories [options]',
+    options: [
+      { flag: '--base-url URL', description: 'Read from another Coolhand server; the stored key is only sent to the server you logged in to' },
+      { flag: '--client-id ID', description: 'Use a specific stored client (optional — reads work anonymously)' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
   },
@@ -1199,6 +1239,63 @@ function getTemplateOptions(parsed: ParsedArgs): GetTemplateOptions {
   return opts;
 }
 
+function helpCenterReadOptions(parsed: ParsedArgs): HelpCenterReadOptions {
+  const opts: HelpCenterReadOptions = {};
+  if (typeof parsed.flags['base-url'] === 'string') {
+    opts.baseUrl = parsed.flags['base-url'];
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+function searchHelpArticlesOptions(parsed: ParsedArgs): SearchHelpArticlesOptions {
+  const opts: SearchHelpArticlesOptions = helpCenterReadOptions(parsed);
+  if (parsed.flags['query'] === true) {
+    throw new CliError('INVALID_ARGS', '--query requires a value (attach a leading-dash query as --query=-text)');
+  }
+  const positionalQuery = parsed.positional.join(' ');
+  if (typeof parsed.flags['query'] === 'string' && positionalQuery.trim()) {
+    throw new CliError('INVALID_ARGS', 'Pass the search text either as --query or as positional text, not both');
+  }
+  const query = typeof parsed.flags['query'] === 'string' ? parsed.flags['query'] : positionalQuery;
+  if (query.trim()) {
+    opts.query = query;
+  }
+  if (typeof parsed.flags['category'] === 'string') {
+    opts.category = parsed.flags['category'];
+  }
+  if (typeof parsed.flags['page'] === 'string') {
+    const raw = parsed.flags['page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+      throw new CliError('INVALID_ARGS', '--page must be a positive integer');
+    }
+    opts.page = n;
+  }
+  if (typeof parsed.flags['per-page'] === 'string') {
+    const raw = parsed.flags['per-page'];
+    const n = parseInt(raw, 10);
+    if (!/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 100) {
+      throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
+    }
+    opts.perPage = n;
+  }
+  return opts;
+}
+
+function getHelpArticleOptions(parsed: ParsedArgs): GetHelpArticleOptions {
+  const slug = parsed.positional[0];
+  if (!slug) {
+    throw new CliError('INVALID_ARGS', 'get-help-article requires a <slug> argument');
+  }
+  return { ...helpCenterReadOptions(parsed), slug };
+}
+
 function searchLogsOptions(parsed: ParsedArgs): SearchLogsOptions {
   const opts: SearchLogsOptions = {};
   if (typeof parsed.flags['template-id'] === 'string') {
@@ -1656,6 +1753,12 @@ export async function run(argv: string[]): Promise<number> {
         return await runSearchTemplates(searchTemplatesOptions(parsed));
       case 'get-template':
         return await runGetTemplate(getTemplateOptions(parsed));
+      case 'search-help-articles':
+        return await runSearchHelpArticles(searchHelpArticlesOptions(parsed));
+      case 'get-help-article':
+        return await runGetHelpArticle(getHelpArticleOptions(parsed));
+      case 'list-help-categories':
+        return await runListHelpCategories(helpCenterReadOptions(parsed));
       case 'search-referenced-files':
         return await runSearchReferencedFiles(searchReferencedFilesOptions(parsed));
       case 'list-referenced-file-sessions':
