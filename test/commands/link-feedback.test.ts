@@ -59,6 +59,11 @@ describe('link-feedback command', () => {
     expect(await run({ optimizationId: 'opt', feedbackIds: ['a'] })).toBe(1);
   });
 
+  test('exits non-zero when coolhand-node resolves null (dry-run)', async () => {
+    mockBulkLinkFeedback.mockResolvedValue(null);
+    expect(await run({ optimizationId: 'opt', feedbackIds: ['a'] })).toBe(1);
+  });
+
   test('reads ids from a file and combines with args', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'lf-'));
     const file = join(dir, 'ids.txt');

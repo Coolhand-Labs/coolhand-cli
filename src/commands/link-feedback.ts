@@ -58,11 +58,15 @@ export async function run(opts: LinkFeedbackOptions): Promise<number> {
     const ids = await collectIds(opts);
     const coolhand = await getFeedbackClient({ clientId: opts.clientId });
 
-    let result: BulkLinkFeedbackResult;
+    let result: BulkLinkFeedbackResult | null;
     try {
       result = await coolhand.bulkLinkFeedback(opts.optimizationId, ids, opts.note !== undefined ? { note: opts.note } : {});
     } catch (err) {
       throw mapLinkError(err, opts.optimizationId);
+    }
+    if (result === null) {
+      // coolhand-node resolves to null only in dryRun mode, which this command never enables.
+      throw new CliError('FEEDBACK_ERROR', 'Link request was not sent (dry-run mode).');
     }
 
     const failed = result.errored > 0;
