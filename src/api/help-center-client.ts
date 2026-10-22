@@ -1,11 +1,11 @@
-import { HttpError, PublicContentService } from 'coolhand-node';
+import { HttpError, HelpCenterDocsService } from 'coolhand-node';
 import { CliError } from '../errors.js';
 import { loadConfig } from '../config.js';
 import { logger, stripAnsiEscapes } from '../logger.js';
 import { ClientEntry, ConfigFile, DEFAULT_BASE_URL } from '../types.js';
 
 export interface HelpCenterClient {
-  service: PublicContentService;
+  service: HelpCenterDocsService;
   /** True when a stored client's key is sent; false when the call has no stored key (node may still
    *  add `COOLHAND_API_KEY` from the environment, except for a `--base-url` the key was not issued for). */
   usesStoredKey: boolean;
@@ -71,7 +71,7 @@ export async function getHelpCenterClient(
 
   try {
     // '' (not undefined) tells node not to fall back to COOLHAND_API_KEY for a host no key was issued for.
-    const service = new PublicContentService({ apiKey: opts.baseUrl !== undefined && !keyAllowed ? '' : key, baseUrl, silent: true });
+    const service = new HelpCenterDocsService({ apiKey: opts.baseUrl !== undefined && !keyAllowed ? '' : key, baseUrl, silent: true });
     return { service, usesStoredKey: key !== undefined };
   } catch (err) {
     throw new CliError('INVALID_BASE_URL', `Invalid base URL: ${baseUrl} (${(err as Error).message})`);
@@ -79,7 +79,7 @@ export async function getHelpCenterClient(
 }
 
 /**
- * Maps an error thrown by a `PublicContentService` call to a `CliError`. A `401` means the key was
+ * Maps an error thrown by a `HelpCenterDocsService` call to a `CliError`. A `401` means the key was
  * rejected and is reported, never retried anonymously. A `429` is the anonymous rate limit, so it
  * is retryable.
  */

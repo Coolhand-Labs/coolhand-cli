@@ -12,7 +12,7 @@ class MockHttpError extends Error {
 }
 
 jest.mock('coolhand-node', () => ({
-  PublicContentService: mockServiceCtor,
+  HelpCenterDocsService: mockServiceCtor,
   HttpError: MockHttpError,
 }));
 jest.mock('../../src/config.js', () => ({

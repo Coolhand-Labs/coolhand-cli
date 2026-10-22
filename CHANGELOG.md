@@ -7,6 +7,11 @@ All notable changes to `coolhand-cli` will be documented in this file.
 ## [0.12.0] - 2026-10-21
 
 ### Added
+- `search-help-articles`, `get-help-article` and `list-help-categories` commands: read the Coolhand
+  help center from the terminal or an AI agent, via `coolhand-node`'s `HelpCenterDocsService`. Reads
+  are public, so they work without `coolhand login`; a stored client's key is sent when one is
+  selected (it lifts the anonymous 30-requests-per-minute limit) but never to a `--base-url` the key
+  was not issued for. See [docs/commands.md](./docs/commands.md#search-help-articles). (#183)
 - `list-client-files`, `download-client-file` and `update-client-file` commands: list a client's
   uploaded files, download a file's contents to disk (never overwriting an existing destination
   without `--force`, and reducing the server-provided filename to a single safe path segment), and
@@ -20,9 +25,10 @@ All notable changes to `coolhand-cli` will be documented in this file.
   ran). (#181)
 
 ### Changed
-- Upgraded `coolhand-node` from `^0.14.0` to `^0.16.0`. (#182)
-- Bumped dependencies: `mockttp` to 4.6.3 (#161), and dev dependencies `eslint` to 10.11.0 (#162),
-  `@types/node` to 26.6.2 (#163) and `jest` to 30.5.2 (#164).
+- Upgraded `coolhand-node` from `^0.14.0` to `^0.17.0`. (#182)
+- Bumped dependencies: `mockttp` to 4.6.3 (#161), and dev dependencies `eslint` to 10.13.0 (#162, #186),
+  `@types/node` to 26.6.2 (#163), `jest` to 30.5.2 (#164), `ts-jest` to 29.4.15 (#187),
+  `@typescript-eslint/eslint-plugin` to 8.71.2 (#188) and `eslint-plugin-jest` to 29.17.0 (#189).
 - Bumped GitHub Actions: `actions/setup-node` to 7.1.0 (#174), `actions/upload-artifact` to 7.0.2
   (#173) and `actions/download-artifact` to 8.0.2 (#172).
 - Clarified the review handshake in `AGENTS.harness.md`. (#168)
@@ -41,7 +47,8 @@ All notable changes to `coolhand-cli` will be documented in this file.
   no-store`.
 - `analyze-claude-sessions`' last-sync request now times out after 10 seconds instead of hanging.
 - Cleared `npm audit` advisories in `mockttp`'s transitive tree (`proxy-addr`,
-  `@graphql-tools/utils`, `ip-address`, and `basic-ftp` via an override), so the CI audit step passes.
+  `@graphql-tools/utils`, `ip-address`) via a lockfile update. `basic-ftp` (reached only through
+  `mockttp`'s unused FTP path) remains pending an upstream `mockttp` release.
 
 ## [0.11.1] - 2026-09-23
 

@@ -60,14 +60,13 @@
     "live-smoke": "bash scripts/run-live-smoke.sh"
   },
   "dependencies": {
-    "coolhand-node": "^0.16.0",
+    "coolhand-node": "^0.17.0",
     "mockttp": "^4.2.1"
   },
   "overrides": {
     "js-yaml": "^4.2.0",
     "get-port": "^5.1.1",
-    "ip-address": "^10.4.0",
-    "basic-ftp": "^6.2.3"
+    "ip-address": "^10.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

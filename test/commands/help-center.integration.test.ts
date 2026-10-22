@@ -9,7 +9,7 @@ import { createTmpHome, TmpHome } from '../helpers/tmp-home.js';
 
 /**
  * Real-transport proof: no SDK mock. A local HTTP server stands in for `/api/v2/public_content`
- * and each command runs through the real `coolhand-node` `PublicContentService`, so the wire
+ * and each command runs through the real `coolhand-node` `HelpCenterDocsService`, so the wire
  * format (query string, `X-API-Key` header, pagination headers, status handling) is asserted as
  * the server would see it.
  */
@@ -86,7 +86,7 @@ describe('help center commands over a real HTTP transport', () => {
     server = await startFakeCoolhand();
     jsonSpy = jest.spyOn(logger, 'json').mockImplementation(() => {});
     infoSpy = jest.spyOn(logger, 'info').mockImplementation(() => {});
-    // PublicContentService falls back to COOLHAND_API_KEY, which would defeat the no-key cases.
+    // HelpCenterDocsService falls back to COOLHAND_API_KEY, which would defeat the no-key cases.
     savedKey = process.env.COOLHAND_API_KEY;
     delete process.env.COOLHAND_API_KEY;
   });
