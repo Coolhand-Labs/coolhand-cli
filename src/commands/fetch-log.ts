@@ -2,6 +2,7 @@ import type { GetLogContentOptions, LlmRequestLogContent } from 'coolhand-node';
 import { CliError, ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
 import { getLogClient, mapLogHttpError } from '../api/log-client.js';
+import { formatCost } from '../format-cost.js';
 import type { FetchLogOptions } from '../types.js';
 
 export async function run(opts: FetchLogOptions): Promise<number> {
@@ -25,6 +26,14 @@ export async function run(opts: FetchLogOptions): Promise<number> {
     if (opts.json) {
       logger.json({ ok: true, result });
     } else {
+      if ('cost' in result) {
+        logger.info(`Cost: ${formatCost(result.cost)}`);
+        if (result.cost_breakdown) {
+          for (const [key, value] of Object.entries(result.cost_breakdown)) {
+            logger.info(`  ${key}: ${formatCost(value)}`);
+          }
+        }
+      }
       logger.info(JSON.stringify(result, null, 2));
     }
     return ExitCode.OK;

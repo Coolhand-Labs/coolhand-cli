@@ -26,6 +26,7 @@ import { run as runUpdateWorkload } from './commands/update-workload.js';
 import { run as runFetchLog } from './commands/fetch-log.js';
 import { run as runSearchLogs } from './commands/search-logs.js';
 import { run as runSearchTemplates } from './commands/search-templates.js';
+import { run as runSearchWorkloads } from './commands/search-workloads.js';
 import { run as runGetTemplate } from './commands/get-template.js';
 import { run as runFlushPending, spawnBackgroundFlush } from './commands/flush-pending.js';
 import { run as runSearchFeedback } from './commands/search-feedback.js';
@@ -33,6 +34,7 @@ import { run as runGetFeedback } from './commands/get-feedback.js';
 import { run as runSearchHelpArticles } from './commands/search-help-articles.js';
 import { run as runGetHelpArticle } from './commands/get-help-article.js';
 import { run as runListHelpCategories } from './commands/list-help-categories.js';
+import { run as runLinkFeedback } from './commands/link-feedback.js';
 import { run as runSearchReferencedFiles } from './commands/search-referenced-files.js';
 import { run as runListReferencedFileSessions } from './commands/list-referenced-file-sessions.js';
 import { countPending, flushFailed } from './pending-store.js';
@@ -61,9 +63,11 @@ import type {
   UpdateWorkloadOptions,
   SearchFeedbackOptions,
   GetFeedbackOptions,
+  LinkFeedbackOptions,
   FetchLogOptions,
   SearchLogsOptions,
   SearchTemplatesOptions,
+  SearchWorkloadsOptions,
   GetTemplateOptions,
   SearchReferencedFilesOptions,
   ListReferencedFileSessionsOptions,
@@ -86,7 +90,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-total', 'include-deprecated', 'force']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-total', 'include-metrics', 'no-metrics', 'include-deprecated', 'force']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
 const REPEATABLE_FLAGS = new Set(['project', 'exclude-project', 'skill', 'exclude-skill', 'source']);
@@ -225,6 +229,17 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--sort-dir asc|desc', description: 'Sort direction (default: desc)' },
       { flag: '--page N', description: 'Page number (default: 1)' },
       { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'link-feedback',
+    oneLiner: 'Link feedback records to an optimization in bulk (requires a private key)',
+    usage: 'coolhand link-feedback <optimization-id> [feedback-id...] [--file PATH|--file=-] [--note TEXT] [options]',
+    options: [
+      { flag: '--file PATH', description: 'Read feedback ids from a file (whitespace/comma separated); use --file=- for stdin' },
+      { flag: '--note TEXT', description: 'Note attached to every link created' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -409,7 +424,13 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--source-api VALUE', description: "Filter by source API (e.g. 'openai', 'anthropic', 'vertex')" },
       { flag: '--source-api-result VALUE', description: 'Filter by result status: success, failed, operational, unmatched' },
       { flag: '--unmatched-only', description: 'Only return logs with no assigned template' },
-      { flag: '--days-back N', description: 'Limit to logs created in the last N days (unrestricted if omitted)' },
+      { flag: '--source-application VALUE', description: 'Filter by exact source_application' },
+      { flag: '--project-path PATH', description: 'Filter by exact metadata.project_path' },
+      { flag: '--days-back N', description: 'Limit to logs created in the last N days (unrestricted if omitted; ignored with --since/--until)' },
+      { flag: '--since TS', description: 'Only logs created at or after this ISO8601 timestamp (replaces --days-back)' },
+      { flag: '--until TS', description: 'Only logs created before this ISO8601 timestamp (exclusive; must be after --since)' },
+      { flag: '--min-cost USD', description: 'Only logs whose cost is at least this many USD (unpriced logs are excluded; 0 is valid)' },
+      { flag: '--order VALUE', description: "Order by cost instead of --sort: 'cost_desc' (highest cost first)" },
       { flag: '--include-prompts', description: 'Include system_prompt and user_prompt in results (may be large)' },
       { flag: '--include-total', description: 'Ask the backend to compute the exact total_count/total_pages instead of the cheaper lower-bound estimate (costs a COUNT(*) server-side; off by default)' },
       { flag: '--sort VALUE', description: "Sort expression, e.g. 'created_at desc' (default: newest first)" },
@@ -429,16 +450,44 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--status VALUE', description: 'Filter by status: draft, published, or failure' },
       { flag: '--include-deprecated', description: 'Include deprecated templates (hidden by default)' },
       { flag: '--include-system', description: "Include the 'Unmatched' and 'Ignored API Calls' system buckets (hidden by default) — inspect 'Unmatched' when logs are misrouting" },
+      { flag: '--include-metrics', description: 'Add a cost and performance metrics object to each template' },
+      { flag: '--days-back N', description: 'Metrics window: rolling N days ending now (server default 28, max 365; ignored with --since)' },
+      { flag: '--since TS', description: 'Metrics window start, ISO8601 (inclusive; overrides --days-back)' },
+      { flag: '--until TS', description: 'Metrics window end, ISO8601 (exclusive; defaults to now)' },
       { flag: '--page N', description: 'Page number (default: 1)' },
       { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
-  },  {
+  },
+  {
+    name: 'search-workloads',
+    oneLiner: 'List and search workloads, optionally with cost and performance metrics (requires a private key)',
+    usage: 'coolhand search-workloads [options]',
+    options: [
+      { flag: '--search TEXT', description: 'Case-insensitive substring to match in the workload name' },
+      { flag: '--include-archived', description: 'Include archived workloads (hidden by default)' },
+      { flag: '--include-system', description: "Include system workloads such as 'Unmatched' (hidden by default)" },
+      { flag: '--include-templates', description: "Add each workload's active templates and their routing patterns" },
+      { flag: '--include-metrics', description: 'Add a cost and performance metrics object to each workload' },
+      { flag: '--days-back N', description: 'Metrics window: rolling N days ending now (server default 28, max 365; ignored with --since)' },
+      { flag: '--since TS', description: 'Metrics window start, ISO8601 (inclusive; overrides --days-back)' },
+      { flag: '--until TS', description: 'Metrics window end, ISO8601 (exclusive; defaults to now)' },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
     name: 'get-template',
-    oneLiner: 'Get a single LLM request template by ID, including its prompt patterns (requires a private key)',
+    oneLiner: 'Get a single LLM request template by ID, including its prompt patterns and metrics (requires a private key)',
     usage: 'coolhand get-template <template-id> [options]',
     options: [
+      { flag: '--no-metrics', description: 'Omit the metrics object (included by default)' },
+      { flag: '--days-back N', description: 'Metrics window: rolling N days ending now (server default 28, max 365; ignored with --since)' },
+      { flag: '--since TS', description: 'Metrics window start, ISO8601 (inclusive; overrides --days-back)' },
+      { flag: '--until TS', description: 'Metrics window end, ISO8601 (exclusive; defaults to now)' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -1176,6 +1225,67 @@ function updateClientFileOptions(parsed: ParsedArgs): UpdateClientFileOptions {
   return opts;
 }
 
+/** Strict positive integer (`/^\d+$/`, `>= 1`), as `--days-back` has always been parsed. */
+function positiveIntFlag(parsed: ParsedArgs, name: string): number | undefined {
+  const raw = parsed.flags[name];
+  if (raw === undefined) {
+    return undefined;
+  }
+  const n = typeof raw === 'string' ? parseInt(raw, 10) : NaN;
+  if (typeof raw !== 'string' || !/^\d+$/.test(raw) || isNaN(n) || n < 1) {
+    throw new CliError('INVALID_ARGS', `--${name} must be a positive integer`);
+  }
+  return n;
+}
+
+/** `--per-page`: strict integer between 1 and 100. */
+function perPageFlag(parsed: ParsedArgs): number | undefined {
+  const raw = parsed.flags['per-page'];
+  if (raw === undefined) {
+    return undefined;
+  }
+  const n = typeof raw === 'string' ? parseInt(raw, 10) : NaN;
+  if (typeof raw !== 'string' || !/^\d+$/.test(raw) || isNaN(n) || n < 1 || n > 100) {
+    throw new CliError('INVALID_ARGS', '--per-page must be an integer between 1 and 100');
+  }
+  return n;
+}
+
+/**
+ * ISO8601 `--since`/`--until`: passed straight through, never parsed into a `Date` locally — the
+ * server validates it and a 422 surfaces as a `CliError` with its message.
+ */
+function timestampFlag(parsed: ParsedArgs, name: string): string | undefined {
+  const raw = parsed.flags[name];
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== 'string' || raw.length === 0) {
+    throw new CliError('INVALID_ARGS', `--${name} requires an ISO8601 timestamp`);
+  }
+  return raw;
+}
+
+/** The metrics window flags shared by search-templates, get-template and search-workloads. */
+function metricsWindow(
+  parsed: ParsedArgs
+): { daysBack?: number; since?: string; until?: string } {
+  const window: { daysBack?: number; since?: string; until?: string } = {};
+  const daysBack = positiveIntFlag(parsed, 'days-back');
+  if (daysBack !== undefined) {
+    window.daysBack = daysBack;
+  }
+  const since = timestampFlag(parsed, 'since');
+  if (since !== undefined) {
+    window.since = since;
+  }
+  const until = timestampFlag(parsed, 'until');
+  if (until !== undefined) {
+    window.until = until;
+  }
+  return window;
+}
+
 const TEMPLATE_STATUSES = new Set(['draft', 'published', 'failure']);
 
 function searchTemplatesOptions(parsed: ParsedArgs): SearchTemplatesOptions {
@@ -1199,6 +1309,10 @@ function searchTemplatesOptions(parsed: ParsedArgs): SearchTemplatesOptions {
   if (parsed.flags['include-system'] === true) {
     opts.includeSystem = true;
   }
+  if (parsed.flags['include-metrics'] === true) {
+    opts.includeMetrics = true;
+  }
+  Object.assign(opts, metricsWindow(parsed));
   if (typeof parsed.flags['page'] === 'string') {
     const raw = parsed.flags['page'];
     const n = parseInt(raw, 10);
@@ -1224,12 +1338,51 @@ function searchTemplatesOptions(parsed: ParsedArgs): SearchTemplatesOptions {
   return opts;
 }
 
+function searchWorkloadsOptions(parsed: ParsedArgs): SearchWorkloadsOptions {
+  const opts: SearchWorkloadsOptions = {};
+  if (typeof parsed.flags['search'] === 'string') {
+    opts.search = parsed.flags['search'];
+  }
+  if (parsed.flags['include-archived'] === true) {
+    opts.includeArchived = true;
+  }
+  if (parsed.flags['include-system'] === true) {
+    opts.includeSystem = true;
+  }
+  if (parsed.flags['include-templates'] === true) {
+    opts.includeTemplates = true;
+  }
+  if (parsed.flags['include-metrics'] === true) {
+    opts.includeMetrics = true;
+  }
+  Object.assign(opts, metricsWindow(parsed));
+  const page = positiveIntFlag(parsed, 'page');
+  if (page !== undefined) {
+    opts.page = page;
+  }
+  const perPage = perPageFlag(parsed);
+  if (perPage !== undefined) {
+    opts.perPage = perPage;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 function getTemplateOptions(parsed: ParsedArgs): GetTemplateOptions {
   const id = parsed.positional[0];
   if (!id) {
     throw new CliError('INVALID_ARGS', 'get-template requires a <template-id> argument');
   }
   const opts: GetTemplateOptions = { id };
+  if (parsed.flags['no-metrics'] === true) {
+    opts.noMetrics = true;
+  }
+  Object.assign(opts, metricsWindow(parsed));
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
   }
@@ -1329,6 +1482,32 @@ function searchLogsOptions(parsed: ParsedArgs): SearchLogsOptions {
       throw new CliError('INVALID_ARGS', '--days-back must be a positive integer');
     }
     opts.daysBack = n;
+  }
+  if (typeof parsed.flags['source-application'] === 'string') {
+    opts.sourceApplication = parsed.flags['source-application'];
+  }
+  if (typeof parsed.flags['project-path'] === 'string') {
+    opts.projectPath = parsed.flags['project-path'];
+  }
+  const since = timestampFlag(parsed, 'since');
+  if (since !== undefined) {
+    opts.since = since;
+  }
+  const until = timestampFlag(parsed, 'until');
+  if (until !== undefined) {
+    opts.until = until;
+  }
+  if (parsed.flags['min-cost'] !== undefined) {
+    const raw = parsed.flags['min-cost'];
+    // `0` is a valid floor and must reach the server, so compare against undefined, not falsiness.
+    if (typeof raw !== 'string' || !/^\d+(\.\d+)?$/.test(raw)) {
+      throw new CliError('INVALID_ARGS', '--min-cost must be a non-negative decimal number (USD)');
+    }
+    opts.minCost = parseFloat(raw);
+  }
+  if (typeof parsed.flags['order'] === 'string') {
+    // Not allowlisted here: the server validates it and a 422 surfaces as a CliError.
+    opts.order = parsed.flags['order'];
   }
   if (parsed.flags['include-prompts'] === true) {
     opts.includePrompts = true;
@@ -1540,6 +1719,29 @@ function searchFeedbackOptions(parsed: ParsedArgs): SearchFeedbackOptions {
   return opts;
 }
 
+function linkFeedbackOptions(parsed: ParsedArgs): LinkFeedbackOptions {
+  const optimizationId = parsed.positional[0];
+  if (!optimizationId) {
+    throw new CliError('INVALID_ARGS', 'link-feedback requires an <optimization-id> argument');
+  }
+  const opts: LinkFeedbackOptions = { optimizationId, feedbackIds: parsed.positional.slice(1) };
+  if (typeof parsed.flags.file === 'string') {
+    opts.file = parsed.flags.file;
+  } else if (parsed.flags.file === true) {
+    throw new CliError('INVALID_ARGS', 'link-feedback --file requires a path; use --file=- to read ids from stdin');
+  }
+  if (typeof parsed.flags.note === 'string') {
+    opts.note = parsed.flags.note;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 function getFeedbackOptions(parsed: ParsedArgs): GetFeedbackOptions {
   const id = parsed.positional[0];
   if (!id) {
@@ -1723,6 +1925,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runWildcard(wildcardOptions(parsed));
       case 'search-feedback':
         return await runSearchFeedback(searchFeedbackOptions(parsed));
+      case 'link-feedback':
+        return await runLinkFeedback(linkFeedbackOptions(parsed));
       case 'get-feedback':
         return await runGetFeedback(getFeedbackOptions(parsed));
       case 'analyze-claude-sessions':
@@ -1751,6 +1955,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runSearchLogs(searchLogsOptions(parsed));
       case 'search-templates':
         return await runSearchTemplates(searchTemplatesOptions(parsed));
+      case 'search-workloads':
+        return await runSearchWorkloads(searchWorkloadsOptions(parsed));
       case 'get-template':
         return await runGetTemplate(getTemplateOptions(parsed));
       case 'search-help-articles':

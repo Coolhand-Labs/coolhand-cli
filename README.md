@@ -83,6 +83,7 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand list-workloads` | List workloads with optional search and pagination |
 | `coolhand get-workload` | Fetch a single workload by ID |
 | `coolhand update-workload` | Update a workload's name and/or description |
+| `coolhand search-workloads` | List and search workloads, optionally with cost and performance metrics |
 | `coolhand search-templates` | List and search LLM request templates |
 | `coolhand get-template` | Fetch a single template by ID, with its prompt patterns |
 | `coolhand search-help-articles` | Search or list Coolhand help center articles (no login needed) |
@@ -94,6 +95,7 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand close-optimization` | Close an optimization with a reason |
 | `coolhand search-feedback` | Search and filter feedback records |
 | `coolhand get-feedback` | Fetch a single feedback record by ID |
+| `coolhand link-feedback` | Link feedback records to an optimization in bulk |
 | `coolhand fetch-log` | Fetch the input/output content of a single LLM request log |
 | `coolhand search-logs` | Search LLM request logs with flexible filters |
 | `coolhand search-referenced-files` | List a client's referenced files, aggregated and ranked by reference count |

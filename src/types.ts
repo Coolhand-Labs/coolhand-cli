@@ -105,6 +105,17 @@ export interface SearchLogsOptions {
   sourceApiResult?: string;
   unmatchedOnly?: boolean;
   daysBack?: number;
+  /** Exact match on `source_application`. */
+  sourceApplication?: string;
+  /** Exact match on `metadata.project_path`. */
+  projectPath?: string;
+  /** ISO8601, passed through untouched — the server validates it. */
+  since?: string;
+  until?: string;
+  /** USD floor on per-log cost. `0` is valid and must be sent. */
+  minCost?: number;
+  /** Server-validated; only `cost_desc` is documented. */
+  order?: string;
   includePrompts?: boolean;
   includeTotal?: boolean;
   sort?: string;
@@ -123,6 +134,27 @@ export interface SearchTemplatesOptions {
   includeDeprecated?: boolean;
   /** Include the `Unmatched` / `Ignored API Calls` buckets, hidden by default. */
   includeSystem?: boolean;
+  includeMetrics?: boolean;
+  /** Metrics window: rolling days ending now. */
+  daysBack?: number;
+  /** ISO8601 metrics window bounds, passed through untouched — the server validates them. */
+  since?: string;
+  until?: string;
+  page?: number;
+  perPage?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface SearchWorkloadsOptions {
+  search?: string;
+  includeArchived?: boolean;
+  includeSystem?: boolean;
+  includeTemplates?: boolean;
+  includeMetrics?: boolean;
+  daysBack?: number;
+  since?: string;
+  until?: string;
   page?: number;
   perPage?: number;
   json?: boolean;
@@ -131,6 +163,11 @@ export interface SearchTemplatesOptions {
 
 export interface GetTemplateOptions {
   id: string;
+  /** `--no-metrics`: send `includeMetrics: false` (the server includes metrics by default). */
+  noMetrics?: boolean;
+  daysBack?: number;
+  since?: string;
+  until?: string;
   json?: boolean;
   clientId?: string;
 }
@@ -298,6 +335,15 @@ export interface SearchFeedbackOptions {
   sortDir?: 'asc' | 'desc';
   page?: number;
   perPage?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface LinkFeedbackOptions {
+  optimizationId: string;
+  feedbackIds: string[];
+  file?: string;
+  note?: string;
   json?: boolean;
   clientId?: string;
 }

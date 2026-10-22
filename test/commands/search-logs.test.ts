@@ -112,4 +112,40 @@ describe('search-logs command', () => {
     const code = await run({});
     expect(code).not.toBe(0);
   });
+
+  test('passes the cost filters through, sending --min-cost 0', async () => {
+    await run({
+      sourceApplication: 'claude-code',
+      projectPath: '/work/app',
+      since: '2026-09-01T00:00:00+02:00',
+      until: '2026-10-01T00:00:00Z',
+      minCost: 0,
+      order: 'cost_desc',
+    });
+    expect(mockSearchLogs).toHaveBeenCalledWith({
+      sourceApplication: 'claude-code',
+      projectPath: '/work/app',
+      since: '2026-09-01T00:00:00+02:00',
+      until: '2026-10-01T00:00:00Z',
+      minCost: 0,
+      order: 'cost_desc',
+    });
+  });
+
+  test('prints cost per row, n/a when null', async () => {
+    mockSearchLogs.mockResolvedValue({
+      logs: [
+        { id: 'log-1', cost: 0.01234 },
+        { id: 'log-2', cost: null },
+      ],
+      pagination: { ...emptyPagination, total_count: 2, total_pages: 1 },
+    });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({});
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('log-1  cost $0.0123');
+    expect(output).toContain('log-2  cost n/a');
+    spy.mockRestore();
+  });
 });
