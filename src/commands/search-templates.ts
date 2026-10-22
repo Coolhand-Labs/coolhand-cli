@@ -27,6 +27,18 @@ export async function run(opts: SearchTemplatesOptions): Promise<number> {
     if (opts.includeSystem) {
       params.includeSystem = true;
     }
+    if (opts.includeMetrics) {
+      params.includeMetrics = true;
+    }
+    if (opts.daysBack !== undefined) {
+      params.daysBack = opts.daysBack;
+    }
+    if (opts.since !== undefined) {
+      params.since = opts.since;
+    }
+    if (opts.until !== undefined) {
+      params.until = opts.until;
+    }
     if (opts.page !== undefined) {
       params.page = opts.page;
     }

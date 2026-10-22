@@ -171,4 +171,14 @@ describe('search-templates command', () => {
       expect.stringContaining('--workload-id')
     );
   });
+
+  test('passes metrics flags through; since/until are raw strings', async () => {
+    await run({ includeMetrics: true, daysBack: 7, since: '2026-09-01T00:00:00Z', until: '2026-10-01' });
+    expect(mockSearchTemplates).toHaveBeenCalledWith({
+      includeMetrics: true,
+      daysBack: 7,
+      since: '2026-09-01T00:00:00Z',
+      until: '2026-10-01',
+    });
+  });
 });
