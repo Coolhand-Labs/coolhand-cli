@@ -58,9 +58,10 @@ export async function fetchLastSync(opts: { clientId?: string } = {}): Promise<D
       headers: { Accept: 'application/json', 'X-API-Key': apiKey },
       // Never follow redirects: fetch would forward X-API-Key to the redirect target.
       redirect: 'error',
+      signal: AbortSignal.timeout(10_000),
     });
   } catch {
-    // Network failure — degrade to local state.
+    // Network failure or timeout — degrade to local state.
     return null;
   }
   if (!res.ok) {

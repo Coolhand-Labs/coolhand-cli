@@ -4,6 +4,63 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-21
+
+### Added
+- `search-help-articles`, `get-help-article` and `list-help-categories` commands: read the Coolhand
+  help center from the terminal or an AI agent, via `coolhand-node`'s `HelpCenterDocsService`. Reads
+  are public, so they work without `coolhand login`; a stored client's key is sent when one is
+  selected (it lifts the anonymous 30-requests-per-minute limit) but never to a `--base-url` the key
+  was not issued for. See [docs/commands.md](./docs/commands.md#search-help-articles). (#183)
+- `search-workloads` command: lists and searches workloads over REST, with optional per-workload
+  cost and performance metrics (`--include-metrics`, `--days-back`, `--since`, `--until`).
+  `search-templates` and `get-template` take the same metrics window flags (`get-template` includes
+  metrics by default; `--no-metrics` omits them). `search-logs` gains `--since`, `--until`,
+  `--min-cost`, `--order cost_desc`, `--project-path` and `--source-application`, and shows each
+  row's `cost` (`n/a` when the log could not be priced); `fetch-log` prints cost and cost breakdown.
+  The new parameters need a backend that supports them; older servers ignore them. See
+  [docs/commands.md](./docs/commands.md#search-workloads). (#180)
+- `link-feedback` command: links many feedback records to an optimization in one call, with ids from
+  arguments or a file, optional `--note`, and `--json` output. Requires a private API key.
+  See [docs/commands.md](./docs/commands.md#link-feedback). (#167)
+- `list-client-files`, `download-client-file` and `update-client-file` commands: list a client's
+  uploaded files, download a file's contents to disk (never overwriting an existing destination
+  without `--force`, and reducing the server-provided filename to a single safe path segment), and
+  change a file's status between `draft`, `published` and `archived`. They require a client admin's
+  private key. See [docs/commands.md](./docs/commands.md#list-client-files). (#177)
+- `search-logs --include-total` asks the backend for the exact `total_count`/`total_pages`; older
+  backends ignore it. (#159)
+- `npm run live-smoke` runs the live smoke test under `zsh -ic` when zsh is installed, so credentials
+  exported from a zsh profile are visible from non-interactive shells. The smoke test now prints its
+  credential source and, when it skips, says why (config path, which env vars are set, which shell
+  ran). (#181)
+
+### Changed
+- Upgraded `coolhand-node` from `^0.14.0` to `^0.17.0`. (#182)
+- Bumped dependencies: `mockttp` to 4.6.3 (#161), and dev dependencies `eslint` to 10.13.0 (#162, #186),
+  `@types/node` to 26.6.2 (#163), `jest` to 30.5.2 (#164), `ts-jest` to 29.4.15 (#187),
+  `@typescript-eslint/eslint-plugin` to 8.71.2 (#188) and `eslint-plugin-jest` to 29.17.0 (#189).
+- Bumped GitHub Actions: `actions/setup-node` to 7.1.0 (#174), `actions/upload-artifact` to 7.0.2
+  (#173) and `actions/download-artifact` to 8.0.2 (#172).
+- Clarified the review handshake in `AGENTS.harness.md`. (#168)
+
+### Security
+- `sync-skills` no longer follows a symlinked `SKILL.md`, which could upload an arbitrary local
+  file (for example a private key) to the client's account.
+- Session and proxy secret redaction now also catches `SECRET_KEY`, `auth_key`, `passphrase`,
+  `signing_key` and `encryption_key` assignments, credentials embedded in URLs
+  (`scheme://user:pass@host`), and npm, GitLab, Hugging Face, Google OAuth and PyPI tokens.
+- Terminal-escape stripping of server-supplied text now repeats until stable (so nested sequences
+  can't reassemble into a live one) and removes remaining control bytes, including DCS/APC/PM/SOS
+  and unterminated OSC introducers.
+- The login callback server answers a malformed request target with `400` instead of throwing and
+  ending the login, and its response sends `Referrer-Policy: no-referrer` and `Cache-Control:
+  no-store`.
+- `analyze-claude-sessions`' last-sync request now times out after 10 seconds instead of hanging.
+- Cleared `npm audit` advisories in `mockttp`'s transitive tree (`proxy-addr`,
+  `@graphql-tools/utils`, `ip-address`) via a lockfile update, and lifted `basic-ftp` (reached only
+  through `mockttp`'s unused FTP path) to 6.2.3 with a package override, so the CI audit step passes.
+
 ## [0.11.1] - 2026-09-23
 
 ### Changed

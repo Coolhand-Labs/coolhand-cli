@@ -28,6 +28,12 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
   /\bBasic\s+[A-Za-z0-9+/=]{8,}/gi, // Authorization: Basic <base64 user:pass>
   /https:\/\/hooks\.slack\.com\/services\/\S+/g, // Slack incoming webhook URL
   /https:\/\/discord(?:app)?\.com\/api\/webhooks\/\S+/g, // Discord webhook URL
+  /npm_[A-Za-z0-9]{36}/g, // npm access token
+  /glpat-[A-Za-z0-9_-]{20,}/g, // GitLab personal access token
+  /hf_[A-Za-z0-9]{30,}/g, // Hugging Face token
+  /ya29\.[A-Za-z0-9_-]+/g, // Google OAuth access token
+  /pypi-[A-Za-z0-9_-]{20,}/g, // PyPI API token
+  /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/:@]+:[^\s/@]+@/gi, // credentials embedded in a URL (scheme://user:pass@host)
   /\b[A-Fa-f0-9]{40,}\b/g, // long hex blobs (generic tokens / hashes)
   // PEM-formatted private key blocks (SSH/RSA/EC/OpenSSH/PGP/encrypted) — no assignment keyword
   // sits next to the base64 body, so ASSIGNMENT_QUOTED/BARE never catch these; a `cat ~/.ssh/id_rsa`
@@ -44,9 +50,9 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
 // The opening quote may be backslash-escaped (`\\"value\\"`): session payloads are JSON.stringify'd
 // before redaction, so a quoted shell assignment inside a tool input arrives with escaped quotes.
 const ASSIGNMENT_QUOTED =
-  /((?:api[_-]?key|secret|token|password|passwd|access[_-]?key|private[_-]?key)\b["']?\s*[:=]\s*)(\\?['"])[^'"]*\2/gi;
+  /((?:api[_-]?key|secret(?:[_-]?key)?|token|password|passwd|passphrase|access[_-]?key|private[_-]?key|auth[_-]?key|signing[_-]?key|encryption[_-]?key)\b["']?\s*[:=]\s*)(\\?['"])[^'"]*\2/gi;
 const ASSIGNMENT_BARE =
-  /((?:api[_-]?key|secret|token|password|passwd|access[_-]?key|private[_-]?key)\b["']?\s*[:=]\s*)[^\s'"]+/gi;
+  /((?:api[_-]?key|secret(?:[_-]?key)?|token|password|passwd|passphrase|access[_-]?key|private[_-]?key|auth[_-]?key|signing[_-]?key|encryption[_-]?key)\b["']?\s*[:=]\s*)[^\s'"]+/gi;
 
 const REDACTED = '[REDACTED]';
 
@@ -59,7 +65,7 @@ export function redactSecrets(text: string): string {
     .replace(ASSIGNMENT_QUOTED, `$1$2${REDACTED}$2`)
     .replace(ASSIGNMENT_BARE, `$1${REDACTED}`);
   for (const pattern of TOKEN_PATTERNS) {
-    out = out.replace(pattern, REDACTED);
+    out = out.replace(pattern, (_match: string, scheme: unknown) => (typeof scheme === 'string' ?`${scheme}${REDACTED}@` : REDACTED));
   }
   return out;
 }

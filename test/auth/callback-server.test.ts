@@ -1,3 +1,4 @@
+import * as net from 'net';
 import { startCallbackServer } from '../../src/auth/callback-server.js';
 import { CliError } from '../../src/errors.js';
 
@@ -124,6 +125,37 @@ describe('startCallbackServer', () => {
     const handle = await startCallbackServer({ expectedState: 's', timeoutMs: 5000, signal: ctrl.signal });
     ctrl.abort();
     await expect(handle.result).rejects.toMatchObject({ code: 'TIMEOUT' });
+    await handle.close().catch(() => undefined);
+  });
+
+  test('a malformed request target gets 400 and does not kill the server', async () => {
+    const handle = await startCallbackServer({ expectedState: 's', timeoutMs: 5000 });
+    const status = await new Promise<number>((resolve, reject) => {
+      const socket = net.connect(handle.port, '127.0.0.1', () => socket.write('GET //[ HTTP/1.1\r\nHost: x\r\n\r\n'));
+      let buf = '';
+      socket.on('data', (d) => {
+        buf += d.toString();
+        const m = buf.match(/^HTTP\/1\.1 (\d+)/);
+        if (m) {
+          socket.destroy();
+          resolve(Number(m[1]));
+        }
+      });
+      socket.on('error', reject);
+    });
+    expect(status).toBe(400);
+    const ok = await get(handle.port, '/callback?token=t&state=s&client_name=N&client_id=I');
+    expect(ok.status).toBe(200);
+    await handle.result;
+    await handle.close().catch(() => undefined);
+  });
+
+  test('the success response is not cacheable and sends no referrer', async () => {
+    const handle = await startCallbackServer({ expectedState: 's', timeoutMs: 5000 });
+    const res = await fetch(`http://127.0.0.1:${handle.port}/callback?token=t&state=s&client_name=N&client_id=I`);
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    await handle.result;
     await handle.close().catch(() => undefined);
   });
 });

@@ -38,8 +38,20 @@ function buildAnsiEscapePattern(): RegExp {
 
 const ANSI_ESCAPE_PATTERN = buildAnsiEscapePattern();
 
+// Control bytes other than \t, \n and \r, plus C1 controls. Removing every ESC defuses DCS/APC/PM/SOS
+// and unterminated OSC sequences the pattern above does not model.
+// eslint-disable-next-line no-control-regex
+const CONTROL_BYTES = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g;
+
 export function stripAnsiEscapes(text: string): string {
-  return text.replace(ANSI_ESCAPE_PATTERN, '');
+  // Strip until stable: removing one sequence can splice its neighbours into a new one
+  // (`\x1b[2\x1b[0mJ` -> `\x1b[2J`).
+  let out = text;
+  for (let prev = ''; prev !== out; ) {
+    prev = out;
+    out = out.replace(ANSI_ESCAPE_PATTERN, '');
+  }
+  return out.replace(CONTROL_BYTES, '');
 }
 
 export function redact(text: string): string {
