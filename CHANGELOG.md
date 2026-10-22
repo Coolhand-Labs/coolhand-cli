@@ -58,8 +58,8 @@ All notable changes to `coolhand-cli` will be documented in this file.
   no-store`.
 - `analyze-claude-sessions`' last-sync request now times out after 10 seconds instead of hanging.
 - Cleared `npm audit` advisories in `mockttp`'s transitive tree (`proxy-addr`,
-  `@graphql-tools/utils`, `ip-address`) via a lockfile update. `basic-ftp` (reached only through
-  `mockttp`'s unused FTP path) remains pending an upstream `mockttp` release.
+  `@graphql-tools/utils`, `ip-address`) via a lockfile update, and lifted `basic-ftp` (reached only
+  through `mockttp`'s unused FTP path) to 6.2.3 with a package override, so the CI audit step passes.
 
 ## [0.11.1] - 2026-09-23
 
