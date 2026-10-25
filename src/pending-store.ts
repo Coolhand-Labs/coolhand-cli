@@ -30,6 +30,8 @@ export interface PendingRecord {
   /** Public ingest key and base url supplied by a hook (no stored client). Wins over `clientId`. */
   apiKey?: string;
   baseUrl?: string;
+  /** Failed replay attempts so far. Hook-spooled turns are dropped after a few: with no server-side dedup, every retry that actually landed is a duplicate log. */
+  attempts?: number;
   /** ISO timestamp of when the record was saved locally. */
   savedAt: string;
 }

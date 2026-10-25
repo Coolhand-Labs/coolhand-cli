@@ -1,9 +1,12 @@
 import { promises as fs } from 'fs';
+import * as path from 'path';
+import { atomicWriteFile } from '../config.js';
 import { Coolhand, type CoolhandCallData } from 'coolhand-node';
 import { CliError } from '../errors.js';
 import { DEFAULT_BASE_URL } from '../types.js';
 import {
   listTurnFiles,
+  pendingDir,
   readPendingRecord,
   removePendingRecord,
   savePendingRecord,
@@ -22,6 +25,13 @@ const SPOOL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_SPOOLED = 200;
 /** Total wall-clock budget for one replay run, so slow-but-answering servers can't hold the hook open. */
 const REPLAY_BUDGET_MS = 15_000;
+/** Don't start a replay upload with less budget than this left. */
+const MIN_UPLOAD_MS = 1_000;
+/** A spooled turn is dropped after this many failed replays. */
+const MAX_REPLAY_ATTEMPTS = 3;
+/** A record being replayed is renamed to `<name>.json.claim`; a claim this old belongs to a dead process. */
+const CLAIM_SUFFIX = '.claim';
+const STALE_CLAIM_MS = 60_000;
 
 export interface SendTurnOptions {
   apiKey: string;
@@ -74,34 +84,108 @@ async function pruneSpool(): Promise<void> {
   }
 }
 
+/** Take exclusive ownership of a spooled record by renaming it out of the `*.json` listing. */
+async function claim(file: string): Promise<string | null> {
+  const claimed = `${file}${CLAIM_SUFFIX}`;
+  try {
+    await fs.rename(file, claimed);
+  } catch {
+    return null; // another hook run got there first
+  }
+  // rename keeps the file's mtime, and a spooled record is usually older than STALE_CLAIM_MS: without
+  // this the claim would look abandoned the moment it was taken and another run would take it back.
+  const now = new Date();
+  await fs.utimes(claimed, now, now).catch(() => undefined);
+  return claimed;
+}
+
+/** Give back claims held by a process that died mid-replay, so those turns aren't stranded. */
+async function reclaimStaleClaims(): Promise<void> {
+  try {
+    const dir = pendingDir();
+    for (const name of await fs.readdir(dir)) {
+      const isClaim = name.startsWith(`${TURN_RECORD_COMMAND}-`) && name.endsWith(`.json${CLAIM_SUFFIX}`);
+      // atomicWriteFile's temp file, left behind if a process died mid-write of a claimed record.
+      const isTemp = name.startsWith(`.${TURN_RECORD_COMMAND}-`) && name.endsWith('.tmp');
+      if (!isClaim && !isTemp) {
+        continue;
+      }
+      const file = path.join(dir, name);
+      try {
+        if (Date.now() - (await fs.stat(file)).mtimeMs > STALE_CLAIM_MS) {
+          await (isClaim ? fs.rename(file, file.slice(0, -CLAIM_SUFFIX.length)) : fs.rm(file, { force: true }));
+        }
+      } catch {
+        // Gone or being handled by someone else.
+      }
+    }
+  } catch {
+    // Housekeeping only.
+  }
+}
+
 /**
  * Re-send turns spooled by earlier failures, NEWEST first: after a key rotation the old records carry
- * a dead key and fail forever, and the turns that matter are the recent ones behind them. One record
- * the server keeps refusing doesn't block the rest; the run stops after several failures in a row.
- * The spool is pruned first so stale records age out even when every send succeeds.
+ * a dead key and fail forever, and the turns that matter are the recent ones behind them. The server
+ * does not dedup, so a replay that lands twice is a duplicate log: each record is claimed atomically
+ * (overlapping hook runs can't both send it) and dropped after MAX_REPLAY_ATTEMPTS failures. One
+ * record the server keeps refusing doesn't block the rest; the run stops after several failures in a
+ * row or once its time budget is spent. The spool is pruned first so stale records age out.
  */
 export async function replaySpooledTurns(timeoutMs: number = SEND_TIMEOUT_MS): Promise<void> {
+  await reclaimStaleClaims();
   await pruneSpool();
   const files = (await listTurnFiles()).reverse();
   const deadline = Date.now() + REPLAY_BUDGET_MS;
   let attempted = 0;
   let failures = 0;
   for (const file of files) {
-    if (attempted >= RETRY_BATCH || failures >= MAX_CONSECUTIVE_FAILURES || Date.now() >= deadline) {
+    // Never start an upload that could outlive the budget: a hook killed mid-upload leaves a claim
+    // and, if the server already took the turn, a duplicate on reclaim.
+    const remaining = deadline - Date.now();
+    if (attempted >= RETRY_BATCH || failures >= MAX_CONSECUTIVE_FAILURES || remaining < MIN_UPLOAD_MS) {
       return;
     }
+    const uploadMs = Math.min(timeoutMs, remaining);
+    const claimed = await claim(file);
+    if (!claimed) {
+      continue;
+    }
     attempted += 1;
+
+    let record;
     try {
-      const record = await readPendingRecord(file);
-      if (record.kind === 'turn' && (await withTimeout(uploadRecord(record, { timeoutMs }), timeoutMs))) {
-        await removePendingRecord(file);
-        failures = 0;
-      } else {
-        failures += 1;
+      record = await readPendingRecord(claimed);
+      if (!record || typeof record !== 'object') {
+        throw new Error('not a record'); // e.g. the JSON literal `null`
       }
     } catch {
+      await removePendingRecord(claimed); // unreadable: it can never be sent
       failures += 1;
+      continue;
     }
+
+    // Count the attempt BEFORE the upload: a hook killed mid-upload leaves its claim to be reclaimed,
+    // and a death like that must still use up one of the record's attempts. (The server doesn't dedup,
+    // so every attempt that actually landed is another duplicate log.) `record` keeps the previous
+    // count, which is what the upload's replay_attempt marker is derived from.
+    const attempts = (record.attempts ?? 0) + 1;
+    try {
+      await atomicWriteFile(claimed, `${JSON.stringify({ ...record, attempts }, null, 2)}\n`, 0o600);
+    } catch {
+      // Not persisted: fall through, the upload still runs.
+    }
+
+    // withTimeout turns a rejected upload into null, so this never throws.
+    const ok = record.kind === 'turn' && !!(await withTimeout(uploadRecord(record, { timeoutMs: uploadMs }), uploadMs));
+    if (ok || attempts >= MAX_REPLAY_ATTEMPTS) {
+      await removePendingRecord(claimed);
+      failures = ok ? 0 : failures + 1;
+      continue;
+    }
+
+    failures += 1;
+    await fs.rename(claimed, file).catch(() => undefined); // on failure the next reclaim hands it back
   }
 }
 
@@ -119,7 +203,9 @@ export async function sendTurn(envelope: unknown, opts: SendTurnOptions): Promis
     // The SDK validates baseUrl in its constructor (https required; http only for localhost).
     coolhand = new Coolhand({ apiKey: opts.apiKey, baseUrl, silent: true, requestTimeoutMs: timeoutMs });
   } catch (err) {
-    throw new CliError('INVALID_BASE_URL', `Invalid base url: ${baseUrl} (${(err as Error).message})`);
+    // This message goes to hook.log: never write credentials embedded in the url (https://user:pass@host).
+    const shown = baseUrl.replace(/\/\/[^/@]*@/, '//');
+    throw new CliError('INVALID_BASE_URL', `Invalid base url: ${shown} (${(err as Error).message})`);
   }
 
   const result = await withTimeout(

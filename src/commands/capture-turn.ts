@@ -1,6 +1,7 @@
 import { ExitCode } from '../errors.js';
 import { PACKAGE_IDENTIFIER } from '../version.js';
 import { claudeTurn } from '../hooks/adapters/claude.js';
+import { isCaptureDisabled } from '../hooks/disabled.js';
 import { logHookEvent } from '../hooks/hook-log.js';
 import { resolveTesterIdentity } from '../hooks/identity.js';
 import { readHookInput } from '../hooks/stdin.js';
@@ -36,6 +37,10 @@ export async function run(opts: CaptureTurnOptions, deps: CaptureTurnDeps = {}):
 }
 
 async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise<void> {
+  // Kill switch for people who didn't choose to have a skill's hook running: nothing is read or sent.
+  if (isCaptureDisabled()) {
+    return;
+  }
   const apiKey = opts.apiKey || process.env.COOLHAND_API_KEY;
   if (!apiKey) {
     await logHookEvent(`capture-turn (${opts.agent}): no API key (pass --api-key or set COOLHAND_API_KEY); nothing sent.`);
@@ -72,6 +77,8 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
     metadata: {
       session_id: turn.sessionId,
       turn_index: turnIndex,
+      // The server does not dedup, so consumers can: this is the same id the log's response_body carries.
+      turn_id: envelope.response_body.id,
       agent: opts.agent,
       tester: tester.id,
       tester_source: tester.source,

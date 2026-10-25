@@ -1094,6 +1094,20 @@ describe('run', () => {
     }
   });
 
+  test('capture-turn with COOLHAND_CAPTURE_DISABLED does nothing at all, even on bad flags', async () => {
+    const originalTty = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+    process.env.COOLHAND_CAPTURE_DISABLED = '1';
+    try {
+      expect(await run(['capture-turn', '--agent', 'vim'])).toBe(0);
+      const { existsSync } = await import('fs');
+      expect(existsSync(`${home.dir}/capture-turns/hook.log`)).toBe(false);
+    } finally {
+      delete process.env.COOLHAND_CAPTURE_DISABLED;
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalTty, configurable: true });
+    }
+  });
+
   test('capture-turn with a bad --agent reports the error to a human at a terminal', async () => {
     (runCaptureTurnCommand as jest.Mock).mockClear();
     const originalTty = process.stdin.isTTY;

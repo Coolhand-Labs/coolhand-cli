@@ -12,6 +12,7 @@ import { run as runCloseOptimization } from './commands/close-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
 import { run as runWildcard } from './commands/wildcard.js';
 import { run as runCaptureTurn } from './commands/capture-turn.js';
+import { isCaptureDisabled } from './hooks/disabled.js';
 import { logHookEvent } from './hooks/hook-log.js';
 import { HOOK_AGENTS, type HookAgent } from './hooks/types.js';
 import { run as runClaude } from './commands/claude.js';
@@ -1971,6 +1972,9 @@ export async function run(argv: string[]): Promise<number> {
         } catch (err) {
           if (process.stdin.isTTY) {
             throw err;
+          }
+          if (isCaptureDisabled()) {
+            return ExitCode.OK;
           }
           await logHookEvent(`capture-turn: ${(err as Error).message}`);
           return ExitCode.OK;

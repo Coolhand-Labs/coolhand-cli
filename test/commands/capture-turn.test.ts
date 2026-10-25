@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { AddressInfo } from 'net';
 import { run } from '../../src/commands/capture-turn.js';
-import { sendTurn } from '../../src/hooks/send-turn.js';
+import { replaySpooledTurns, sendTurn } from '../../src/hooks/send-turn.js';
 import { countPending, listTurnFiles, readPendingRecord, savePendingRecord } from '../../src/pending-store.js';
 import { createTmpHome, TmpHome } from '../helpers/tmp-home.js';
 
@@ -335,6 +335,125 @@ describe('capture-turn', () => {
       expect(await listTurnFiles()).toHaveLength(4);
     });
 
+    it('drops a spooled turn after three failed replays instead of retrying (and duplicating) it forever', async () => {
+      await server.close();
+      const picky = http.createServer((req, res) => {
+        let body = '';
+        req.on('data', (c) => (body += c));
+        req.on('end', () => {
+          res.writeHead(body.includes('POISON') ? 500 : 200, { 'Content-Type': 'application/json' });
+          res.end('{"id":1}');
+        });
+      });
+      await new Promise<void>((resolve) => picky.listen(0, '127.0.0.1', resolve));
+      const url = `http://127.0.0.1:${(picky.address() as AddressInfo).port}`;
+      try {
+        await spoolTurn('always-refused', 'POISON', url);
+        const left = async () => (await listTurnFiles()).length;
+
+        for (const [i, expected] of [[1, 1], [2, 1], [3, 0]] as const) {
+          await run({ ...opts(), baseUrl: url }, { readInput: async () => stop({ last_assistant_message: `turn ${i}` }) });
+          expect(await left()).toBe(expected);
+          if (expected === 1) {
+            // The count is on disk as soon as the upload starts, so a killed hook still uses an attempt up.
+            expect((await readPendingRecord((await listTurnFiles())[0])).attempts).toBe(i);
+          }
+        }
+      } finally {
+        await new Promise<void>((resolve) => picky.close(() => resolve()));
+        server = await startFakeCoolhand();
+      }
+    });
+
+    it('delivers a spooled turn once when two hook runs replay at the same time', async () => {
+      await spoolTurn('contended', 'only-once-please', server.url);
+
+      await Promise.all([replaySpooledTurns(), replaySpooledTurns()]);
+
+      const hits = server.received.filter((r) => JSON.stringify(r.body).includes('only-once-please'));
+      expect(hits).toHaveLength(1);
+      expect(await listTurnFiles()).toHaveLength(0);
+    });
+
+    it('does not let a second run take over a claim whose record is old and still uploading', async () => {
+      await server.close();
+      let hits = 0;
+      const slow = http.createServer((req, res) => {
+        let body = '';
+        req.on('data', (c) => (body += c));
+        req.on('end', () => {
+          if (body.includes('old-but-once')) {
+            hits += 1;
+          }
+          // Hold the upload open so the second run starts while the first still owns the claim.
+          setTimeout(() => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end('{"id":1}');
+          }, 400);
+        });
+      });
+      await new Promise<void>((resolve) => slow.listen(0, '127.0.0.1', resolve));
+      const url = `http://127.0.0.1:${(slow.address() as AddressInfo).port}`;
+      try {
+        // Spooled minutes ago: rename keeps that mtime, which must not make the claim look abandoned.
+        const file = await spoolTurn('old-contended', 'old-but-once', url);
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+        await fs.utimes(file, tenMinutesAgo, tenMinutesAgo);
+
+        const first = replaySpooledTurns();
+        await new Promise((r) => setTimeout(r, 150));
+        await replaySpooledTurns();
+        await first;
+
+        expect(hits).toBe(1);
+      } finally {
+        await new Promise<void>((resolve) => slow.close(() => resolve()));
+        server = await startFakeCoolhand();
+      }
+    });
+
+    it('removes a temp file left behind by a process that died while rewriting a claim', async () => {
+      const dir = path.dirname(await spoolTurn('anchor', 'anchor', server.url));
+      const leftover = path.join(dir, '.capture-turn-x.json.claim.deadbeef.tmp');
+      await fs.writeFile(leftover, '{}');
+      const longAgo = new Date(Date.now() - 5 * 60 * 1000);
+      await fs.utimes(leftover, longAgo, longAgo);
+
+      await replaySpooledTurns();
+
+      await expect(fs.access(leftover)).rejects.toThrow();
+    });
+
+    it('hands back a claim left behind by a process that died mid-replay', async () => {
+      const file = await spoolTurn('orphaned', 'rescued', server.url);
+      await fs.rename(file, `${file}.claim`);
+      const longAgo = new Date(Date.now() - 5 * 60 * 1000);
+      await fs.utimes(`${file}.claim`, longAgo, longAgo);
+
+      await replaySpooledTurns();
+
+      expect(server.received.some((r) => JSON.stringify(r.body).includes('rescued'))).toBe(true);
+    });
+
+    it('marks replayed turns so consumers can tell them from first sends', async () => {
+      await spoolTurn('marked', 'replay-me', server.url);
+
+      await replaySpooledTurns();
+
+      const raw = server.received.find((r) => JSON.stringify(r.body).includes('replay-me'))!.body.llm_request_log;
+      expect(raw.metadata).toMatchObject({ replayed: true, replay_attempt: 1 });
+    });
+
+    it('discards a spooled file that is not a record at all, and keeps going', async () => {
+      const dir = path.dirname(await spoolTurn('anchor', 'anchor-delivered', server.url));
+      await fs.writeFile(path.join(dir, `capture-turn-${new Date(Date.now() + 1000).toISOString().replace(/[:.]/g, '-')}-ffff.json`), 'null');
+
+      await replaySpooledTurns();
+
+      expect(await listTurnFiles()).toHaveLength(0);
+      expect(server.received.some((r) => JSON.stringify(r.body).includes('anchor-delivered'))).toBe(true);
+    });
+
     it('replays even when config.json is unreadable, because the record carries its own key', async () => {
       await fs.writeFile(path.join(home.dir, 'config.json'), '{ not json');
       await spoolTurn('c-ok', 'queued', server.url);
@@ -366,6 +485,10 @@ describe('capture-turn', () => {
   it('writes nothing to stdout or stderr even when the server rejects the key', async () => {
     await server.close();
     server = await startFakeCoolhand(401);
+    // The console stubs are shared by the whole file; count only what this run does.
+    for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+      (console[method] as jest.Mock).mockClear();
+    }
     const out = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const err = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
@@ -382,6 +505,25 @@ describe('capture-turn', () => {
       out.mockRestore();
       err.mockRestore();
     }
+  });
+
+  it('stamps every turn with a stable turn_id equal to the response id', async () => {
+    await run(opts(), { readInput: async () => stop() });
+
+    const { llm_request_log: log } = server.received[0].body;
+    expect(log.metadata.turn_id).toBe(log.raw_request.response_body.id);
+    expect(log.metadata.replayed).toBeUndefined();
+  });
+
+  it.each(['1', 'true', 'YES'])('COOLHAND_CAPTURE_DISABLED=%s sends nothing and reads nothing', async (value) => {
+    process.env.COOLHAND_CAPTURE_DISABLED = value;
+    const readInput = jest.fn(async () => stop());
+
+    const code = await run(opts(), { readInput });
+
+    expect(code).toBe(0);
+    expect(readInput).not.toHaveBeenCalled();
+    expect(server.received).toHaveLength(0);
   });
 
   it('an empty --api-key falls back to COOLHAND_API_KEY', async () => {
@@ -409,6 +551,14 @@ describe('capture-turn', () => {
       hang.closeAllConnections();
       await new Promise<void>((resolve) => hang.close(() => resolve()));
     }
+  });
+
+  it('keeps credentials embedded in a bad --base-url out of hook.log', async () => {
+    await run({ ...opts(), baseUrl: 'http://user:s3cretpass@example.com' }, { readInput: async () => stop() });
+
+    const log = await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8');
+    expect(log).toContain('Invalid base url');
+    expect(log).not.toContain('s3cretpass');
   });
 
   it('never throws and logs to hook.log when the base url is unusable', async () => {
