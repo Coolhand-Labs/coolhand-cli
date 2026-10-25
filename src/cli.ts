@@ -11,6 +11,9 @@ import { run as runGetOptimization } from './commands/get-optimization.js';
 import { run as runCloseOptimization } from './commands/close-optimization.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
 import { run as runWildcard } from './commands/wildcard.js';
+import { run as runCaptureTurn } from './commands/capture-turn.js';
+import { logHookEvent } from './hooks/hook-log.js';
+import { HOOK_AGENTS, type HookAgent } from './hooks/types.js';
 import { run as runClaude } from './commands/claude.js';
 import { run as runMonitor } from './commands/monitor.js';
 import { run as runAnalyzeClaudeSessions } from './commands/analyze-claude-sessions.js';
@@ -50,6 +53,7 @@ import type {
   CloseOptimizationOptions,
   UpdateOptimizationOptions,
   ComplaintBoxOptions,
+  CaptureTurnOptions,
   AnalyzeClaudeSessionsOptions,
   MapClaudeProjectsOptions,
   UploadClientFileOptions,
@@ -90,7 +94,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-total', 'include-metrics', 'no-metrics', 'include-deprecated', 'force']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-total', 'include-metrics', 'no-metrics', 'include-deprecated', 'force', 'anonymous']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
 const REPEATABLE_FLAGS = new Set(['project', 'exclude-project', 'skill', 'exclude-skill', 'source']);
@@ -211,6 +215,18 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--log-id N', description: 'Optional LLM request log id this blocker relates to' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'capture-turn',
+    oneLiner: 'Agent hook: send the turn that just finished (user and assistant text) to Coolhand',
+    usage: 'coolhand capture-turn --agent claude [--skill NAME] [options]   (reads the hook JSON on stdin)',
+    options: [
+      { flag: '--agent claude', description: 'Which agent is calling the hook (required)' },
+      { flag: '--skill NAME', description: 'Skill that enabled the hook; sent as metadata' },
+      { flag: '--api-key KEY', description: 'Public API key (or set COOLHAND_API_KEY). No login needed' },
+      { flag: '--base-url URL', description: 'Coolhand base URL (default: https://coolhandlabs.com)' },
+      { flag: '--anonymous', description: 'Attribute turns to an anonymous machine id instead of the git email' },
     ],
   },
   {
@@ -1786,9 +1802,32 @@ function wildcardOptions(parsed: ParsedArgs): ComplaintBoxOptions {
   return opts;
 }
 
+function captureTurnOptions(parsed: ParsedArgs): CaptureTurnOptions {
+  const agent = parsed.flags.agent;
+  if (typeof agent !== 'string' || !(HOOK_AGENTS as readonly string[]).includes(agent)) {
+    throw new CliError('INVALID_ARGS', `capture-turn requires --agent ${HOOK_AGENTS.join('|')}`);
+  }
+  const opts: CaptureTurnOptions = { agent: agent as HookAgent };
+  // `skill` is a repeatable flag, so a doubled `--skill` arrives as an array; the last one wins.
+  const skill = Array.isArray(parsed.flags.skill) ? parsed.flags.skill[parsed.flags.skill.length - 1] : parsed.flags.skill;
+  if (typeof skill === 'string') {
+    opts.skill = skill;
+  }
+  if (typeof parsed.flags['api-key'] === 'string') {
+    opts.apiKey = parsed.flags['api-key'];
+  }
+  if (typeof parsed.flags['base-url'] === 'string' && parsed.flags['base-url']) {
+    opts.baseUrl = parsed.flags['base-url'];
+  }
+  if (parsed.flags.anonymous === true) {
+    opts.anonymous = true;
+  }
+  return opts;
+}
+
 // Commands that must never trigger the failed-flush reminder: the flush itself, and
 // login (which runs its own pending-flush prompt).
-const NO_FLUSH_REMINDER = new Set(['__flush-pending', 'login', 'help', 'version']);
+const NO_FLUSH_REMINDER = new Set(['__flush-pending', 'login', 'help', 'version', 'capture-turn']);
 
 /**
  * Option B retry: if a previous background flush failed, remind the user on their next
@@ -1923,6 +1962,21 @@ export async function run(argv: string[]): Promise<number> {
         return await runUpdateOptimization(updateOptimizationOptions(parsed));
       case 'wildcard':
         return await runWildcard(wildcardOptions(parsed));
+      case 'capture-turn': {
+        // Runs unattended inside an agent hook: a bad flag must not print into the agent's hook
+        // channel or fail the hook. Only a human at a terminal gets the error.
+        let captureOpts: CaptureTurnOptions;
+        try {
+          captureOpts = captureTurnOptions(parsed);
+        } catch (err) {
+          if (process.stdin.isTTY) {
+            throw err;
+          }
+          await logHookEvent(`capture-turn: ${(err as Error).message}`);
+          return ExitCode.OK;
+        }
+        return await runCaptureTurn(captureOpts);
+      }
       case 'search-feedback':
         return await runSearchFeedback(searchFeedbackOptions(parsed));
       case 'link-feedback':

@@ -68,6 +68,9 @@ jest.mock('../src/commands/map-claude-projects.js', () => ({
 jest.mock('../src/commands/analyze-claude-sessions.js', () => ({
   run: jest.fn().mockResolvedValue(0),
 }));
+jest.mock('../src/commands/capture-turn.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
 jest.mock('../src/commands/flush-pending.js', () => ({
   run: jest.fn().mockResolvedValue(0),
   spawnBackgroundFlush: jest.fn(),
@@ -102,6 +105,7 @@ import { run as runDownloadClientFileCommand } from '../src/commands/download-cl
 import { run as runUpdateClientFileCommand } from '../src/commands/update-client-file.js';
 import { run as runMapClaudeProjectsCommand } from '../src/commands/map-claude-projects.js';
 import { run as runAnalyzeClaudeSessions } from '../src/commands/analyze-claude-sessions.js';
+import { run as runCaptureTurnCommand } from '../src/commands/capture-turn.js';
 
 function makePending() {
   return savePendingRecord({
@@ -1041,6 +1045,65 @@ describe('run', () => {
       json: true,
       clientId: 'acme',
     });
+  });
+
+  test('capture-turn dispatches with its flags', async () => {
+    const code = await run([
+      'capture-turn',
+      '--agent', 'claude',
+      '--skill', 'qa-login',
+      '--api-key', 'pk_test_123',
+      '--base-url', 'http://127.0.0.1:9',
+      '--anonymous',
+    ]);
+    expect(code).toBe(0);
+    expect(runCaptureTurnCommand).toHaveBeenCalledWith({
+      agent: 'claude',
+      skill: 'qa-login',
+      apiKey: 'pk_test_123',
+      baseUrl: 'http://127.0.0.1:9',
+      anonymous: true,
+    });
+  });
+
+  test('capture-turn ignores --client-id and treats an empty --base-url as unset', async () => {
+    (runCaptureTurnCommand as jest.Mock).mockClear();
+    await run(['--client-id', 'acme', 'capture-turn', '--agent', 'claude', '--base-url=']);
+    expect(runCaptureTurnCommand).toHaveBeenCalledWith({ agent: 'claude' });
+  });
+
+  test('capture-turn keeps the last --skill when the flag is repeated', async () => {
+    (runCaptureTurnCommand as jest.Mock).mockClear();
+    await run(['capture-turn', '--agent', 'claude', '--skill', 'first', '--skill', 'second']);
+    expect(runCaptureTurnCommand).toHaveBeenCalledWith({ agent: 'claude', skill: 'second' });
+  });
+
+  test('capture-turn with a bad --agent stays silent and exits 0 when run by an agent (no TTY)', async () => {
+    (runCaptureTurnCommand as jest.Mock).mockClear();
+    const info = jest.spyOn(logger, 'info').mockImplementation(() => undefined);
+    const originalTty = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+    try {
+      expect(await run(['capture-turn'])).toBe(0);
+      expect(await run(['capture-turn', '--agent', 'vim'])).toBe(0);
+      expect(info).not.toHaveBeenCalled();
+      expect(runCaptureTurnCommand).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalTty, configurable: true });
+      info.mockRestore();
+    }
+  });
+
+  test('capture-turn with a bad --agent reports the error to a human at a terminal', async () => {
+    (runCaptureTurnCommand as jest.Mock).mockClear();
+    const originalTty = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+    try {
+      expect(await run(['capture-turn', '--agent', 'vim'])).not.toBe(0);
+      expect(runCaptureTurnCommand).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalTty, configurable: true });
+    }
   });
 
 });

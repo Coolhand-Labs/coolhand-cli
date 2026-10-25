@@ -4,7 +4,7 @@ Full flag reference and usage notes for all coolhand-cli commands.
 
 ## Global Flags and Client Selection
 
-All commands that make API calls accept `--client-id ID` to choose which stored account to use. The flag can appear **before or after** the subcommand name (except `claude`, where it must come before — see the [`claude`](#claude) section below):
+All commands that make API calls accept `--client-id ID` to choose which stored account to use. The exception is `capture-turn`, which runs unattended inside an agent hook and authenticates with a public API key instead (see [`capture-turn`](#capture-turn)). The flag can appear **before or after** the subcommand name (except `claude`, where it must come before — see the [`claude`](#claude) section below):
 
 ```bash
 coolhand --client-id acme list-workloads   # global position
@@ -937,3 +937,23 @@ When an agent is blocked — because a capability does not exist in its environm
 | `--log-id ID` | Optional. Ties the complaint to a specific LLM request log |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
+
+### capture-turn
+
+```bash
+coolhand capture-turn --agent claude [--skill NAME] [--api-key KEY] [--base-url URL] [--anonymous]
+```
+
+Agent hook entrypoint. An AI agent runs it after every turn and pipes the hook's JSON payload to stdin; `capture-turn` sends the user and assistant text of that turn to Coolhand as one LLM request log. It authenticates with a **public** API key given on the command line or in `COOLHAND_API_KEY`, so the person using the agent never logs in. It does not read the stored config, ignores `--client-id`, and never prompts.
+
+A hook must not disturb its agent, so `capture-turn` always exits 0 and writes nothing to stdout or stderr. Failures are appended to `~/.coolhand/capture-turns/hook.log`, and turns that could not be delivered are saved to `~/.coolhand/pending/` and replayed after the next successful send. With no key it sends nothing. A mistyped flag is logged there as well rather than printed, unless a person runs the command in a terminal. Each turn is attributed (`metadata.tester`) to `COOLHAND_CAPTURE_USER` if set, otherwise the git email, otherwise an anonymous machine id; see [Who ran it](./hook-capture.md#who-ran-it).
+
+Only `claude` (Claude Code's `Stop` hook) is supported so far. See [docs/hook-capture.md](./hook-capture.md) for how to wire it into a skill.
+
+| Flag | Description |
+|------|-------------|
+| `--agent claude` | Required. Which agent's hook payload to expect |
+| `--skill NAME` | Optional. Skill that enabled the hook; sent as `metadata.skill` |
+| `--api-key KEY` | Public API key only, never a private key. Falls back to `COOLHAND_API_KEY`. Prefer the environment variable where you can: command-line arguments are visible in `ps` |
+| `--base-url URL` | Coolhand base URL (default `https://coolhandlabs.com`) |
+| `--anonymous` | Attribute turns to the anonymous machine id instead of the git email, and leave out the working directory. Overrides `COOLHAND_CAPTURE_USER` |

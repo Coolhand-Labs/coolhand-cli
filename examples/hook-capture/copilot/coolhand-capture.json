@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "bash": "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent copilot --skill qa-example; else npx -y coolhand-cli capture-turn --agent copilot --skill qa-example; fi >/dev/null 2>&1 || true",
+        "timeoutSec": 10
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "bash": "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent copilot --skill qa-example; else npx -y coolhand-cli capture-turn --agent copilot --skill qa-example; fi >/dev/null 2>&1 || true",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}

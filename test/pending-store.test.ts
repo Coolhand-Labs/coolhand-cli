@@ -3,6 +3,7 @@ import * as path from 'path';
 import {
   savePendingRecord,
   listPendingFiles,
+  listTurnFiles,
   countPending,
   readPendingRecord,
   removePendingRecord,
@@ -94,5 +95,16 @@ describe('pending-store', () => {
 
   test('clearFlushFailed is idempotent when no marker exists', async () => {
     await expect(clearFlushFailed()).resolves.toBeUndefined();
+  });
+
+  describe('hook-captured turns', () => {
+    it('are listed separately and never counted as user-facing pending records', async () => {
+      const feedback = await savePendingRecord(makeRecord());
+      const turn = await savePendingRecord(makeRecord({ command: 'capture-turn', kind: 'turn', apiKey: 'pk' }));
+
+      expect(await listPendingFiles()).toEqual([feedback]);
+      expect(await listTurnFiles()).toEqual([turn]);
+      expect(await countPending()).toBe(1);
+    });
   });
 });

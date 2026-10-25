@@ -350,6 +350,133 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
   };
 }
 
+/** The most recent user prompt and the assistant's final reply to it, as plain text. */
+export interface LastTurn {
+  userText?: string;
+  assistantText?: string;
+  model?: string;
+  /** The final assistant message's request id: unique per model call, so it tells a repeated
+   *  identical turn from a hook that fired twice for one turn. */
+  assistantKey?: string;
+}
+
+function isToolResultBlock(block: unknown): boolean {
+  return !!block && typeof block === 'object' && (block as { type?: unknown }).type === 'tool_result';
+}
+
+/** Lines Claude Code writes as user messages that the user didn't type. */
+function isInterruptMarker(text: string): boolean {
+  return text.startsWith('[Request interrupted by user');
+}
+
+/** Plain text of a REAL user prompt: a string, or the `text` blocks of an array. Tool results are not prompts. */
+function promptText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((block) =>
+        block && typeof block === 'object' && (block as { type?: unknown }).type === 'text'
+          ? String((block as { text?: unknown }).text ?? '')
+          : ''
+      )
+      .filter((part) => part.length > 0)
+      .join('\n');
+  }
+  return '';
+}
+
+/**
+ * Pull the latest user prompt and the final assistant message out of a transcript (or the tail of
+ * one — a leading partial line is skipped like any other unparseable line). Only `text` content is
+ * returned: no tool calls, tool results or thinking. Synthetic `isMeta` user lines (injected skill
+ * bodies, caveats) are not prompts. Pure function, never throws.
+ */
+export function extractLastTurn(content: string): LastTurn {
+  let userText: string | undefined;
+  let assistantText: string | undefined;
+  let model: string | undefined;
+  let assistantKey: string | undefined;
+  let textKey: string | undefined;
+  let assistantParts: string[] = [];
+
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const message = event?.message as Record<string, unknown> | undefined;
+    if (!message || typeof message !== 'object') {
+      continue;
+    }
+
+    // Subagent (sidechain) traffic is not the conversation the user is having.
+    if (event.isSidechain === true) {
+      continue;
+    }
+
+    if (event.type === 'user') {
+      // Meta lines are injected context and compaction summaries are generated, not typed. A line
+      // carrying any tool_result is the tool loop talking, whatever else rides along with it.
+      if (
+        event.isMeta === true ||
+        event.isCompactSummary === true ||
+        (Array.isArray(message.content) && message.content.some(isToolResultBlock))
+      ) {
+        continue;
+      }
+      const text = promptText(message.content).trim();
+      // A prompt with no text of its own (e.g. an image) still starts a new turn: the reply that
+      // follows must not be paired with the previous prompt.
+      const textlessPrompt = !text && Array.isArray(message.content) && message.content.length > 0;
+      if ((text && !isInterruptMarker(text)) || textlessPrompt) {
+        // A new prompt starts a new turn; whatever assistant text we had belonged to the old one.
+        userText = text || undefined;
+        assistantText = undefined;
+        assistantKey = undefined;
+        textKey = undefined;
+        assistantParts = [];
+      }
+      continue;
+    }
+
+    if (event.type === 'assistant' && message.role === 'assistant') {
+      const key = turnKey(event, message, '');
+      if (key !== assistantKey) {
+        assistantKey = key;
+        assistantParts = [];
+      }
+      const blocks = Array.isArray(message.content) ? message.content : [];
+      for (const block of blocks) {
+        if (block && typeof block === 'object' && (block as { type?: unknown }).type === 'text') {
+          const text = (block as { text?: unknown }).text;
+          if (typeof text === 'string' && text.trim()) {
+            assistantParts.push(text);
+          }
+        }
+      }
+      if (assistantParts.length > 0) {
+        assistantText = assistantParts.join('\n').trim();
+        // The key of the message the returned text came from, not of a later tool-only message.
+        textKey = key;
+      }
+      // Claude Code's own placeholder messages (interrupts, API errors) carry a pseudo-model.
+      if (typeof message.model === 'string' && message.model && message.model !== '<synthetic>') {
+        model = message.model;
+      }
+    }
+  }
+
+  return { userText, assistantText, model, assistantKey: assistantText ? textKey || undefined : undefined };
+}
+
 /**
  * Find every Claude Code transcript under `projectsDir` (default `~/.claude/projects`) and build one
  * conversation envelope per session. A missing directory simply yields zero sessions.

@@ -47,6 +47,8 @@ Every command that calls the Coolhand API must accept and forward `--client-id`.
 
 Commands where `resolveClient` is NOT appropriate (they use `getClient` or no client at all): `status`, `whoami`, `logout` — these are informational or credential-management commands that intentionally work without a fully resolved client.
 
+`capture-turn` is exempt too: it runs unattended inside an agent hook, authenticated by a public API key passed with `--api-key` or `COOLHAND_API_KEY`, so it never reads stored clients (its spool replay doesn't either, because spooled turns carry their own key) and never prompts. It must stay silent and exit 0 whatever happens, including on bad flags when stdin is not a terminal. It cannot tell a public key from a private one, so the docs warn against passing a private key.
+
 The help center reads (`search-help-articles`, `get-help-article`, `list-help-categories`) are also exempt: the endpoints are public, so they must work with no stored client and never prompt. They accept `--client-id` and use `selectStoredClient` in `src/api/help-center-client.ts`, a non-prompting variant of the same priority chain.
 
 ## Docs

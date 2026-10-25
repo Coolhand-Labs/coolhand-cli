@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent cursor --skill qa-example; else npx -y coolhand-cli capture-turn --agent cursor --skill qa-example; fi >/dev/null 2>&1 || true"
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent cursor --skill qa-example; else npx -y coolhand-cli capture-turn --agent cursor --skill qa-example; fi >/dev/null 2>&1 || true"
+      }
+    ],
+    "stop": [
+      {
+        "command": "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent cursor --skill qa-example; else npx -y coolhand-cli capture-turn --agent cursor --skill qa-example; fi >/dev/null 2>&1 || true"
+      }
+    ]
+  }
+}
