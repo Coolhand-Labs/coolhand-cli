@@ -364,6 +364,27 @@ function isToolResultBlock(block: unknown): boolean {
   return !!block && typeof block === 'object' && (block as { type?: unknown }).type === 'tool_result';
 }
 
+/**
+ * Claude Code stores a typed slash command as markup, e.g.
+ *   <command-message>loop-review</command-message>
+ *   <command-name>/loop-review</command-name>
+ *   <command-args>high --max-rounds 3</command-args>
+ * (tags in either order, `<command-args>` present but empty when nothing was typed). The prompt the
+ * user actually typed is `/loop-review high --max-rounds 3`, so that is what is recorded.
+ */
+function slashCommandPrompt(text: string): string {
+  if (!text.includes('<command-name>') && !text.includes('<command-message>')) {
+    return text;
+  }
+  const tag = (name: string): string | undefined => new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(text)?.[1]?.trim();
+  const command = tag('command-name') ?? (tag('command-message') ? `/${tag('command-message')}` : undefined);
+  if (!command) {
+    return text;
+  }
+  const args = tag('command-args');
+  return args ? `${command} ${args}` : command;
+}
+
 /** Lines Claude Code writes as user messages that the user didn't type. */
 function isInterruptMarker(text: string): boolean {
   return text.startsWith('[Request interrupted by user');
@@ -432,7 +453,7 @@ export function extractLastTurn(content: string): LastTurn {
       ) {
         continue;
       }
-      const text = promptText(message.content).trim();
+      const text = slashCommandPrompt(promptText(message.content).trim());
       // A prompt with no text of its own (e.g. an image) still starts a new turn: the reply that
       // follows must not be paired with the previous prompt.
       const textlessPrompt = !text && Array.isArray(message.content) && message.content.length > 0;

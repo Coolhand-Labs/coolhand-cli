@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { atomicWriteFile } from '../config.js';
+import { logHookEvent } from './hook-log.js';
 import { Coolhand, type CoolhandCallData } from 'coolhand-node';
 import { CliError } from '../errors.js';
 import { DEFAULT_BASE_URL } from '../types.js';
@@ -68,10 +69,12 @@ async function pruneSpool(): Promise<void> {
   const files = await listTurnFiles();
   const now = Date.now();
   const kept: string[] = [];
+  let expired = 0;
   for (const file of files) {
     try {
       if (now - (await fs.stat(file)).mtimeMs > SPOOL_TTL_MS) {
         await removePendingRecord(file);
+        expired += 1;
         continue;
       }
       kept.push(file);
@@ -79,8 +82,16 @@ async function pruneSpool(): Promise<void> {
       // Vanished underneath us.
     }
   }
-  for (const file of kept.slice(0, Math.max(0, kept.length - MAX_SPOOLED))) {
+  const overflow = kept.slice(0, Math.max(0, kept.length - MAX_SPOOLED));
+  for (const file of overflow) {
     await removePendingRecord(file);
+  }
+  // A dropped turn is data loss; hook.log is where people are told to look (counts only, no content).
+  if (expired > 0) {
+    await logHookEvent(`capture-turn: dropped ${expired} spooled turn(s) older than 7 days.`);
+  }
+  if (overflow.length > 0) {
+    await logHookEvent(`capture-turn: dropped ${overflow.length} oldest spooled turn(s) over the ${MAX_SPOOLED}-turn cap.`);
   }
 }
 
@@ -88,15 +99,17 @@ async function pruneSpool(): Promise<void> {
 async function claim(file: string): Promise<string | null> {
   const claimed = `${file}${CLAIM_SUFFIX}`;
   try {
+    // rename keeps the file's mtime, and a spooled record is usually older than STALE_CLAIM_MS. Touch it
+    // BEFORE the rename so the claim is born fresh: otherwise, for an instant, it would look abandoned
+    // and a concurrent run's reclaimStaleClaims could take it back. (A missing file means another run
+    // already claimed it.)
+    const now = new Date();
+    await fs.utimes(file, now, now);
     await fs.rename(file, claimed);
+    return claimed;
   } catch {
     return null; // another hook run got there first
   }
-  // rename keeps the file's mtime, and a spooled record is usually older than STALE_CLAIM_MS: without
-  // this the claim would look abandoned the moment it was taken and another run would take it back.
-  const now = new Date();
-  await fs.utimes(claimed, now, now).catch(() => undefined);
-  return claimed;
 }
 
 /** Give back claims held by a process that died mid-replay, so those turns aren't stranded. */
@@ -161,6 +174,7 @@ export async function replaySpooledTurns(timeoutMs: number = SEND_TIMEOUT_MS): P
       }
     } catch {
       await removePendingRecord(claimed); // unreadable: it can never be sent
+      await logHookEvent(`capture-turn: discarded an unreadable spooled turn (${path.basename(file)}).`);
       failures += 1;
       continue;
     }
@@ -180,6 +194,9 @@ export async function replaySpooledTurns(timeoutMs: number = SEND_TIMEOUT_MS): P
     const ok = record.kind === 'turn' && !!(await withTimeout(uploadRecord(record, { timeoutMs: uploadMs }), uploadMs));
     if (ok || attempts >= MAX_REPLAY_ATTEMPTS) {
       await removePendingRecord(claimed);
+      if (!ok) {
+        await logHookEvent(`capture-turn: gave up on spooled turn ${path.basename(file)} after ${attempts} failed replays.`);
+      }
       failures = ok ? 0 : failures + 1;
       continue;
     }
@@ -193,9 +210,10 @@ export async function replaySpooledTurns(timeoutMs: number = SEND_TIMEOUT_MS): P
  * Send one turn envelope to Coolhand with the supplied public key. On any failure (network, timeout,
  * server refusal) the turn is spooled to `~/.coolhand/pending/` carrying the key and base url, so it
  * is replayed (see {@link replaySpooledTurns}, which the caller runs after a successful send), without a login.
- * Returns `'sent'` or `'spooled'`. Throws only for an unusable `baseUrl`.
+ * Returns `'sent'`, `'spooled'`, or `'failed'` when the send failed and the turn could not be spooled
+ * either (unwritable pending dir, disk full). Throws only for an unusable `baseUrl`.
  */
-export async function sendTurn(envelope: unknown, opts: SendTurnOptions): Promise<'sent' | 'spooled'> {
+export async function sendTurn(envelope: unknown, opts: SendTurnOptions): Promise<'sent' | 'spooled' | 'failed'> {
   const baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
   const timeoutMs = opts.timeoutMs ?? SEND_TIMEOUT_MS;
   let coolhand: Coolhand;
@@ -208,20 +226,29 @@ export async function sendTurn(envelope: unknown, opts: SendTurnOptions): Promis
     throw new CliError('INVALID_BASE_URL', `Invalid base url: ${shown} (${(err as Error).message})`);
   }
 
+  const started = Date.now();
   const result = await withTimeout(
     coolhand.logRequest(envelope as CoolhandCallData, { collector: opts.collector, metadata: opts.metadata }),
     timeoutMs
   );
 
   if (result === null || result === undefined) {
-    await savePendingRecord({
-      command: TURN_RECORD_COMMAND,
-      kind: 'turn',
-      payload: { envelope, collector: opts.collector, metadata: opts.metadata },
-      apiKey: opts.apiKey,
-      baseUrl,
-      savedAt: new Date().toISOString(),
-    });
+    // A quick refusal means the server did not take the turn. Running out the clock means we can't
+    // know, and (with no server-side dedup yet) a replay of it may be a duplicate: record that.
+    const ambiguous = Date.now() - started >= timeoutMs - 100;
+    try {
+      await savePendingRecord({
+        command: TURN_RECORD_COMMAND,
+        kind: 'turn',
+        payload: { envelope, collector: opts.collector, metadata: opts.metadata },
+        apiKey: opts.apiKey,
+        baseUrl,
+        ...(ambiguous ? { ambiguous: true } : {}),
+        savedAt: new Date().toISOString(),
+      });
+    } catch {
+      return 'failed'; // the caller still advances the session's state and records the loss
+    }
     // Housekeeping must not change the outcome: the turn is already safely spooled.
     await pruneSpool().catch(() => undefined);
     return 'spooled';

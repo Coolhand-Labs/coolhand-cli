@@ -15,14 +15,24 @@ import type { HookAgent, HookTurn } from '../hooks/types.js';
  * key for consumers to dedup on, not a guard. Only user and assistant text goes in — no tool calls,
  * tool results or thinking — and all of it is secret-scrubbed.
  */
+/**
+ * Per-half cap on the text sent. A reply can be megabytes, and a turn the server refuses for size
+ * would be spooled to disk, retried and dropped; the cap keeps both the request and the spool small.
+ */
+export const MAX_TURN_TEXT_CHARS = 100_000;
+
+function capText(text: string): string {
+  return text.length > MAX_TURN_TEXT_CHARS ? `${text.slice(0, MAX_TURN_TEXT_CHARS)}\n…[truncated]` : text;
+}
+
 export function buildTurnEnvelope(
   agent: HookAgent,
   turn: HookTurn,
   turnIndex: number,
   digest: string
 ): CaptureEnvelope {
-  const userText = turn.userText ? redactSecrets(turn.userText).trim() : '';
-  const assistantText = redactSecrets(turn.assistantText).trim();
+  const userText = turn.userText ? capText(redactSecrets(turn.userText).trim()) : '';
+  const assistantText = capText(redactSecrets(turn.assistantText).trim());
 
   return {
     url: `coolhand-hook://${agent}/session/${encodeURIComponent(turn.sessionId)}/turn/${turnIndex}`,

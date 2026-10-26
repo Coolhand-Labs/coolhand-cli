@@ -27,6 +27,33 @@ describe('resolveTesterIdentity', () => {
     expect(await machineId()).toBe(first);
   });
 
+  it('two first-ever runs racing to mint the machine id end up with the same one', async () => {
+    const ids = await Promise.all([machineId(), machineId(), machineId(), machineId()]);
+    expect(new Set(ids).size).toBe(1);
+    expect(await machineId()).toBe(ids[0]);
+  });
+
+  it('still returns an identity when the config directory cannot be written', async () => {
+    const blocker = path.join(home.dir, 'a-file');
+    await fs.writeFile(blocker, 'not a directory');
+    const saved = process.env.COOLHAND_CONFIG_DIR;
+    process.env.COOLHAND_CONFIG_DIR = path.join(blocker, 'cannot-mkdir-here');
+    try {
+      const identity = await resolveTesterIdentity({ anonymous: true });
+      expect(identity.source).toBe('machine');
+      expect(identity.id).toMatch(/^[0-9a-f-]{36}$/);
+    } finally {
+      process.env.COOLHAND_CONFIG_DIR = saved;
+    }
+  });
+
+  it('repairs a half-made, empty machine-id file so the id stops changing', async () => {
+    await fs.writeFile(path.join(home.dir, 'machine-id'), '');
+    const first = await machineId();
+    expect(first).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await machineId()).toBe(first);
+  });
+
   it('prefers the COOLHAND_CAPTURE_USER override', async () => {
     process.env.COOLHAND_CAPTURE_USER = 'qa-bot';
     expect(await resolveTesterIdentity()).toEqual({ id: 'qa-bot', source: 'env' });

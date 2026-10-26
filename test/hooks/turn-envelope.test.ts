@@ -1,4 +1,4 @@
-import { buildTurnEnvelope } from '../../src/sessions/turn-envelope.js';
+import { buildTurnEnvelope, MAX_TURN_TEXT_CHARS } from '../../src/sessions/turn-envelope.js';
 
 const SECRET = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -17,5 +17,17 @@ describe('buildTurnEnvelope', () => {
   it('omits the user message when there is none', () => {
     const env = buildTurnEnvelope('claude', { ...turn, userText: undefined }, 1, 'x');
     expect(env.request_body.messages).toEqual([]);
+  });
+
+  it('cuts each half to the size cap and says so', () => {
+    const big = 'y'.repeat(MAX_TURN_TEXT_CHARS + 500);
+    const env = buildTurnEnvelope('claude', { ...turn, userText: big, assistantText: big }, 1, 'x');
+
+    const user = (env.request_body.messages[0] as { content: string }).content;
+    const assistant = (env.response_body.content as Array<{ text: string }>)[0].text;
+    for (const text of [user, assistant]) {
+      expect(text.length).toBeLessThan(MAX_TURN_TEXT_CHARS + 50);
+      expect(text.endsWith('…[truncated]')).toBe(true);
+    }
   });
 });

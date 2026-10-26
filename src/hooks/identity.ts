@@ -30,8 +30,35 @@ export async function machineId(): Promise<string> {
   }
   const id = randomUUID();
   await fs.mkdir(configDir(), { recursive: true, mode: DIR_MODE });
-  await atomicWriteFile(machineIdPath(), `${id}\n`, FILE_MODE);
-  return id;
+  try {
+    // 'wx': when two first-ever runs race, exactly one creates the file and the other adopts its id.
+    await fs.writeFile(machineIdPath(), `${id}\n`, { flag: 'wx', mode: FILE_MODE });
+    return id;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+      throw err;
+    }
+    // The winner creates the file and then writes it; a reader can catch it between the two.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const winner = (await fs.readFile(machineIdPath(), 'utf8')).trim();
+      if (winner) {
+        return winner;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    // Still empty: a crash left a half-made file. Repair it so the id stops changing on every run.
+    await atomicWriteFile(machineIdPath(), `${id}\n`, FILE_MODE);
+    return id;
+  }
+}
+
+/** The machine id, or a throwaway one when the config dir can't be written: attribution is not worth a lost turn. */
+async function machineIdentity(): Promise<TesterIdentity> {
+  try {
+    return { id: await machineId(), source: 'machine' };
+  } catch {
+    return { id: randomUUID(), source: 'machine' };
+  }
 }
 
 function gitEmail(cwd?: string): Promise<string | undefined> {
@@ -65,7 +92,7 @@ export async function resolveTesterIdentity(
   opts: { anonymous?: boolean; cwd?: string } = {}
 ): Promise<TesterIdentity> {
   if (opts.anonymous) {
-    return { id: await machineId(), source: 'machine' };
+    return machineIdentity();
   }
   const override = process.env.COOLHAND_CAPTURE_USER?.trim();
   if (override) {
@@ -75,5 +102,5 @@ export async function resolveTesterIdentity(
   if (email) {
     return { id: email, source: 'git' };
   }
-  return { id: await machineId(), source: 'machine' };
+  return machineIdentity();
 }

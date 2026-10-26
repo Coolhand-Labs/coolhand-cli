@@ -1072,6 +1072,21 @@ describe('run', () => {
     expect(runCaptureTurnCommand).toHaveBeenCalledWith({ agent: 'claude' });
   });
 
+  test.each([['--anonymous', true], ['--anonymous=true', true], ['--anonymous=1', true], ['--anonymous=weird', true]])(
+    'capture-turn treats %s as anonymous',
+    async (flag) => {
+      (runCaptureTurnCommand as jest.Mock).mockClear();
+      await run(['capture-turn', '--agent', 'claude', flag as string]);
+      expect(runCaptureTurnCommand).toHaveBeenCalledWith({ agent: 'claude', anonymous: true });
+    }
+  );
+
+  test.each(['--anonymous=false', '--anonymous=0', '--anonymous=no'])('capture-turn treats %s as not anonymous', async (flag) => {
+    (runCaptureTurnCommand as jest.Mock).mockClear();
+    await run(['capture-turn', '--agent', 'claude', flag]);
+    expect(runCaptureTurnCommand).toHaveBeenCalledWith({ agent: 'claude' });
+  });
+
   test('capture-turn keeps the last --skill when the flag is repeated', async () => {
     (runCaptureTurnCommand as jest.Mock).mockClear();
     await run(['capture-turn', '--agent', 'claude', '--skill', 'first', '--skill', 'second']);

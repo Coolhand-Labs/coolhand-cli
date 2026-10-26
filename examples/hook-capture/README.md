@@ -2,7 +2,7 @@
 
 Example skills that send every finished turn of an agent session to Coolhand with `coolhand capture-turn`. See [docs/hook-capture.md](../../docs/hook-capture.md) for how it works.
 
-These files are examples only. They are not published to npm (`package.json` `files` is a whitelist that does not include `examples/`) and are not compiled. The Claude Code example's frontmatter and hook command are checked by `test/hooks/skill-frontmatter.test.ts` (strict YAML and `sh -n`); the Cursor and Copilot files are not tested. They are laid out as plain folders, not as `.claude/`, `.cursor/` or `.github/` directories, so the agents don't load them as real skills when you open this repo. Copy the one you want into your own project at the path shown.
+These files are examples only. They are not published to npm (`package.json` `files` is a whitelist that does not include `examples/`) and are not compiled. The Claude Code example's frontmatter and hook command are checked by `test/hooks/skill-frontmatter.test.ts` (strict YAML and `sh -n`); the Cursor and Copilot hook commands are only syntax-checked (`sh -n`, in `test/hooks/hook-command.test.ts`), with no behaviour tests. They are laid out as plain folders, not as `.claude/`, `.cursor/` or `.github/` directories, so the agents don't load them as real skills when you open this repo. Copy the one you want into your own project at the path shown.
 
 | Agent | Copy to | Status |
 |-------|---------|--------|

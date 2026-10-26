@@ -5,9 +5,9 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          # Drop `async: true` and add `timeout: 30` if headless (`claude -p`) runs matter: an async hook
-          # for the last turn is killed when the process exits. See docs/hook-capture.md.
-          async: true
+          # Synchronous on purpose: an `async: true` hook is killed when Claude Code exits, so the last turn
+          # of a headless (`claude -p`) run would be lost. `timeout` (seconds) must exceed the worst case. See docs/hook-capture.md.
+          timeout: 30
           command: "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent claude --skill qa-example; else npx -y coolhand-cli capture-turn --agent claude --skill qa-example; fi >/dev/null 2>&1 || true"
 ---
 

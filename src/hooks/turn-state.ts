@@ -76,18 +76,25 @@ const STATE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Delete per-session state files untouched for 30 days. Best-effort; never throws. */
 async function pruneOldState(): Promise<void> {
+  let names: string[];
   try {
-    const now = Date.now();
-    for (const name of await fs.readdir(turnsDir())) {
-      if (!name.endsWith('.json')) {
-        continue;
-      }
-      const file = path.join(turnsDir(), name);
+    names = await fs.readdir(turnsDir());
+  } catch {
+    return; // Housekeeping only.
+  }
+  const now = Date.now();
+  for (const name of names) {
+    if (!name.endsWith('.json')) {
+      continue;
+    }
+    const file = path.join(turnsDir(), name);
+    try {
+      // Per file: another session's hook may remove one between the readdir and here.
       if (now - (await fs.stat(file)).mtimeMs > STATE_TTL_MS) {
         await fs.rm(file, { force: true });
       }
+    } catch {
+      // Gone already.
     }
-  } catch {
-    // Housekeeping only.
   }
 }

@@ -91,12 +91,19 @@ describe('capture-turn', () => {
     await fs.writeFile(transcriptPath, TRANSCRIPT);
     process.env.COOLHAND_CAPTURE_USER = 'tester@example.com';
     delete process.env.COOLHAND_API_KEY;
+    delete process.env.COOLHAND_CAPTURE_DISABLED; // a developer who disabled capture must still be able to run these
   });
 
   afterEach(async () => {
     await server.close();
     await home.cleanup();
-    process.env = { ...savedEnv };
+    // Restore in place: replacing process.env with a plain object loses its string coercion.
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) {
+        delete process.env[key];
+      }
+    }
+    Object.assign(process.env, savedEnv);
   });
 
   it('sends the user and assistant text of the turn with the public key, and nothing else', async () => {
@@ -165,6 +172,7 @@ describe('capture-turn', () => {
     const record = await readPendingRecord((await listTurnFiles())[0]);
     expect(record.kind).toBe('turn');
     expect(record.apiKey).toBe('pk_test_123');
+    expect(record.ambiguous).toBeUndefined(); // a quick refusal: the server did not take it
 
     // Same port is gone; bring up a healthy server and point the next turn at it.
     await server.close();
@@ -359,6 +367,9 @@ describe('capture-turn', () => {
             expect((await readPendingRecord((await listTurnFiles())[0])).attempts).toBe(i);
           }
         }
+        // Dropping a turn is data loss, so it is on record where the docs say to look.
+        const log = await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8');
+        expect(log).toContain('gave up on spooled turn');
       } finally {
         await new Promise<void>((resolve) => picky.close(() => resolve()));
         server = await startFakeCoolhand();
@@ -401,7 +412,12 @@ describe('capture-turn', () => {
         await fs.utimes(file, tenMinutesAgo, tenMinutesAgo);
 
         const first = replaySpooledTurns();
-        await new Promise((r) => setTimeout(r, 150));
+        // Start the second run only once the first really holds the claim (not after a fixed sleep).
+        const pending = path.dirname(file);
+        for (let i = 0; i < 200 && !(await fs.readdir(pending)).some((n) => n.endsWith('.claim')); i++) {
+          await new Promise((r) => setTimeout(r, 15));
+        }
+        expect((await fs.readdir(pending)).some((n) => n.endsWith('.claim'))).toBe(true);
         await replaySpooledTurns();
         await first;
 
@@ -452,6 +468,32 @@ describe('capture-turn', () => {
 
       expect(await listTurnFiles()).toHaveLength(0);
       expect(server.received.some((r) => JSON.stringify(r.body).includes('anchor-delivered'))).toBe(true);
+    });
+
+    it('still replays when this session\'s state cannot be saved', async () => {
+      await spoolTurn('state-broken', 'replayed-anyway', server.url);
+      // Make the state directory impossible to create: a plain file sits where it should be.
+      await fs.writeFile(path.join(home.dir, 'capture-turns'), 'in the way');
+
+      const code = await run(opts(), { readInput: async () => stop() });
+
+      expect(code).toBe(0);
+      expect(server.received.some((r) => JSON.stringify(r.body).includes('replayed-anyway'))).toBe(true);
+    });
+
+    it('flags the replay of a timed-out send as a possible duplicate, and only that', async () => {
+      const ambiguousFile = await spoolTurn('timed-out', 'ambiguous-one', server.url);
+      const raw = JSON.parse(await fs.readFile(ambiguousFile, 'utf8'));
+      await fs.writeFile(ambiguousFile, JSON.stringify({ ...raw, ambiguous: true }));
+      await new Promise((r) => setTimeout(r, 5));
+      await spoolTurn('refused', 'refused-one', server.url);
+
+      await replaySpooledTurns();
+
+      const meta = (needle: string) =>
+        server.received.find((r) => JSON.stringify(r.body).includes(needle))!.body.llm_request_log.metadata;
+      expect(meta('ambiguous-one')).toMatchObject({ replayed: true, possible_duplicate: true });
+      expect(meta('refused-one').possible_duplicate).toBeUndefined();
     });
 
     it('replays even when config.json is unreadable, because the record carries its own key', async () => {
@@ -526,6 +568,23 @@ describe('capture-turn', () => {
     expect(server.received).toHaveLength(0);
   });
 
+  it('records a lost turn and still advances the session when the send fails and the spool is unwritable', async () => {
+    await server.close();
+    server = await startFakeCoolhand(500);
+    await fs.writeFile(path.join(home.dir, 'pending'), 'a file where the spool directory should be');
+
+    const code = await run(opts(), { readInput: async () => stop() });
+
+    expect(code).toBe(0);
+    const log = await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8');
+    expect(log).toContain('could not be sent or spooled');
+
+    await server.close();
+    server = await startFakeCoolhand(200);
+    await run({ ...opts(), baseUrl: server.url }, { readInput: async () => stop({ last_assistant_message: 'the next turn' }) });
+    expect(JSON.stringify(server.received[0].body)).toContain('/turn/2');
+  });
+
   it('an empty --api-key falls back to COOLHAND_API_KEY', async () => {
     process.env.COOLHAND_API_KEY = 'pk_from_env';
     await run({ agent: 'claude', apiKey: '', baseUrl: server.url }, { readInput: async () => stop() });
@@ -547,6 +606,8 @@ describe('capture-turn', () => {
       expect(outcome).toBe('spooled');
       expect(Date.now() - started).toBeLessThan(3000);
       expect(await listTurnFiles()).toHaveLength(1);
+      // Running out the clock leaves it unknown whether the server stored the turn.
+      expect((await readPendingRecord((await listTurnFiles())[0])).ambiguous).toBe(true);
     } finally {
       hang.closeAllConnections();
       await new Promise<void>((resolve) => hang.close(() => resolve()));

@@ -86,11 +86,19 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
       ...(turn.cwd ? { project_path: turn.cwd } : {}),
     },
   });
+  if (outcome === 'failed') {
+    await logHookEvent(`capture-turn (${opts.agent}): turn ${turnIndex} of ${turn.sessionId} could not be sent or spooled and is lost.`);
+  }
   if (outcome === 'spooled') {
     await logHookEvent(`capture-turn (${opts.agent}): turn ${turnIndex} of ${turn.sessionId} could not be sent; spooled for retry.`);
   }
 
-  await saveTurnState(opts.agent, turn.sessionId, { turnIndex, lastDigest: digest, ...(opts.anonymous ? {} : { tester }) });
+  try {
+    await saveTurnState(opts.agent, turn.sessionId, { turnIndex, lastDigest: digest, ...(opts.anonymous ? {} : { tester }) });
+  } catch (err) {
+    // The turn is already sent; say what is now off rather than losing the replay too.
+    await logHookEvent(`capture-turn (${opts.agent}): could not save session state (${(err as Error).message}); turn numbering and double-fire protection are off for this session.`);
+  }
 
   // Replay only after this turn's progress is on disk: if the agent kills the hook mid-replay, the
   // next turn must not reuse this turn's number.

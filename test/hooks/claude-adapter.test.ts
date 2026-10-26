@@ -62,6 +62,30 @@ describe('extractLastTurn', () => {
     expect(turn.model).toBe('real-model');
   });
 
+  it.each([
+    [
+      'name, message and args in the order Claude Code writes them',
+      '<command-message>loop-review</command-message>\n<command-name>/loop-review</command-name>\n<command-args>high --max-rounds 3</command-args>',
+      '/loop-review high --max-rounds 3',
+    ],
+    [
+      'args first-class and multiline, tags in the other order',
+      '<command-name>/api-harness</command-name>\n  <command-message>api-harness</command-message>\n  <command-args>Build the docs & search\nthen reopen #178</command-args>',
+      '/api-harness Build the docs & search\nthen reopen #178',
+    ],
+    ['no args tag at all', '<command-message>loop-review</command-message>\n<command-name>/loop-review</command-name>', '/loop-review'],
+    ['an empty args tag', '<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args></command-args>', '/compact'],
+    ['only the message tag', '<command-message>loop-review</command-message>', '/loop-review'],
+  ])('records a typed slash command as what the user typed: %s', (_label, raw, expected) => {
+    const turn = extractLastTurn(lines(user(raw), assistant('r1', [{ type: 'text', text: 'ok' }])));
+    expect(turn.userText).toBe(expected);
+  });
+
+  it('leaves an ordinary prompt that merely mentions a command tag alone', () => {
+    const prompt = 'why does <command-args> show up in my transcript?';
+    expect(extractLastTurn(lines(user(prompt), assistant('r1', [{ type: 'text', text: 'ok' }]))).userText).toBe(prompt);
+  });
+
   it('does not take a compaction summary, or a tool-result line with extra text, for a prompt', () => {
     const turn = extractLastTurn(
       lines(

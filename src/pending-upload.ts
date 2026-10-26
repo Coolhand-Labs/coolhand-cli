@@ -41,7 +41,13 @@ export async function uploadRecord(record: PendingRecord, opts: { timeoutMs?: nu
     // A replay may duplicate a turn that actually landed (the server does not dedup), so mark it for consumers.
     const result = await coolhand.logRequest(envelope, {
       collector,
-      metadata: { ...metadata, replayed: true, replay_attempt: (record.attempts ?? 0) + 1 },
+      metadata: {
+        ...metadata,
+        replayed: true,
+        replay_attempt: (record.attempts ?? 0) + 1,
+        // The original send timed out rather than being refused, so it may already be stored.
+        ...(record.ambiguous ? { possible_duplicate: true } : {}),
+      },
     });
     return result !== null && result !== undefined;
   }

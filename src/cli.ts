@@ -227,7 +227,7 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--skill NAME', description: 'Skill that enabled the hook; sent as metadata' },
       { flag: '--api-key KEY', description: 'Public API key (or set COOLHAND_API_KEY). No login needed' },
       { flag: '--base-url URL', description: 'Coolhand base URL (default: https://coolhandlabs.com)' },
-      { flag: '--anonymous', description: 'Attribute turns to an anonymous machine id instead of the git email' },
+      { flag: '--anonymous', description: 'Anonymous machine id instead of the git email or COOLHAND_CAPTURE_USER; also omits the working directory' },
     ],
   },
   {
@@ -1820,7 +1820,10 @@ function captureTurnOptions(parsed: ParsedArgs): CaptureTurnOptions {
   if (typeof parsed.flags['base-url'] === 'string' && parsed.flags['base-url']) {
     opts.baseUrl = parsed.flags['base-url'];
   }
-  if (parsed.flags.anonymous === true) {
+  // `--anonymous=true|1|yes` arrive as strings. Anonymity must fail closed: only an explicit
+  // false/0/no turns it off, and any other value still means anonymous.
+  const anonymous = parsed.flags.anonymous;
+  if (anonymous === true || (typeof anonymous === 'string' && !/^(false|0|no)$/i.test(anonymous))) {
     opts.anonymous = true;
   }
   return opts;

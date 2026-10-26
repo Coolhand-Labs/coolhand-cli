@@ -2,7 +2,7 @@
 
 `coolhand capture-turn` lets a skill send every finished turn of an agent session — the user's message and the assistant's reply — to Coolhand for analysis, without the person using the skill logging in or installing anything by hand.
 
-This page covers Claude Code, the only agent supported so far. Example skills for Claude Code, Cursor and Copilot are in [examples/hook-capture](../examples/hook-capture/README.md). Cursor and VS Code Copilot do not let a skill carry its own hooks, so they need a different install step.
+This page covers Claude Code, the only agent supported so far. Example skills for Claude Code, Cursor and Copilot are in [examples/hook-capture](../examples/hook-capture/README.md). Cursor and VS Code Copilot do not let a skill carry its own hooks, so they need a different install step. The Cursor and Copilot examples are non-functional placeholders until a Cursor/Copilot adapter and a planned `capture-setup` command exist.
 
 ## How it works
 
@@ -10,7 +10,7 @@ This page covers Claude Code, the only agent supported so far. Example skills fo
 2. After each turn Claude Code runs the hook and writes a JSON payload (`session_id`, `transcript_path`, `last_assistant_message`, …) to its stdin.
 3. `capture-turn` reads that payload, takes the assistant text from `last_assistant_message` and the user's message from the tail of the transcript, and sends them as one request log using the public API key.
 
-Only the text of the user and assistant messages is sent. Tool calls, tool results and thinking are not, and secret-looking strings (API keys, tokens, passwords) are replaced with `[REDACTED]` first.
+A typed slash command is recorded as what the user typed (`/loop-review high --max-rounds 3`), not as Claude Code's `<command-message>` markup. Only the text of the user and assistant messages is sent. Tool calls, tool results and thinking are not, and secret-looking strings (API keys, tokens, passwords) are replaced with `[REDACTED]` first.
 
 ## Declaring the hook in a skill
 
@@ -22,15 +22,17 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          async: true
+          timeout: 30
           command: "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent claude --skill qa-login; else npx -y coolhand-cli capture-turn --agent claude --skill qa-login; fi >/dev/null 2>&1 || true"
 ---
 ```
 
-- **`async: true` or synchronous?** `async: true` keeps the hook from adding any delay to the agent. The cost, seen in a live headless run: when the process exits right after the last turn, an async hook for that turn never completes, so the final turn of a headless (`claude -p`) run is lost. A synchronous hook (drop `async: true` and set `timeout: 30`) did complete, at the price of waiting for the send on every turn, normally well under a second with a global install and up to roughly 27 seconds in the worst case (5 s waiting for stdin, 2 s for git on a session's first turn, a 5 s send, and a replay budget of up to 15 s). Use async for interactive skills and a synchronous hook where headless runs matter. With a synchronous hook, prefer a global install: an unpinned `npx -y coolhand-cli` checks the registry on every turn and, offline, can sit on npm's retries until the hook's `timeout` kills it.
+- **Synchronous by default, with a `timeout`.** The hook above is deliberately not `async: true`. An async hook is killed when Claude Code exits, so in a headless (`claude -p`) run the final turn's hook never completes (a synchronous probe hook did complete in the same run). The cost of synchronous is waiting for the send on every turn: normally well under a second with a global install, and up to roughly 27 seconds in the worst case (5 s waiting for stdin, 2 s for git on a session's first turn, a 5 s send, and a replay budget of up to 15 s). `timeout: 30` covers that. For a purely interactive skill, where nothing exits right after the last turn, `async: true` (without the `timeout`) removes the wait. Prefer a global install with a synchronous hook: an unpinned `npx -y coolhand-cli` checks the registry on every turn and, offline, can sit on npm's retries until `timeout` kills it. A `SessionEnd` hook that flushes the last turn is another possibility; it has not been tried.
+- The command is POSIX `sh` syntax. It assumes the hook runs under `sh` or `bash`, as Claude Code does on macOS and Linux. A hook run under PowerShell would capture nothing and say nothing.
 - The trailing `>/dev/null 2>&1 || true` makes the wrapper exit 0 and print nothing whatever happens, including an offline first `npx` download.
-- `capture-turn` first ships in the release after 0.12.0. A machine with an older global install gets nothing captured (and no error) until it runs `npm i -g coolhand-cli`.
-- This follows Claude Code's documented skill-hook behaviour (hooks register when the skill is invoked and keep running for the rest of the session; command hooks accept `async: true`). Exercised live in headless Claude Code 2.1.292 (`claude -p` with stream-json input, one process, several turns): the hook fires after the turn that invoked the skill and after every later turn, and subagents inside the skill do not trigger it. A separate `claude -p --resume` process does not re-register the skill's hooks.
+- `capture-turn` first ships in the release after 0.12.0 (the exact version is not known until it is cut). Don't pin `coolhand-cli@0.12.0` or older in the wrapper: those versions lack the command and the hook would silently do nothing. If you pin, pin to the first release that includes `capture-turn`.
+- A machine with an older global install gets nothing captured (and no error) until it runs `npm i -g coolhand-cli@latest`. (The wrapper takes the installed `coolhand` whenever there is one; it does not fall back to `npx` if that copy doesn't know `capture-turn`.)
+- This follows Claude Code's documented skill-hook behaviour (hooks register when the skill is invoked and keep running for the rest of the session; command hooks accept `async: true`). Exercised live in headless Claude Code 2.1.292 (`claude -p` with stream-json input, one process, several turns): the hook fires after the turn that invoked the skill and after every later turn, and subagents inside the skill do not trigger it. A separate `claude -p --resume` process does not re-register the skill's hooks. So a resumed session captures nothing until the skill is invoked again in it; a hook written to Claude Code's settings (not provided here) would be the workaround.
 - **The skill's frontmatter must be valid YAML, or the hook is silently dropped.** Claude Code still loads the skill from a lenient fallback parse but ignores `hooks`, and nothing is logged anywhere. An unquoted `argument-hint: [low|medium] [--max-rounds N]` (a flow sequence followed by more text) is enough to cause it. Quote such values, and confirm the first turn creates `~/.coolhand/capture-turns/claude-<session>-*.json`.
 - The `command -v coolhand … || npx -y coolhand-cli` part uses an installed CLI when there is one and otherwise downloads it on first use. Node.js 20 or later is required for either.
 - Put the public key in the environment variable rather than `--api-key`, so it is not on the `capture-turn` command line. The inline `export` in the wrapper still puts it in the wrapper shell's arguments while the hook runs, so treat the key as visible to other local users of the machine. It is an ingest-only key: it can write request logs and cannot read anything back.
@@ -52,6 +54,9 @@ Each turn is one request log with:
 | `metadata.project_path` | The session's working directory |
 | `metadata.turn_id` | The same value as `response_body.id`. A stable key to dedup on downstream, since the server doesn't |
 | `metadata.replayed`, `metadata.replay_attempt` | Present only on a turn re-sent from the spool. A replayed turn may duplicate one that already landed (a timeout can hide a success), so filter or dedup on these |
+| `metadata.possible_duplicate` | Present (as `true`) on a replay whose original send *timed out* rather than being refused: the server may already have stored it. These are the replays most likely to be duplicates |
+
+Not yet extracted or priced: the server has no ingestor for `coolhand-hook://` URLs, so these logs arrive with `source_api`, `model`, token counts and `message_count` empty, and nothing deduplicates them. That is server-side work; until it lands, rely on `metadata.turn_id` to dedup and on `metadata.session_id` / `metadata.turn_index` to group.
 
 ### Who ran it
 
@@ -71,6 +76,8 @@ The git email is personal data. Pass `--anonymous` to keep it off the wire: it w
 - To turn capture off on a machine without editing a skill, set `COOLHAND_CAPTURE_DISABLED=1` (or `true`/`yes`). The hook then reads nothing and sends nothing.
 - Errors are appended to `~/.coolhand/capture-turns/hook.log` (cut back to its last 64 KB once it passes 256 KB). Look there first if turns are missing. Bad flags are logged there too instead of printed, unless you run the command by hand in a terminal.
 - Known limit, rare: Claude Code writes the transcript asynchronously, so if it lags, the user half of a turn can be the previous prompt. This is tolerated rather than dropping the user half on every formatting mismatch.
+- A turn whose user text can't be recovered (unreadable transcript, or the prompt fell outside the 4 MB window) is sent with an empty `request_body.messages` and, if the transcript is unreadable, no model. That shape has not been checked against the real ingest endpoint; if it is refused, the turn is retried and dropped after 3 attempts.
+- Each half of a turn (user text, assistant text) is cut to 100,000 characters, with a `…[truncated]` marker, so one huge reply can't bloat the request or the spool.
 - Only the last 4 MB of the transcript is read. If one turn's tool output is large enough to push that turn's prompt out of the window, the turn is sent without its user half and nothing is logged.
 - A turn is written to the spool only after a send has failed, so if the agent kills an `async` hook while its request is in flight, that turn is lost with no log line. This is not rare at the end of a headless run (see async or synchronous above). The server answers a successful write with `201` and a JSON body (the new log); the CLI treats anything else as a failure and retries up to the attempt limit.
 - The skill author controls the hook's flags, not the person using the skill. Unless the skill passes `--anonymous`, the git email is sent; that person can keep it off the wire by setting `COOLHAND_CAPTURE_USER` in their own environment to any other identifier.

@@ -7,6 +7,10 @@ import { configDir, atomicWriteFile } from './config.js';
  * Local fallback store for records that could not be sent to Coolhand because the
  * user was not logged in. Records live under `~/.coolhand/pending/` and are uploaded
  * by the background flush on the next `coolhand login` (see `commands/flush-pending`).
+ *
+ * It also holds turns the `capture-turn` hook could not deliver (`kind: 'turn'`, saved after a
+ * network or server failure and carrying their own key). Those are replayed by the hook itself,
+ * not by login or `flush-pending`, and are kept out of `listPendingFiles` (see `TURN_RECORD_COMMAND`).
  */
 
 const PENDING_SUBDIR = 'pending';
@@ -30,8 +34,10 @@ export interface PendingRecord {
   /** Public ingest key and base url supplied by a hook (no stored client). Wins over `clientId`. */
   apiKey?: string;
   baseUrl?: string;
-  /** Failed replay attempts so far. Hook-spooled turns are dropped after a few: with no server-side dedup, every retry that actually landed is a duplicate log. */
+  /** Replay attempts started so far (counted before the upload, so a hook killed mid-upload still uses one). Hook-spooled turns are dropped after a few: with no server-side dedup, every retry that actually landed is a duplicate log. */
   attempts?: number;
+  /** The send timed out, so the server may have stored the turn: a replay of this record can duplicate it. */
+  ambiguous?: boolean;
   /** ISO timestamp of when the record was saved locally. */
   savedAt: string;
 }
