@@ -60,7 +60,7 @@
     "live-smoke": "bash scripts/run-live-smoke.sh"
   },
   "dependencies": {
-    "coolhand-node": "^0.17.0",
+    "coolhand-node": "^0.17.1",
     "mockttp": "^4.2.1"
   },
   "overrides": {
