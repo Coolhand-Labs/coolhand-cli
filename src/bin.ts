@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import 'coolhand-node/auto-monitor';
 import { run } from './cli.js';
 import { ExitCode } from './errors.js';
 import { logger, redact } from './logger.js';
