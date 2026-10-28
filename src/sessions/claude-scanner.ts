@@ -373,7 +373,9 @@ function isToolResultBlock(block: unknown): boolean {
  * user actually typed is `/loop-review high --max-rounds 3`, so that is what is recorded.
  */
 function slashCommandPrompt(text: string): string {
-  if (!text.includes('<command-name>') && !text.includes('<command-message>')) {
+  // Claude Code's own line starts with the markup; a prompt that merely quotes it is left alone.
+  const head = text.trimStart();
+  if (!head.startsWith('<command-name>') && !head.startsWith('<command-message>')) {
     return text;
   }
   const tag = (name: string): string | undefined => new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(text)?.[1]?.trim();

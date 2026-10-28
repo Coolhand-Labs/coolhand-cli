@@ -73,6 +73,7 @@ export function digestTurn(userText: string | undefined, assistantText: string, 
 }
 
 const STATE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const TEMP_TTL_MS = 60 * 60 * 1000;
 
 /** Delete per-session state files untouched for 30 days. Best-effort; never throws. */
 async function pruneOldState(): Promise<void> {
@@ -84,13 +85,17 @@ async function pruneOldState(): Promise<void> {
   }
   const now = Date.now();
   for (const name of names) {
-    if (!name.endsWith('.json')) {
+    // State files age out after 30 days; an `atomicWriteFile` temp file (left by a hook killed
+    // mid-write) is stale after an hour.
+    const isState = name.endsWith('.json');
+    const isTemp = name.startsWith('.') && name.endsWith('.tmp');
+    if (!isState && !isTemp) {
       continue;
     }
     const file = path.join(turnsDir(), name);
     try {
       // Per file: another session's hook may remove one between the readdir and here.
-      if (now - (await fs.stat(file)).mtimeMs > STATE_TTL_MS) {
+      if (now - (await fs.stat(file)).mtimeMs > (isState ? STATE_TTL_MS : TEMP_TTL_MS)) {
         await fs.rm(file, { force: true });
       }
     } catch {

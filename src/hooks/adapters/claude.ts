@@ -18,6 +18,11 @@ async function readTail(filePath: string, maxBytes: number): Promise<string> {
   }
 }
 
+/** Equal once whitespace is collapsed: the payload and the transcript may join a reply's text blocks differently. */
+function sameText(a: string | undefined, b: string): boolean {
+  return a !== undefined && a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
+}
+
 function str(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined;
 }
@@ -62,7 +67,7 @@ export async function claudeTurn(input: HookInput): Promise<HookTurn | null> {
     assistantText,
     model: tail.model,
     // The transcript can lag the payload; only trust its request id if it is for the same reply.
-    turnKey: tail.assistantText?.trim() === assistantText.trim() ? tail.assistantKey : undefined,
+    turnKey: sameText(tail.assistantText, assistantText) ? tail.assistantKey : undefined,
     cwd: str(input.cwd),
   };
 }

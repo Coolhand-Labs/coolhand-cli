@@ -496,6 +496,40 @@ describe('capture-turn', () => {
       expect(meta('refused-one').possible_duplicate).toBeUndefined();
     });
 
+    it('flags a record as a possible duplicate once one of its replays runs out the clock', async () => {
+      await server.close();
+      const hang = http.createServer(() => {
+        // Never respond.
+      });
+      await new Promise<void>((resolve) => hang.listen(0, '127.0.0.1', resolve));
+      const url = `http://127.0.0.1:${(hang.address() as AddressInfo).port}`;
+      try {
+        await spoolTurn('slow-replay', 'maybe-stored', url); // first refused quickly: not flagged
+        expect((await readPendingRecord((await listTurnFiles())[0])).ambiguous).toBeUndefined();
+
+        await replaySpooledTurns(200);
+
+        const record = await readPendingRecord((await listTurnFiles())[0]);
+        expect(record.attempts).toBe(1);
+        expect(record.ambiguous).toBe(true);
+      } finally {
+        hang.closeAllConnections();
+        await new Promise<void>((resolve) => hang.close(() => resolve()));
+        server = await startFakeCoolhand();
+      }
+    });
+
+    it('does not make a further attempt on a record that has already used all of them', async () => {
+      const file = await spoolTurn('exhausted', 'must-not-be-sent', server.url);
+      const raw = JSON.parse(await fs.readFile(file, 'utf8'));
+      await fs.writeFile(file, JSON.stringify({ ...raw, attempts: 3 }));
+
+      await replaySpooledTurns();
+
+      expect(server.received.some((r) => JSON.stringify(r.body).includes('must-not-be-sent'))).toBe(false);
+      expect(await listTurnFiles()).toHaveLength(0);
+    });
+
     it('replays even when config.json is unreadable, because the record carries its own key', async () => {
       await fs.writeFile(path.join(home.dir, 'config.json'), '{ not json');
       await spoolTurn('c-ok', 'queued', server.url);

@@ -179,6 +179,15 @@ export async function replaySpooledTurns(timeoutMs: number = SEND_TIMEOUT_MS): P
       continue;
     }
 
+    // A hook killed mid-upload on the last allowed attempt leaves the cap reached but the record still
+    // here: give up now rather than make one more (possibly duplicating) attempt.
+    if ((record.attempts ?? 0) >= MAX_REPLAY_ATTEMPTS) {
+      await removePendingRecord(claimed);
+      await logHookEvent(`capture-turn: gave up on spooled turn ${path.basename(file)} after ${record.attempts} replay attempts.`);
+      failures += 1;
+      continue;
+    }
+
     // Count the attempt BEFORE the upload: a hook killed mid-upload leaves its claim to be reclaimed,
     // and a death like that must still use up one of the record's attempts. (The server doesn't dedup,
     // so every attempt that actually landed is another duplicate log.) `record` keeps the previous
@@ -191,6 +200,7 @@ export async function replaySpooledTurns(timeoutMs: number = SEND_TIMEOUT_MS): P
     }
 
     // withTimeout turns a rejected upload into null, so this never throws.
+    const uploadStarted = Date.now();
     const ok = record.kind === 'turn' && !!(await withTimeout(uploadRecord(record, { timeoutMs: uploadMs }), uploadMs));
     if (ok || attempts >= MAX_REPLAY_ATTEMPTS) {
       await removePendingRecord(claimed);
@@ -202,6 +212,15 @@ export async function replaySpooledTurns(timeoutMs: number = SEND_TIMEOUT_MS): P
     }
 
     failures += 1;
+    // This replay ran out the clock, so the server may have stored it even if the original send was
+    // refused outright: from now on the record's replays are possible duplicates.
+    if (!record.ambiguous && Date.now() - uploadStarted >= uploadMs - 100) {
+      try {
+        await atomicWriteFile(claimed, `${JSON.stringify({ ...record, attempts, ambiguous: true }, null, 2)}\n`, 0o600);
+      } catch {
+        // Keep the earlier copy.
+      }
+    }
     await fs.rename(claimed, file).catch(() => undefined); // on failure the next reclaim hands it back
   }
 }
@@ -233,8 +252,9 @@ export async function sendTurn(envelope: unknown, opts: SendTurnOptions): Promis
   );
 
   if (result === null || result === undefined) {
-    // A quick refusal means the server did not take the turn. Running out the clock means we can't
-    // know, and (with no server-side dedup yet) a replay of it may be a duplicate: record that.
+    // A quick failure most likely means the server did not take the turn (not a guarantee: the SDK
+    // reports every failure as null). Running out the clock means we can't know, and (with no
+    // server-side dedup yet) a replay of it may be a duplicate: record that.
     const ambiguous = Date.now() - started >= timeoutMs - 100;
     try {
       await savePendingRecord({

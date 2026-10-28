@@ -1,5 +1,5 @@
 import { execFile } from 'child_process';
-import { promises as fs } from 'fs';
+import { promises as fs, constants as fsConstants } from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { configDir, atomicWriteFile } from '../config.js';
@@ -61,13 +61,42 @@ async function machineIdentity(): Promise<TesterIdentity> {
   }
 }
 
-function gitEmail(cwd?: string): Promise<string | undefined> {
+/**
+ * Find an executable on PATH, ignoring empty and relative entries. The session's cwd is an arbitrary,
+ * possibly untrusted repository, and Windows searches the working directory (and a `.` PATH entry)
+ * when launching a bare command name, so a repo could plant its own `git.exe`. An absolute path
+ * resolved here avoids that on every platform.
+ */
+async function findOnPath(name: string): Promise<string | undefined> {
+  const suffixes = process.platform === 'win32' ? ['.exe'] : [''];
+  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
+    if (!dir || !path.isAbsolute(dir)) {
+      continue;
+    }
+    for (const suffix of suffixes) {
+      const candidate = path.join(dir, `${name}${suffix}`);
+      try {
+        await fs.access(candidate, fsConstants.X_OK);
+        return candidate;
+      } catch {
+        // Not here.
+      }
+    }
+  }
+  return undefined;
+}
+
+async function gitEmail(cwd?: string): Promise<string | undefined> {
+  const git = await findOnPath('git');
+  if (!git) {
+    return undefined;
+  }
   return new Promise((resolve) => {
     try {
       execFile(
-        'git',
+        git,
         ['config', 'user.email'],
-        { cwd, env: process.env, timeout: GIT_TIMEOUT_MS, windowsHide: true },
+        { cwd, timeout: GIT_TIMEOUT_MS, windowsHide: true },
         (err, stdout) => {
           const email = err ? '' : String(stdout).trim();
           resolve(email || undefined);

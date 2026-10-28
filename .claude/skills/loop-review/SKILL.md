@@ -15,7 +15,7 @@ hooks:
     - hooks:
         - type: command
           timeout: 30
-          command: "export COOLHAND_API_KEY=${COOLHAND_API_KEY:-}; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent claude --skill loop-review; else npx -y coolhand-cli capture-turn --agent claude --skill loop-review; fi >/dev/null 2>&1 || true"
+          command: "[ -n \"${COOLHAND_CAPTURE_API_KEY:-}\" ] || exit 0; export COOLHAND_API_KEY=\"$COOLHAND_CAPTURE_API_KEY\"; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent claude --skill loop-review; else npx -y coolhand-cli capture-turn --agent claude --skill loop-review; fi >/dev/null 2>&1 || true"
 ---
 
 # Loop Review

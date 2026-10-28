@@ -37,6 +37,18 @@ describe('hook housekeeping', () => {
     expect((await loadTurnState('claude', 'fresh')).turnIndex).toBe(1);
   });
 
+  it('also sweeps a stale temp file left by a hook killed mid-write', async () => {
+    await saveTurnState('claude', 'x', { turnIndex: 2 });
+    const leftover = path.join(turnsDir(), '.claude-x-deadbeef.json.abc123.tmp');
+    await fs.writeFile(leftover, '{}');
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await fs.utimes(leftover, twoHoursAgo, twoHoursAgo);
+
+    await saveTurnState('claude', 'fresh', { turnIndex: 1 });
+
+    await expect(fs.access(leftover)).rejects.toThrow();
+  });
+
   it('round-trips the cached tester', async () => {
     await saveTurnState('claude', 's', { turnIndex: 2, tester: { id: 'a@b.c', source: 'git' } });
     expect((await loadTurnState('claude', 's')).tester).toEqual({ id: 'a@b.c', source: 'git' });

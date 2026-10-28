@@ -22,7 +22,10 @@ function commandsIn(file: string, keys: string[]): string[] {
   return found;
 }
 
-describe('documented hook commands', () => {
+// Runs the commands through a real POSIX shell; skipped where there isn't one (Windows).
+const shDescribe = spawnSync('sh', ['-c', 'true']).status === 0 ? describe : describe.skip;
+
+shDescribe('documented hook commands', () => {
   const cases: Array<[string, string[]]> = [
     ['claude/SKILL.md', commandsIn(path.join(EXAMPLES, 'claude', 'SKILL.md'), ['command'])],
     ['cursor/hooks.json', commandsIn(path.join(EXAMPLES, 'cursor', 'hooks.json'), ['command'])],

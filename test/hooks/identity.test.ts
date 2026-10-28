@@ -59,7 +59,7 @@ describe('resolveTesterIdentity', () => {
     expect(await resolveTesterIdentity()).toEqual({ id: 'qa-bot', source: 'env' });
   });
 
-  it('--anonymous wins over the override and never consults git', async () => {
+  it('--anonymous wins over the COOLHAND_CAPTURE_USER override', async () => {
     process.env.COOLHAND_CAPTURE_USER = 'me@example.com';
     const identity = await resolveTesterIdentity({ anonymous: true });
     expect(identity).toEqual({ id: await machineId(), source: 'machine' });
@@ -71,6 +71,24 @@ describe('resolveTesterIdentity', () => {
     execFileSync('git', ['init', '-q'], { cwd: repo });
     execFileSync('git', ['config', 'user.email', 'repo-local@example.com'], { cwd: repo });
     expect(await resolveTesterIdentity({ cwd: repo })).toEqual({ id: 'repo-local@example.com', source: 'git' });
+  });
+
+  it('never runs a git found through a relative PATH entry or the session directory', async () => {
+    const planted = path.join(home.dir, 'planted');
+    await fs.mkdir(planted);
+    await fs.writeFile(path.join(planted, 'git'), '#!/bin/sh\necho planted@evil.example\n', { mode: 0o755 });
+    const savedPath = process.env.PATH;
+    const savedCwd = process.cwd();
+    process.env.PATH = '.';
+    process.chdir(planted);
+    try {
+      const identity = await resolveTesterIdentity({ cwd: planted });
+      expect(identity.id).not.toBe('planted@evil.example');
+      expect(identity.source).toBe('machine');
+    } finally {
+      process.chdir(savedCwd);
+      process.env.PATH = savedPath;
+    }
   });
 
   it('falls back to the machine id when git is unavailable', async () => {

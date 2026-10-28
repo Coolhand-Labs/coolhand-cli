@@ -225,7 +225,7 @@ const COMMANDS: CommandMeta[] = [
     options: [
       { flag: '--agent claude', description: 'Which agent is calling the hook (required)' },
       { flag: '--skill NAME', description: 'Skill that enabled the hook; sent as metadata' },
-      { flag: '--api-key KEY', description: 'Public API key (or set COOLHAND_API_KEY). No login needed' },
+      { flag: '--api-key KEY', description: 'Public API key only, never a private key (or set COOLHAND_API_KEY). No login needed' },
       { flag: '--base-url URL', description: 'Coolhand base URL (default: https://coolhandlabs.com)' },
       { flag: '--anonymous', description: 'Anonymous machine id instead of the git email or COOLHAND_CAPTURE_USER; also omits the working directory' },
     ],

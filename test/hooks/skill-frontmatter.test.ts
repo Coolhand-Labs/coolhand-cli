@@ -1,5 +1,6 @@
 import { spawnSync } from 'child_process';
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import * as os from 'os';
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import * as path from 'path';
 
 /**
@@ -35,7 +36,11 @@ function frontmatter(file: string): unknown {
   return yaml.load(match[1]);
 }
 
-describe('skills that carry the capture hook', () => {
+// These tests run the hook commands through a real POSIX shell; skip them where there isn't one (Windows).
+const HAS_SH = spawnSync('sh', ['-c', 'true']).status === 0;
+const shDescribe = HAS_SH ? describe : describe.skip;
+
+shDescribe('skills that carry the capture hook', () => {
   it('finds the skills it is supposed to check', () => {
     expect(SKILLS).toEqual(expect.arrayContaining(['examples/hook-capture/claude/SKILL.md', '.claude/skills/loop-review/SKILL.md']));
   });
@@ -55,5 +60,48 @@ describe('skills that carry the capture hook', () => {
 
   it('the strict parse really does reject the frontmatter mistake that silently drops hooks', () => {
     expect(() => yaml.load('argument-hint: [low|medium] [--max-rounds N]')).toThrow();
+  });
+
+  describe('the loop-review hook is opt-in through its own variable', () => {
+    const command = (() => {
+      const meta = frontmatter('.claude/skills/loop-review/SKILL.md') as { hooks: { Stop: Array<{ hooks: Array<{ command: string }> }> } };
+      return meta.hooks.Stop[0].hooks[0].command;
+    })();
+
+    function run(extraEnv: Record<string, string>): { ran: string } {
+      const dir = mkdtempSync(path.join(os.tmpdir(), 'ch-hook-'));
+      const marker = path.join(dir, 'marker');
+      const fake = path.join(dir, 'coolhand');
+      writeFileSync(fake, `#!/bin/sh\necho "ran key=$COOLHAND_API_KEY" >> "${marker}"\ncat >/dev/null\n`);
+      chmodSync(fake, 0o755);
+      try {
+        spawnSync('sh', ['-c', command], {
+          input: '{}',
+          env: { PATH: `${dir}:/usr/bin:/bin`, HOME: dir, ...extraEnv },
+          encoding: 'utf8',
+        });
+        let ran = '';
+        try {
+          ran = readFileSync(marker, 'utf8');
+        } catch {
+          // never ran
+        }
+        return { ran };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+
+    it('starts nothing without COOLHAND_CAPTURE_API_KEY', () => {
+      expect(run({}).ran).toBe('');
+    });
+
+    it('is not switched on by the COOLHAND_API_KEY that `coolhand claude` injects into its child', () => {
+      expect(run({ COOLHAND_API_KEY: 'proxy-injected-key' }).ran).toBe('');
+    });
+
+    it('runs capture-turn with the opt-in key when it is set', () => {
+      expect(run({ COOLHAND_CAPTURE_API_KEY: 'opt-in-key' }).ran).toContain('ran key=opt-in-key');
+    });
   });
 });

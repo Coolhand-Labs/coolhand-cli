@@ -81,6 +81,11 @@ describe('extractLastTurn', () => {
     expect(turn.userText).toBe(expected);
   });
 
+  it('leaves a prompt that quotes the slash-command markup mid-text alone', () => {
+    const prompt = 'Debugging a transcript: the line was <command-name>/foo</command-name> with <command-args>bar</command-args>';
+    expect(extractLastTurn(lines(user(prompt), assistant('r1', [{ type: 'text', text: 'ok' }]))).userText).toBe(prompt);
+  });
+
   it('leaves an ordinary prompt that merely mentions a command tag alone', () => {
     const prompt = 'why does <command-args> show up in my transcript?';
     expect(extractLastTurn(lines(user(prompt), assistant('r1', [{ type: 'text', text: 'ok' }]))).userText).toBe(prompt);
@@ -176,6 +181,20 @@ describe('claudeTurn', () => {
     const turn = await claudeTurn({ session_id: 's1', transcript_path: file, last_assistant_message: 'a' });
 
     expect(turn?.userText).toBe('the prompt after a huge tool result');
+  });
+
+  it('still trusts the request id when a multi-block reply is joined differently in the payload', async () => {
+    const file = path.join(home.dir, 'multi.jsonl');
+    await fs.writeFile(
+      file,
+      lines(user('q'), assistant('r7', [{ type: 'text', text: 'first part' }, { type: 'text', text: 'second part' }]))
+    );
+    const turn = await claudeTurn({
+      session_id: 's1',
+      transcript_path: file,
+      last_assistant_message: 'first part\n\nsecond part',
+    });
+    expect(turn?.turnKey).toBe('r7');
   });
 
   it('falls back to the transcript when the payload has no message', async () => {
