@@ -4,6 +4,7 @@ import * as path from 'path';
 import { AddressInfo } from 'net';
 import { run } from '../../src/commands/capture-turn.js';
 import { replaySpooledTurns, sendTurn } from '../../src/hooks/send-turn.js';
+import { saveTurnState } from '../../src/hooks/turn-state.js';
 import { countPending, listTurnFiles, readPendingRecord, savePendingRecord } from '../../src/pending-store.js';
 import { createTmpHome, TmpHome } from '../helpers/tmp-home.js';
 
@@ -617,6 +618,78 @@ describe('capture-turn', () => {
     server = await startFakeCoolhand(200);
     await run({ ...opts(), baseUrl: server.url }, { readInput: async () => stop({ last_assistant_message: 'the next turn' }) });
     expect(JSON.stringify(server.received[0].body)).toContain('/turn/2');
+  });
+
+  describe('the conversation so far', () => {
+    type Ex = { u: string; a: string };
+    const write = async (name: string, exchanges: Ex[]) => {
+      const file = path.join(home.dir, `${name}.jsonl`);
+      const lines = exchanges.flatMap((e, i) => [
+        { type: 'user', message: { role: 'user', content: e.u } },
+        { type: 'assistant', requestId: `${name}-${i}`, message: { id: `${name}-m${i}`, role: 'assistant', content: [{ type: 'text', text: e.a }] } },
+      ]);
+      await fs.writeFile(file, lines.map((l) => JSON.stringify(l)).join('\n'));
+      return file;
+    };
+    const sent = (i: number) => server.received[i].body.llm_request_log;
+
+    it("turn 2 carries turn 1's user and assistant text, ends on turn 2's user message, and replies with turn 2's answer", async () => {
+      const t1 = await write('t1', [{ u: 'what is 2+2?', a: 'four' }]);
+      await run(opts(), { readInput: async () => stop({ transcript_path: t1, last_assistant_message: 'four' }) });
+      const t2 = await write('t2', [{ u: 'what is 2+2?', a: 'four' }, { u: 'and times three?', a: 'twelve' }]);
+      await run(opts(), { readInput: async () => stop({ transcript_path: t2, last_assistant_message: 'twelve' }) });
+
+      expect(sent(0).raw_request.request_body.messages).toEqual([{ role: 'user', content: 'what is 2+2?' }]);
+      const second = sent(1).raw_request;
+      expect(second.request_body.messages).toEqual([
+        { role: 'user', content: 'what is 2+2?' },
+        { role: 'assistant', content: 'four' },
+        { role: 'user', content: 'and times three?' },
+      ]);
+      expect(second.response_body.content).toEqual([{ type: 'text', text: 'twelve' }]);
+      expect(second.url).toBe('coolhand-hook://claude/session/sess-1/turn/2');
+      expect(sent(1).metadata).toMatchObject({ session_id: 'sess-1', turn_index: 2 });
+      expect(sent(1).metadata.history_truncated).toBeUndefined();
+    });
+
+    it('leaves out everything said before the skill was invoked', async () => {
+      const t1 = await write('pre', [{ u: 'my private question', a: 'a private answer' }, { u: '/qa-login', a: 'starting the checklist' }]);
+      await run(opts(), { readInput: async () => stop({ transcript_path: t1, last_assistant_message: 'starting the checklist' }) });
+
+      expect(JSON.stringify(sent(0))).not.toContain('private');
+      expect(sent(0).raw_request.request_body.messages).toEqual([{ role: 'user', content: '/qa-login' }]);
+    });
+
+    it('a spooled turn carries the same cumulative payload it was built with', async () => {
+      await server.close();
+      server = await startFakeCoolhand(500);
+      await saveTurnState('claude', 'sess-1', { turnIndex: 1, lastDigest: 'x' });
+      const t = await write('spool', [{ u: 'first', a: 'one' }, { u: 'second', a: 'two' }]);
+
+      await run(opts(), { readInput: async () => stop({ transcript_path: t, last_assistant_message: 'two' }) });
+
+      const record = await readPendingRecord((await listTurnFiles())[0]);
+      const payload = record.payload as { envelope: { request_body: { messages: unknown[] }; url: string } };
+      expect(payload.envelope.url).toMatch(/\/turn\/2$/);
+      expect(payload.envelope.request_body.messages).toEqual([
+        { role: 'user', content: 'first' },
+        { role: 'assistant', content: 'one' },
+        { role: 'user', content: 'second' },
+      ]);
+    });
+
+    it('says when the oldest history was left out to stay inside the size cap', async () => {
+      const big = 'w'.repeat(90_000);
+      const t = await write('big', [1, 2, 3, 4].map((n) => ({ u: `${n}${big}`, a: `${n}${big}` })).concat([{ u: 'latest', a: 'reply' }]));
+      await saveTurnState('claude', 'sess-1', { turnIndex: 4, lastDigest: 'x' });
+
+      await run(opts(), { readInput: async () => stop({ transcript_path: t, last_assistant_message: 'reply' }) });
+
+      const { metadata, raw_request: raw } = sent(0);
+      expect(metadata).toMatchObject({ turn_index: 5, history_truncated: true });
+      expect(metadata.history_omitted).toBeGreaterThan(0);
+      expect(raw.request_body.messages[raw.request_body.messages.length - 1]).toEqual({ role: 'user', content: 'latest' });
+    });
   });
 
   it('an empty --api-key falls back to COOLHAND_API_KEY', async () => {

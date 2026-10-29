@@ -410,19 +410,41 @@ function promptText(content: unknown): string {
   return '';
 }
 
+/** One user prompt and the assistant's final text reply to it, as plain text. */
+export interface Exchange {
+  /** Undefined for a prompt with no text of its own (e.g. an image), or an assistant reply with no prompt in view. */
+  userText?: string;
+  assistantText?: string;
+  /** Request id of the message `assistantText` came from. */
+  assistantKey?: string;
+}
+
+export interface ParsedExchanges {
+  exchanges: Exchange[];
+  /** The latest real model name seen on an assistant line. */
+  model?: string;
+}
+
 /**
- * Pull the latest user prompt and the final assistant message out of a transcript (or the tail of
- * one — a leading partial line is skipped like any other unparseable line). Only `text` content is
- * returned: no tool calls, tool results or thinking. Synthetic `isMeta` user lines (injected skill
- * bodies, caveats) are not prompts. Pure function, never throws.
+ * Walk a transcript (or a window of one — a leading partial line is skipped like any other
+ * unparseable line) and return its user→assistant exchanges in order. Only `text` content is kept:
+ * no tool calls, tool results or thinking. Synthetic `isMeta` user lines (injected skill bodies,
+ * caveats), compaction summaries, interrupt markers and subagent (sidechain) traffic are not prompts.
+ * A typed slash command is recovered as typed. Pure function, never throws.
  */
-export function extractLastTurn(content: string): LastTurn {
-  let userText: string | undefined;
-  let assistantText: string | undefined;
+export function parseExchanges(content: string): ParsedExchanges {
+  const exchanges: Exchange[] = [];
   let model: string | undefined;
-  let assistantKey: string | undefined;
-  let textKey: string | undefined;
-  let assistantParts: string[] = [];
+  let current: Exchange | undefined;
+  let groupKey: string | undefined;
+  let parts: string[] = [];
+
+  const begin = (userText: string | undefined): void => {
+    current = { userText };
+    exchanges.push(current);
+    groupKey = undefined;
+    parts = [];
+  };
 
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
@@ -460,35 +482,35 @@ export function extractLastTurn(content: string): LastTurn {
       // follows must not be paired with the previous prompt.
       const textlessPrompt = !text && Array.isArray(message.content) && message.content.length > 0;
       if ((text && !isInterruptMarker(text)) || textlessPrompt) {
-        // A new prompt starts a new turn; whatever assistant text we had belonged to the old one.
-        userText = text || undefined;
-        assistantText = undefined;
-        assistantKey = undefined;
-        textKey = undefined;
-        assistantParts = [];
+        // A new prompt starts a new exchange; whatever assistant text we had belonged to the old one.
+        begin(text || undefined);
       }
       continue;
     }
 
     if (event.type === 'assistant' && message.role === 'assistant') {
+      if (!current) {
+        begin(undefined);
+      }
+      const exchange = current as Exchange;
       const key = turnKey(event, message, '');
-      if (key !== assistantKey) {
-        assistantKey = key;
-        assistantParts = [];
+      if (key !== groupKey) {
+        groupKey = key;
+        parts = [];
       }
       const blocks = Array.isArray(message.content) ? message.content : [];
       for (const block of blocks) {
         if (block && typeof block === 'object' && (block as { type?: unknown }).type === 'text') {
           const text = (block as { text?: unknown }).text;
           if (typeof text === 'string' && text.trim()) {
-            assistantParts.push(text);
+            parts.push(text);
           }
         }
       }
-      if (assistantParts.length > 0) {
-        assistantText = assistantParts.join('\n').trim();
-        // The key of the message the returned text came from, not of a later tool-only message.
-        textKey = key;
+      if (parts.length > 0) {
+        exchange.assistantText = parts.join('\n').trim();
+        // The key of the message the text came from, not of a later tool-only message.
+        exchange.assistantKey = key || undefined;
       }
       // Claude Code's own placeholder messages (interrupts, API errors) carry a pseudo-model.
       if (typeof message.model === 'string' && message.model && message.model !== '<synthetic>') {
@@ -497,7 +519,26 @@ export function extractLastTurn(content: string): LastTurn {
     }
   }
 
-  return { userText, assistantText, model, assistantKey: assistantText ? textKey || undefined : undefined };
+  return { exchanges, model };
+}
+
+/** The latest exchange of already-parsed exchanges, in the shape the Stop-hook adapter wants. */
+export function lastTurnFrom(parsed: ParsedExchanges): LastTurn {
+  const last = parsed.exchanges[parsed.exchanges.length - 1];
+  return {
+    userText: last?.userText,
+    assistantText: last?.assistantText,
+    model: parsed.model,
+    assistantKey: last?.assistantText ? last.assistantKey : undefined,
+  };
+}
+
+/**
+ * Pull the latest user prompt and the final assistant message out of a transcript (or a window of
+ * one). Only `text` content is returned. Pure function, never throws.
+ */
+export function extractLastTurn(content: string): LastTurn {
+  return lastTurnFrom(parseExchanges(content));
 }
 
 /**

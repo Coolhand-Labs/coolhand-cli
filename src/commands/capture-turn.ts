@@ -9,7 +9,7 @@ import { withSilencedConsole } from '../hooks/silence.js';
 import { replaySpooledTurns, sendTurn } from '../hooks/send-turn.js';
 import { digestTurn, loadTurnState, saveTurnState } from '../hooks/turn-state.js';
 import type { HookInput, HookTurn } from '../hooks/types.js';
-import { buildTurnEnvelope } from '../sessions/turn-envelope.js';
+import { buildTurnEnvelope, prepareTurnMessages } from '../sessions/turn-envelope.js';
 import type { CaptureTurnOptions } from '../types.js';
 
 export interface CaptureTurnDeps {
@@ -70,6 +70,7 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
   const tester =
     (!opts.anonymous && state.tester) || (await resolveTesterIdentity({ anonymous: opts.anonymous, cwd: parsed.cwd }));
   const envelope = buildTurnEnvelope(opts.agent, turn, turnIndex, digest);
+  const history = prepareTurnMessages(turn, turnIndex);
   const outcome = await sendTurn(envelope, {
     apiKey,
     baseUrl: opts.baseUrl,
@@ -79,6 +80,9 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
       turn_index: turnIndex,
       // The server does not dedup, so consumers can: this is the same id the log's response_body carries.
       turn_id: envelope.response_body.id,
+      // The messages are the conversation so far; say when the oldest part of it had to be left out.
+      ...(history.truncated ? { history_truncated: true } : {}),
+      ...(history.omitted > 0 ? { history_omitted: history.omitted } : {}),
       agent: opts.agent,
       tester: tester.id,
       tester_source: tester.source,

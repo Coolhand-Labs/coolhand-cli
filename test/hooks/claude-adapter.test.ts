@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { claudeTurn } from '../../src/hooks/adapters/claude.js';
-import { extractLastTurn } from '../../src/sessions/claude-scanner.js';
+import { extractLastTurn, parseExchanges } from '../../src/sessions/claude-scanner.js';
 import { createTmpHome, TmpHome } from '../helpers/tmp-home.js';
 
 const lines = (...events: unknown[]) => events.map((e) => JSON.stringify(e)).join('\n');
@@ -137,6 +137,34 @@ describe('extractLastTurn', () => {
   });
 });
 
+describe('parseExchanges', () => {
+  it('returns every exchange in order, merging tool loops into one reply per prompt', () => {
+    const { exchanges, model } = parseExchanges(
+      lines(
+        user('first question'),
+        assistant('r1', [{ type: 'tool_use', name: 'Bash', input: {} }]),
+        user([{ type: 'tool_result', tool_use_id: 't', content: 'output' }]),
+        assistant('r2', [{ type: 'text', text: 'first answer' }], 'm-1'),
+        user('second question'),
+        assistant('r3', [{ type: 'text', text: 'second answer' }], 'm-2')
+      )
+    );
+    expect(exchanges.map((e) => [e.userText, e.assistantText])).toEqual([
+      ['first question', 'first answer'],
+      ['second question', 'second answer'],
+    ]);
+    expect(model).toBe('m-2');
+  });
+
+  it('keeps an unanswered prompt and a textless prompt as exchanges of their own', () => {
+    const { exchanges } = parseExchanges(lines(user('never answered'), user([{ type: 'image', source: {} }]), assistant('r1', [{ type: 'text', text: 'about the picture' }])));
+    expect(exchanges.map((e) => [e.userText, e.assistantText])).toEqual([
+      ['never answered', undefined],
+      [undefined, 'about the picture'],
+    ]);
+  });
+});
+
 describe('claudeTurn', () => {
   let home: TmpHome;
   beforeEach(async () => {
@@ -163,6 +191,7 @@ describe('claudeTurn', () => {
       model: 'm-1',
       turnKey: undefined, // the transcript's reply differs from the payload's, so its request id isn't trusted
       cwd: '/w',
+      earlier: [],
     });
   });
 
@@ -195,6 +224,31 @@ describe('claudeTurn', () => {
       last_assistant_message: 'first part\n\nsecond part',
     });
     expect(turn?.turnKey).toBe('r7');
+  });
+
+  it('hands back the earlier exchanges (not the current one), oldest first', async () => {
+    const file = path.join(home.dir, 'history.jsonl');
+    await fs.writeFile(
+      file,
+      lines(
+        user('one'),
+        assistant('r1', [{ type: 'text', text: 'reply one' }]),
+        user('two'),
+        assistant('r2', [{ type: 'tool_use', name: 'Bash', input: {} }]),
+        user([{ type: 'tool_result', tool_use_id: 't', content: 'out' }]),
+        assistant('r3', [{ type: 'text', text: 'reply two' }]),
+        { ...user('subagent prompt'), isSidechain: true },
+        user('three'),
+        assistant('r4', [{ type: 'text', text: 'reply three' }])
+      )
+    );
+    const turn = await claudeTurn({ session_id: 's1', transcript_path: file, last_assistant_message: 'reply three' });
+
+    expect(turn?.userText).toBe('three');
+    expect(turn?.earlier).toEqual([
+      { userText: 'one', assistantText: 'reply one' },
+      { userText: 'two', assistantText: 'reply two' },
+    ]);
   });
 
   it('falls back to the transcript when the payload has no message', async () => {

@@ -1,9 +1,13 @@
 import { promises as fs } from 'fs';
-import { extractLastTurn } from '../../sessions/claude-scanner.js';
-import type { HookInput, HookTurn } from '../types.js';
+import { lastTurnFrom, parseExchanges } from '../../sessions/claude-scanner.js';
+import type { EarlierExchange, HookInput, HookTurn } from '../types.js';
 
-/** How much of the transcript's tail to read. A turn full of tool output can run to megabytes. */
-const TRANSCRIPT_TAIL_BYTES = 4 * 1024 * 1024;
+/**
+ * How much of the transcript's tail to read. A turn full of tool output can run to megabytes, and the
+ * earlier exchanges are rebuilt from the same window, so anything older than this is simply not seen
+ * (the turn's `history_truncated` flag says when that cost the conversation some of its history).
+ */
+const TRANSCRIPT_TAIL_BYTES = 8 * 1024 * 1024;
 
 async function readTail(filePath: string, maxBytes: number): Promise<string> {
   const handle = await fs.open(filePath, 'r');
@@ -46,11 +50,18 @@ export async function claudeTurn(input: HookInput): Promise<HookTurn | null> {
     return null;
   }
 
-  let tail: ReturnType<typeof extractLastTurn> = {};
+  let tail: ReturnType<typeof lastTurnFrom> = {};
+  let earlier: EarlierExchange[] = [];
   const transcriptPath = str(input.transcript_path);
   if (transcriptPath) {
     try {
-      tail = extractLastTurn(await readTail(transcriptPath, TRANSCRIPT_TAIL_BYTES));
+      const parsed = parseExchanges(await readTail(transcriptPath, TRANSCRIPT_TAIL_BYTES));
+      tail = lastTurnFrom(parsed);
+      // Everything before the latest exchange that has a prompt of its own, oldest first.
+      earlier = parsed.exchanges
+        .slice(0, -1)
+        .filter((e): e is typeof e & { userText: string } => typeof e.userText === 'string')
+        .map((e) => ({ userText: e.userText, assistantText: e.assistantText }));
     } catch {
       // Unreadable transcript: fall through with whatever the payload itself carries.
     }
@@ -69,5 +80,6 @@ export async function claudeTurn(input: HookInput): Promise<HookTurn | null> {
     // The transcript can lag the payload; only trust its request id if it is for the same reply.
     turnKey: sameText(tail.assistantText, assistantText) ? tail.assistantKey : undefined,
     cwd: str(input.cwd),
+    earlier,
   };
 }
