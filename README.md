@@ -86,6 +86,8 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand search-workloads` | List and search workloads, optionally with cost and performance metrics |
 | `coolhand search-templates` | List and search LLM request templates |
 | `coolhand get-template` | Fetch a single template by ID, with its prompt patterns |
+| `coolhand list-step-templates` | List the skills and recurring steps detected in captured agent sessions |
+| `coolhand get-step-template` | Fetch a single step template by its integer ID, with metrics |
 | `coolhand search-help-articles` | Search or list Coolhand help center articles (no login needed) |
 | `coolhand get-help-article` | Read one help center article by slug, with its markdown body |
 | `coolhand list-help-categories` | List help center sections and their allowed tags |

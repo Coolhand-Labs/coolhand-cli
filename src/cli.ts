@@ -28,6 +28,8 @@ import { run as runSearchLogs } from './commands/search-logs.js';
 import { run as runSearchTemplates } from './commands/search-templates.js';
 import { run as runSearchWorkloads } from './commands/search-workloads.js';
 import { run as runGetTemplate } from './commands/get-template.js';
+import { run as runListStepTemplates } from './commands/list-step-templates.js';
+import { run as runGetStepTemplate } from './commands/get-step-template.js';
 import { run as runFlushPending, spawnBackgroundFlush } from './commands/flush-pending.js';
 import { run as runSearchFeedback } from './commands/search-feedback.js';
 import { run as runGetFeedback } from './commands/get-feedback.js';
@@ -69,6 +71,8 @@ import type {
   SearchTemplatesOptions,
   SearchWorkloadsOptions,
   GetTemplateOptions,
+  ListStepTemplatesOptions,
+  GetStepTemplateOptions,
   SearchReferencedFilesOptions,
   ListReferencedFileSessionsOptions,
   HelpCenterReadOptions,
@@ -90,7 +94,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-total', 'include-metrics', 'no-metrics', 'include-deprecated', 'force']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'include-turn-metrics', 'unmatched-only', 'include-prompts', 'include-total', 'include-metrics', 'no-metrics', 'include-deprecated', 'force']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
 const REPEATABLE_FLAGS = new Set(['project', 'exclude-project', 'skill', 'exclude-skill', 'source']);
@@ -407,6 +411,7 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--max-chars N', description: 'Maximum characters to return per content field' },
       { flag: '--search-query TEXT', description: 'Search within the log content instead of returning raw content (cannot combine with --section/--max-chars)' },
       { flag: '--include-thinking', description: 'Include thinking/reasoning response content' },
+      { flag: '--include-turn-metrics', description: 'Include the per-turn breakdown (turn_metrics) of a captured agent session' },
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -491,7 +496,32 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
-  },  {
+  },
+  {
+    name: 'list-step-templates',
+    oneLiner: 'List the skills and recurring steps detected in captured agent sessions (requires a private key)',
+    usage: 'coolhand list-step-templates [options]',
+    options: [
+      { flag: '--search TEXT', description: 'Case-insensitive substring to match in the step template name' },
+      { flag: '--step-type VALUE', description: 'Filter by type: prompt_step or tool_step' },
+      { flag: '--include-metrics', description: 'Add a metrics object to each row (caps the page size at 25)' },
+      { flag: '--page N', description: 'Page number (default: 1)' },
+      { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'get-step-template',
+    oneLiner: 'Get a single step template by its integer ID, including metrics (requires a private key)',
+    usage: 'coolhand get-step-template <step-template-id> [options]',
+    options: [
+      { flag: '--no-metrics', description: 'Omit the metrics object (included by default)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
     name: 'search-referenced-files',
     oneLiner: "List a client's referenced files, aggregated and ranked by reference count",
     usage: 'coolhand search-referenced-files [options]',
@@ -1127,6 +1157,9 @@ function fetchLogOptions(parsed: ParsedArgs): FetchLogOptions {
   if (parsed.flags['include-thinking'] === true) {
     opts.includeThinking = true;
   }
+  if (parsed.flags['include-turn-metrics'] === true) {
+    opts.includeTurnMetrics = true;
+  }
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
   }
@@ -1383,6 +1416,62 @@ function getTemplateOptions(parsed: ParsedArgs): GetTemplateOptions {
     opts.noMetrics = true;
   }
   Object.assign(opts, metricsWindow(parsed));
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+const STEP_TYPES = new Set(['prompt_step', 'tool_step']);
+
+function listStepTemplatesOptions(parsed: ParsedArgs): ListStepTemplatesOptions {
+  const opts: ListStepTemplatesOptions = {};
+  if (typeof parsed.flags['search'] === 'string') {
+    opts.search = parsed.flags['search'];
+  }
+  if (typeof parsed.flags['step-type'] === 'string') {
+    const stepType = parsed.flags['step-type'];
+    if (!STEP_TYPES.has(stepType)) {
+      throw new CliError('INVALID_ARGS', '--step-type must be one of: prompt_step, tool_step');
+    }
+    opts.stepType = stepType as ListStepTemplatesOptions['stepType'];
+  }
+  if (parsed.flags['include-metrics'] === true) {
+    opts.includeMetrics = true;
+  }
+  const page = positiveIntFlag(parsed, 'page');
+  if (page !== undefined) {
+    opts.page = page;
+  }
+  const perPage = perPageFlag(parsed);
+  if (perPage !== undefined) {
+    opts.perPage = perPage;
+  }
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
+function getStepTemplateOptions(parsed: ParsedArgs): GetStepTemplateOptions {
+  const raw = parsed.positional[0];
+  if (!raw) {
+    throw new CliError('INVALID_ARGS', 'get-step-template requires a <step-template-id> argument');
+  }
+  const id = Number(raw);
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(id) || id < 1) {
+    throw new CliError('INVALID_ARGS', 'get-step-template <step-template-id> must be a positive integer');
+  }
+  const opts: GetStepTemplateOptions = { id };
+  if (parsed.flags['no-metrics'] === true) {
+    opts.noMetrics = true;
+  }
   if (typeof parsed.flags['client-id'] === 'string') {
     opts.clientId = parsed.flags['client-id'];
   }
@@ -1959,6 +2048,10 @@ export async function run(argv: string[]): Promise<number> {
         return await runSearchWorkloads(searchWorkloadsOptions(parsed));
       case 'get-template':
         return await runGetTemplate(getTemplateOptions(parsed));
+      case 'list-step-templates':
+        return await runListStepTemplates(listStepTemplatesOptions(parsed));
+      case 'get-step-template':
+        return await runGetStepTemplate(getStepTemplateOptions(parsed));
       case 'search-help-articles':
         return await runSearchHelpArticles(searchHelpArticlesOptions(parsed));
       case 'get-help-article':
