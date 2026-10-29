@@ -57,3 +57,7 @@ On Windows, POSIX permission bits are not enforced. The file is still confined t
 Running `coolhand login` against a different client adds a second entry to `clients` and marks it as the new default. Use `coolhand clients use <id>` to switch back without re-authenticating, or `coolhand status --client-id <id>` to query a specific entry.
 
 `coolhand logout` without flags removes the default client. `coolhand logout --client-id <id>` removes a specific entry. `coolhand logout --all` deletes the file entirely.
+
+## Files written by `capture-turn`
+
+Besides `config.json`, the [`capture-turn` hook](./hook-capture.md) keeps a few files under the same directory: `machine-id` (anonymous machine id), `capture-turns/` (per-session progress, which includes the resolved tester identity, i.e. the git email unless `--anonymous` is used, and `hook.log`), and `pending/capture-turn-*.json` (turns waiting to be re-sent, each with the public key it was sent with and the turn's scrubbed text, kept until 7 days after their last replay attempt).

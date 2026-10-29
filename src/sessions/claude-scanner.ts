@@ -350,6 +350,197 @@ export function parseTranscript(content: string, sessionId: string): CaptureEnve
   };
 }
 
+/** The most recent user prompt and the assistant's final reply to it, as plain text. */
+export interface LastTurn {
+  userText?: string;
+  assistantText?: string;
+  model?: string;
+  /** The final assistant message's request id: unique per model call, so it tells a repeated
+   *  identical turn from a hook that fired twice for one turn. */
+  assistantKey?: string;
+}
+
+function isToolResultBlock(block: unknown): boolean {
+  return !!block && typeof block === 'object' && (block as { type?: unknown }).type === 'tool_result';
+}
+
+/**
+ * Claude Code stores a typed slash command as markup, e.g.
+ *   <command-message>loop-review</command-message>
+ *   <command-name>/loop-review</command-name>
+ *   <command-args>high --max-rounds 3</command-args>
+ * (tags in either order, `<command-args>` present but empty when nothing was typed). The prompt the
+ * user actually typed is `/loop-review high --max-rounds 3`, so that is what is recorded.
+ */
+function slashCommandPrompt(text: string): string {
+  // Claude Code's own line starts with the markup; a prompt that merely quotes it is left alone.
+  const head = text.trimStart();
+  if (!head.startsWith('<command-name>') && !head.startsWith('<command-message>')) {
+    return text;
+  }
+  const tag = (name: string): string | undefined => new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(text)?.[1]?.trim();
+  const command = tag('command-name') ?? (tag('command-message') ? `/${tag('command-message')}` : undefined);
+  if (!command) {
+    return text;
+  }
+  const args = tag('command-args');
+  return args ? `${command} ${args}` : command;
+}
+
+/** Lines Claude Code writes as user messages that the user didn't type. */
+function isInterruptMarker(text: string): boolean {
+  return text.startsWith('[Request interrupted by user');
+}
+
+/** Plain text of a REAL user prompt: a string, or the `text` blocks of an array. Tool results are not prompts. */
+function promptText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((block) =>
+        block && typeof block === 'object' && (block as { type?: unknown }).type === 'text'
+          ? String((block as { text?: unknown }).text ?? '')
+          : ''
+      )
+      .filter((part) => part.length > 0)
+      .join('\n');
+  }
+  return '';
+}
+
+/** One user prompt and the assistant's final text reply to it, as plain text. */
+export interface Exchange {
+  /** Undefined for a prompt with no text of its own (e.g. an image), or an assistant reply with no prompt in view. */
+  userText?: string;
+  assistantText?: string;
+  /** Request id of the message `assistantText` came from. */
+  assistantKey?: string;
+}
+
+export interface ParsedExchanges {
+  exchanges: Exchange[];
+  /** The latest real model name seen on an assistant line. */
+  model?: string;
+}
+
+/**
+ * Walk a transcript (or a window of one — a leading partial line is skipped like any other
+ * unparseable line) and return its user→assistant exchanges in order. Only `text` content is kept:
+ * no tool calls, tool results or thinking. Synthetic `isMeta` user lines (injected skill bodies,
+ * caveats), compaction summaries, interrupt markers and subagent (sidechain) traffic are not prompts.
+ * A typed slash command is recovered as typed. Pure function, never throws.
+ */
+export function parseExchanges(content: string): ParsedExchanges {
+  const exchanges: Exchange[] = [];
+  let model: string | undefined;
+  let current: Exchange | undefined;
+  let groupKey: string | undefined;
+  let parts: string[] = [];
+
+  const begin = (userText: string | undefined): void => {
+    current = { userText };
+    exchanges.push(current);
+    groupKey = undefined;
+    parts = [];
+  };
+
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const message = event?.message as Record<string, unknown> | undefined;
+    if (!message || typeof message !== 'object') {
+      continue;
+    }
+
+    // Subagent (sidechain) traffic is not the conversation the user is having.
+    if (event.isSidechain === true) {
+      continue;
+    }
+
+    if (event.type === 'user') {
+      // Meta lines are injected context and compaction summaries are generated, not typed. A line
+      // carrying any tool_result is the tool loop talking, whatever else rides along with it.
+      if (
+        event.isMeta === true ||
+        event.isCompactSummary === true ||
+        (Array.isArray(message.content) && message.content.some(isToolResultBlock))
+      ) {
+        continue;
+      }
+      const text = slashCommandPrompt(promptText(message.content).trim());
+      // A prompt with no text of its own (e.g. an image) still starts a new turn: the reply that
+      // follows must not be paired with the previous prompt.
+      const textlessPrompt = !text && Array.isArray(message.content) && message.content.length > 0;
+      if ((text && !isInterruptMarker(text)) || textlessPrompt) {
+        // A new prompt starts a new exchange; whatever assistant text we had belonged to the old one.
+        begin(text || undefined);
+      }
+      continue;
+    }
+
+    if (event.type === 'assistant' && message.role === 'assistant') {
+      if (!current) {
+        begin(undefined);
+      }
+      const exchange = current as Exchange;
+      const key = turnKey(event, message, '');
+      if (key !== groupKey) {
+        groupKey = key;
+        parts = [];
+      }
+      const blocks = Array.isArray(message.content) ? message.content : [];
+      for (const block of blocks) {
+        if (block && typeof block === 'object' && (block as { type?: unknown }).type === 'text') {
+          const text = (block as { text?: unknown }).text;
+          if (typeof text === 'string' && text.trim()) {
+            parts.push(text);
+          }
+        }
+      }
+      if (parts.length > 0) {
+        exchange.assistantText = parts.join('\n').trim();
+        // The key of the message the text came from, not of a later tool-only message.
+        exchange.assistantKey = key || undefined;
+      }
+      // Claude Code's own placeholder messages (interrupts, API errors) carry a pseudo-model.
+      if (typeof message.model === 'string' && message.model && message.model !== '<synthetic>') {
+        model = message.model;
+      }
+    }
+  }
+
+  return { exchanges, model };
+}
+
+/** The latest exchange of already-parsed exchanges, in the shape the Stop-hook adapter wants. */
+export function lastTurnFrom(parsed: ParsedExchanges): LastTurn {
+  const last = parsed.exchanges[parsed.exchanges.length - 1];
+  return {
+    userText: last?.userText,
+    assistantText: last?.assistantText,
+    model: parsed.model,
+    assistantKey: last?.assistantText ? last.assistantKey : undefined,
+  };
+}
+
+/**
+ * Pull the latest user prompt and the final assistant message out of a transcript (or a window of
+ * one). Only `text` content is returned. Pure function, never throws.
+ */
+export function extractLastTurn(content: string): LastTurn {
+  return lastTurnFrom(parseExchanges(content));
+}
+
 /**
  * Find every Claude Code transcript under `projectsDir` (default `~/.claude/projects`) and build one
  * conversation envelope per session. A missing directory simply yields zero sessions.

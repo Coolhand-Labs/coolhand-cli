@@ -7,6 +7,10 @@ import { configDir, atomicWriteFile } from './config.js';
  * Local fallback store for records that could not be sent to Coolhand because the
  * user was not logged in. Records live under `~/.coolhand/pending/` and are uploaded
  * by the background flush on the next `coolhand login` (see `commands/flush-pending`).
+ *
+ * It also holds turns the `capture-turn` hook could not deliver (`kind: 'turn'`, saved after a
+ * network or server failure and carrying their own key). Those are replayed by the hook itself,
+ * not by login or `flush-pending`, and are kept out of `listPendingFiles` (see `TURN_RECORD_COMMAND`).
  */
 
 const PENDING_SUBDIR = 'pending';
@@ -16,7 +20,7 @@ const FILE_MODE = 0o600;
 const FLUSH_FAILED_MARKER = '.flush-failed';
 
 /** What kind of SDK call the flush worker should make to upload a record. */
-export type PendingKind = 'feedback';
+export type PendingKind = 'feedback' | 'turn';
 
 export interface PendingRecord {
   /** Human-readable command name, e.g. "report-blocker". Used in the filename. */
@@ -27,6 +31,13 @@ export interface PendingRecord {
   payload: unknown;
   /** Optional stored-client id to resolve the api key/base url at flush time. */
   clientId?: string;
+  /** Public ingest key and base url supplied by a hook (no stored client). Wins over `clientId`. */
+  apiKey?: string;
+  baseUrl?: string;
+  /** Replay attempts started so far (counted before the upload, so a hook killed mid-upload still uses one). Hook-spooled turns are dropped after a few: with no server-side dedup, every retry that actually landed is a duplicate log. */
+  attempts?: number;
+  /** The send timed out, so the server may have stored the turn: a replay of this record can duplicate it. */
+  ambiguous?: boolean;
   /** ISO timestamp of when the record was saved locally. */
   savedAt: string;
 }
@@ -56,8 +67,14 @@ export async function savePendingRecord(record: PendingRecord): Promise<string> 
   return filePath;
 }
 
-/** Absolute paths of every saved record, sorted oldest-first by filename. */
-export async function listPendingFiles(): Promise<string[]> {
+/**
+ * `savePendingRecord` names files after `record.command`, so hook-captured turns saved with this
+ * command are `capture-turn-…`. The hook owns and replays them; the user-facing flow ignores them.
+ */
+export const TURN_RECORD_COMMAND = 'capture-turn';
+const TURN_FILE_PREFIX = `${TURN_RECORD_COMMAND}-`;
+
+async function listRecordFiles(): Promise<string[]> {
   let entries: string[];
   try {
     entries = await fs.readdir(pendingDir());
@@ -71,6 +88,20 @@ export async function listPendingFiles(): Promise<string[]> {
     .filter((name) => name.endsWith('.json') && !name.startsWith('.'))
     .sort()
     .map((name) => path.join(pendingDir(), name));
+}
+
+/**
+ * Absolute paths of every saved record the user-facing flow owns (blocker feedback), oldest-first.
+ * Hook-captured turns are excluded: they replay themselves and must not inflate the "you have N
+ * locally-saved records" prompts shown at login or on the next command.
+ */
+export async function listPendingFiles(): Promise<string[]> {
+  return (await listRecordFiles()).filter((file) => !path.basename(file).startsWith(TURN_FILE_PREFIX));
+}
+
+/** Absolute paths of the turns `capture-turn` spooled, oldest-first. */
+export async function listTurnFiles(): Promise<string[]> {
+  return (await listRecordFiles()).filter((file) => path.basename(file).startsWith(TURN_FILE_PREFIX));
 }
 
 export async function countPending(): Promise<number> {
