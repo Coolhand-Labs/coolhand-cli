@@ -20,6 +20,9 @@ jest.mock('../src/commands/search-feedback.js', () => ({
 jest.mock('../src/commands/get-feedback.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/fetch-log.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
 jest.mock('../src/commands/search-logs.js', () => ({
   run: jest.fn().mockResolvedValue(0),
 }));
@@ -31,6 +34,12 @@ jest.mock('../src/commands/search-templates.js', () => ({
 }));
 jest.mock('../src/commands/get-template.js', () => ({
   run: jest.fn(),
+}));
+jest.mock('../src/commands/list-step-templates.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
+jest.mock('../src/commands/get-step-template.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
 }));
 jest.mock('../src/commands/search-help-articles.js', () => ({
   run: jest.fn().mockResolvedValue(0),
@@ -86,10 +95,13 @@ import { run as runMonitorCommand } from '../src/commands/monitor.js';
 import { run as runSearchOptimizationsCommand } from '../src/commands/search-optimizations.js';
 import { run as runSearchFeedbackCommand } from '../src/commands/search-feedback.js';
 import { run as runGetFeedbackCommand } from '../src/commands/get-feedback.js';
+import { run as runFetchLogCommand } from '../src/commands/fetch-log.js';
 import { run as runSearchLogsCommand } from '../src/commands/search-logs.js';
 import { run as runLinkFeedbackCommand } from '../src/commands/link-feedback.js';
 import { run as runSearchTemplatesCommand } from '../src/commands/search-templates.js';
 import { run as runGetTemplateCommand } from '../src/commands/get-template.js';
+import { run as runListStepTemplatesCommand } from '../src/commands/list-step-templates.js';
+import { run as runGetStepTemplateCommand } from '../src/commands/get-step-template.js';
 import { run as runSearchHelpArticlesCommand } from '../src/commands/search-help-articles.js';
 import { run as runGetHelpArticleCommand } from '../src/commands/get-help-article.js';
 import { run as runListHelpCategoriesCommand } from '../src/commands/list-help-categories.js';
@@ -568,6 +580,72 @@ describe('run', () => {
     expect(code).toBe(0);
     expect(runGetTemplateCommand).toHaveBeenCalledWith({ id: 'tmpl-1', json: true });
   });
+
+  test('fetch-log --include-turn-metrics parses as a boolean and is forwarded', async () => {
+    await run(['fetch-log', 'log-1', '--include-turn-metrics']);
+    expect(runFetchLogCommand).toHaveBeenCalledWith({ logId: 'log-1', includeTurnMetrics: true });
+  });
+
+  test('fetch-log --include-turn-metrics does not swallow a following positional', async () => {
+    await run(['fetch-log', '--include-turn-metrics', 'log-1']);
+    expect(runFetchLogCommand).toHaveBeenLastCalledWith({ logId: 'log-1', includeTurnMetrics: true });
+  });
+
+  test('list-step-templates forwards its flags to the command', async () => {
+    const code = await run([
+      'list-step-templates',
+      '--search', 'comm',
+      '--step-type', 'tool_step',
+      '--include-metrics',
+      '--page', '2',
+      '--per-page', '10',
+      '--client-id', 'c1',
+      '--json',
+    ]);
+    expect(code).toBe(0);
+    expect(runListStepTemplatesCommand).toHaveBeenCalledWith({
+      search: 'comm',
+      stepType: 'tool_step',
+      includeMetrics: true,
+      page: 2,
+      perPage: 10,
+      clientId: 'c1',
+      json: true,
+    });
+  });
+
+  test('list-step-templates with no flags sends no options', async () => {
+    await run(['list-step-templates']);
+    expect(runListStepTemplatesCommand).toHaveBeenCalledWith({});
+  });
+
+  test.each([
+    ['--step-type', 'skill'],
+    ['--per-page', '101'],
+    ['--page', '0'],
+  ])('list-step-templates rejects %s %s with exit 1', async (flag, value) => {
+    (runListStepTemplatesCommand as jest.Mock).mockClear();
+    expect(await run(['list-step-templates', flag, value])).toBe(1);
+    expect(runListStepTemplatesCommand).not.toHaveBeenCalled();
+  });
+
+  test('get-step-template parses the id as an integer and forwards --no-metrics', async () => {
+    await run(['get-step-template', '42', '--no-metrics', '--json']);
+    expect(runGetStepTemplateCommand).toHaveBeenCalledWith({ id: 42, noMetrics: true, json: true });
+  });
+
+  test('get-step-template without an id returns exit 1', async () => {
+    expect(await run(['get-step-template'])).toBe(1);
+  });
+
+  test.each(['abc', '0', '-3', '1.5', '1e3', '9007199254740993'])(
+    'get-step-template rejects id %p with exit 1 before calling the command',
+    async (id) => {
+      (runGetStepTemplateCommand as jest.Mock).mockClear();
+      expect(await run(['get-step-template', `${id}`])).toBe(1);
+      expect(runGetStepTemplateCommand).not.toHaveBeenCalled();
+    }
+  );
 
   test('search-help-articles with no args lists everything (no query sent)', async () => {
     const code = await run(['search-help-articles']);

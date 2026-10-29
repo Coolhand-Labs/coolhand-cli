@@ -338,6 +338,56 @@ printed after the patterns; pass `--no-metrics` to omit them. Because metrics ar
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
+## Step templates
+
+A step template is a skill or other recurring step Coolhand detects in captured agent sessions: a
+`prompt_step` matches a user prompt such as a slash command, a `tool_step` matches tool usage. These
+two commands are read-only — there is no way to create or edit step templates from the CLI. Both
+require a **private** key (`coolhand login --scope private`). Step template ids are integers, unlike
+the hashids on templates and logs.
+
+### list-step-templates
+
+```bash
+coolhand list-step-templates [--search TEXT] [--step-type prompt_step|tool_step] [--include-metrics]
+                             [--page N] [--per-page N] [--client-id ID] [--json]
+```
+
+Lists the resolved client's published step templates, newest first. The result is
+`{ stepTemplates: [...], pagination: {...} }`, matching `search-templates`' shape. `--include-metrics`
+adds a `metrics` object to every row and makes the server cap the page size at 25; the pagination
+`per_page` reports the size actually applied, and the command says so when it shrank your
+`--per-page`. A query that exceeds the server's statement timeout is reported as a retryable timeout
+with a hint to narrow it.
+
+| Flag | Description |
+|------|-------------|
+| `--search TEXT` | Case-insensitive substring to match in the step template name |
+| `--step-type VALUE` | Filter by type: `prompt_step` or `tool_step` |
+| `--include-metrics` | Add a `metrics` object per row (off by default; caps the page size at 25) |
+| `--page N` | Page number (default: 1) |
+| `--per-page N` | Results per page (default: 25, max: 100) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
+### get-step-template
+
+```bash
+coolhand get-step-template <step-template-id> [--no-metrics] [--client-id ID] [--json]
+```
+
+Fetches one step template by the integer `id` `list-step-templates` returns. A non-integer id is
+rejected as `INVALID_ARGS` before any request. Unlike the list, metrics are included by default
+(total runs, turn and tool statistics, interactive/automated efficiency cohorts and explanatory
+notes); pass `--no-metrics` to skip them. A draft or failed step template, an unknown id, and one
+belonging to another client all return "not found".
+
+| Flag | Description |
+|------|-------------|
+| `--no-metrics` | Omit the `metrics` object (sends `includeMetrics: false`) |
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
 ## Help center
 
 Read the Coolhand help center (the same pages served at `/help` and `/updates`) from the terminal.
@@ -570,7 +620,7 @@ Prints `Linked`, `Already linked`, `Errored`, and any `Not found` ids. Exits non
 ### fetch-log
 
 ```bash
-coolhand fetch-log <log-id> [--section full|beginning|end] [--max-chars N] [--search-query TEXT] [--include-thinking] [--client-id ID] [--json]
+coolhand fetch-log <log-id> [--section full|beginning|end] [--max-chars N] [--search-query TEXT] [--include-thinking] [--include-turn-metrics] [--client-id ID] [--json]
 ```
 
 Fetches the input/output content of a single LLM request log. By default returns the full
@@ -581,12 +631,18 @@ cannot be combined with `--section`/`--max-chars`). When partial retrieval is us
 includes `truncated: true` and `total_chars` per field. The result also carries `cost` (USD, `null`
 when the log could not be priced) and `cost_breakdown`; both print ahead of the JSON body.
 
+`--include-turn-metrics` adds `turn_metrics`: one entry per user message of a captured agent session
+(`index`, `human`, `started_at`, `ended_at`, `assistant_requests`, `tool_calls` and the four token
+counts, each `null` when unrecorded), summarised ahead of the JSON body. It is `null` for a log that
+is not a captured agent session, and the key is absent from the result unless the flag is passed.
+
 | Flag | Description |
 |------|-------------|
 | `--section VALUE` | Which part of each content field to return: `full` (default), `beginning`, or `end` |
 | `--max-chars N` | Maximum characters to return per content field |
 | `--search-query TEXT` | Search within the log content instead of returning raw content |
 | `--include-thinking` | Include thinking/reasoning response content |
+| `--include-turn-metrics` | Include `turn_metrics`, the per-turn breakdown of a captured agent session |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
