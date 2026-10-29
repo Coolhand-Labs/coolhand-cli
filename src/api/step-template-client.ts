@@ -26,7 +26,7 @@ export function mapStepTemplateHttpError(
     if (err.status === 422) {
       return new CliError(
         'STEP_TEMPLATE_ERROR',
-        `The server rejected the request (422); --step-type must be prompt_step or tool_step. ${err.message}`
+        `The server rejected the request (422). ${err.message}`
       );
     }
     if (err.status === 504) {

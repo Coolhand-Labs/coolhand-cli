@@ -586,6 +586,11 @@ describe('run', () => {
     expect(runFetchLogCommand).toHaveBeenCalledWith({ logId: 'log-1', includeTurnMetrics: true });
   });
 
+  test('fetch-log --include-turn-metrics does not swallow a following positional', async () => {
+    await run(['fetch-log', '--include-turn-metrics', 'log-1']);
+    expect(runFetchLogCommand).toHaveBeenLastCalledWith({ logId: 'log-1', includeTurnMetrics: true });
+  });
+
   test('list-step-templates forwards its flags to the command', async () => {
     const code = await run([
       'list-step-templates',

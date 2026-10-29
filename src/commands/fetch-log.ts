@@ -6,7 +6,11 @@ import { formatCost } from '../format-cost.js';
 import type { FetchLogOptions } from '../types.js';
 
 function printTurnMetrics(turns: LlmRequestLogTurnMetric[] | null | undefined): void {
-  if (!turns) {
+  if (turns === undefined) {
+    logger.info('Turn metrics: not returned by the server');
+    return;
+  }
+  if (turns === null) {
     logger.info('Turn metrics: n/a (not a captured agent session)');
     return;
   }

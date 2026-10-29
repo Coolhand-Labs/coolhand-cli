@@ -158,6 +158,16 @@ describe('fetch-log command', () => {
     spy.mockRestore();
   });
 
+  test('says turn metrics were not returned when requested but the key is absent', async () => {
+    mockGetLogContent.mockResolvedValue({ ...fullContent });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ logId: 'log-1', includeTurnMetrics: true });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('Turn metrics: not returned by the server');
+    spy.mockRestore();
+  });
+
   test('prints no turn metrics section when not requested', async () => {
     mockGetLogContent.mockResolvedValue({ ...fullContent, turn_metrics: null });
     const { logger } = await import('../../src/logger.js');

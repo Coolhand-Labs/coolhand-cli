@@ -28,14 +28,14 @@ describe('mapStepTemplateHttpError', () => {
     expect(err.message).toBe('Step template "9" not found.');
   });
 
-  test('maps a 422 to a message that names --step-type and keeps the server detail', () => {
+  test('maps a 422 to a message that keeps the server detail', () => {
     const err = mapStepTemplateHttpError(
       new HttpError('Step template request failed (422): {"errors":{"step_type":["is invalid"]}}', 422),
       'not found',
       'x'
     );
     expect(err.code).toBe('STEP_TEMPLATE_ERROR');
-    expect(err.message).toContain('--step-type');
+    expect(err.message).toContain('422');
     expect(err.message).toContain('is invalid');
   });
 

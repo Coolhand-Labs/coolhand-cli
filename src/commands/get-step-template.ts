@@ -26,7 +26,7 @@ function metricsLines(m: StepTemplateMetrics): string[] {
     const single = single_turn_pct === null ? '' : `, single-turn ${single_turn_pct}%`;
     lines.push(`Turns: avg ${avg}, median ${median}, high ${high}${single}`);
   }
-  if (m.tool_stats) {
+  if (m.tool_stats && m.tool_stats.length > 0) {
     lines.push('Tools:');
     for (const t of m.tool_stats) {
       lines.push(`  ${t.name}: ${t.pct_of_runs}% of runs, ${t.avg_per_run} per run`);

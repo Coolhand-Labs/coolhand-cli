@@ -90,12 +90,35 @@ describe('get-step-template command', () => {
   test('prints the metrics block, tolerating null cohorts and token figures', async () => {
     const text = await output(() => run({ id: 7 }));
     expect(text).toContain('Total runs: 5');
-    expect(text).toContain('Turns: avg 2, median 2, high 4');
+    expect(text).toContain('Turns: avg 2, median 2, high 4\n');
+    expect(text).not.toContain('single-turn');
     expect(text).toContain('Bash: 80% of runs, 2.5 per run');
     expect(text).toContain('Efficiency (automated): 4 runs, 6 tool calls, 8 requests, tokens n/a');
     expect(text).not.toContain('Efficiency (interactive)');
     expect(text).toContain('Runs without a turn snapshot: 1');
     expect(text).toContain('Note: One run has no per-turn snapshot.');
+  });
+
+  test('prints the single-turn share and cohort token medians when present, and skips an empty tool list', async () => {
+    mockGetStepTemplate.mockResolvedValue({
+      ...detail,
+      metrics: {
+        ...detail.metrics,
+        tool_stats: [],
+        turn_stats: { avg: 2, median: 2, high: 4, single_turn_pct: 60 },
+        efficiency: {
+          interactive: null,
+          automated: null,
+          all: { ...cohort, tokens_available: true, token_runs: 4, median_tokens: 1200, p90_tokens: 2000, tokens_per_tool_call: 200 },
+          unavailable_runs: 0,
+        },
+      },
+    });
+    const text = await output(() => run({ id: 7 }));
+    expect(text).toContain('Turns: avg 2, median 2, high 4, single-turn 60%');
+    expect(text).toContain('Efficiency (all): 4 runs, 6 tool calls, 8 requests, median 1200 tokens');
+    expect(text).not.toContain('Tools:');
+    expect(text).not.toContain('Runs without a turn snapshot');
   });
 
   test('omits the metrics block and handles null tool_stats/turn_stats/efficiency', async () => {
@@ -106,6 +129,8 @@ describe('get-step-template command', () => {
     const text = await output(() => run({ id: 7 }));
     expect(text).toContain('Total runs: 0');
     expect(text).not.toContain('Tools:');
+    expect(text).not.toContain('Turns:');
+    expect(text).not.toContain('Efficiency');
     mockGetStepTemplate.mockResolvedValue({ ...detail, metrics: undefined });
     expect(await output(() => run({ id: 7 }))).not.toContain('Metrics');
   });
