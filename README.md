@@ -150,7 +150,7 @@ coolhand login --write-env .env
 # sets COOLHAND_API_KEY=<token> in .env, idempotent on re-run
 ```
 
-The CLI works especially well with the [Coolhand feedback collection skill](https://github.com/Coolhand-Labs/feedback-collection-skill) for Claude Code. The skill scans your project for LLM inference calls and implements best-practice human feedback collection — it reads `COOLHAND_API_KEY` from the environment, which `coolhand login --write-env .env` puts in place.
+The CLI works especially well with the [Coolhand feedback collection skill](https://github.com/Coolhand-Labs/skills) for Claude Code. The skill scans your project for LLM inference calls and implements best-practice human feedback collection — it reads `COOLHAND_API_KEY` from the environment, which `coolhand login --write-env .env` puts in place.
 
 ## Configuration file
 
