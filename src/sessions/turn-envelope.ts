@@ -1,12 +1,10 @@
+import { MAX_TURN_TEXT_CHARS, messageSize, sanitizeBlock, sanitizeMessage, type ContentBlock } from './blocks.js';
 import { redactSecrets } from './redact-secrets.js';
 import type { CaptureEnvelope } from './claude-scanner.js';
+import { addUsage, emptySubagentUsage, emptyUsage, mergeSubagents, totalTokens, type SubagentUsage, type Usage } from './usage.js';
 import type { EarlierExchange, HookAgent, HookTurn, TurnMessage } from '../hooks/types.js';
 
-/**
- * Per-half cap on the text sent. A reply can be megabytes, and a turn the server refuses for size
- * would be spooled to disk, retried and dropped; the cap keeps both the request and the spool small.
- */
-export const MAX_TURN_TEXT_CHARS = 100_000;
+export { MAX_TURN_TEXT_CHARS };
 
 function capText(text: string): string {
   return text.length > MAX_TURN_TEXT_CHARS ? `${text.slice(0, MAX_TURN_TEXT_CHARS)}\n…[truncated]` : text;
@@ -16,62 +14,167 @@ function capText(text: string): string {
  * Cap on the characters of EARLIER messages sent with a turn (the current turn's own user message is
  * extra, and is itself capped at MAX_TURN_TEXT_CHARS). The payload grows with the conversation, so
  * when the history would exceed this the OLDEST whole exchanges are dropped and the most recent are
- * kept: the server should expect a truncated head, flagged by `metadata.history_truncated`.
+ * kept: the server should expect a truncated head, flagged by `metadata.history_truncated`. The newest
+ * earlier exchange is always kept, even if it alone is over the cap. Counted in characters (UTF-16
+ * code units), not bytes.
  */
 export const HISTORY_BUDGET_CHARS = 200_000;
 
 export interface PreparedMessages {
   /** The conversation so far, ending on the current turn's user message (when there is one). */
   messages: TurnMessage[];
-  /** Messages dropped from the start of the history to stay inside HISTORY_BUDGET_CHARS. */
+  /** Messages dropped from the start of the history to stay inside HISTORY_BUDGET_CHARS (an upper bound: a reply that redacts to nothing is still counted). */
   omitted: number;
   /** True when part of the conversation since the skill was invoked is not in `messages`. */
   truncated: boolean;
+  /**
+   * Tokens the main-thread assistant messages spent across the same exchanges as the history, plus
+   * this turn's: a CUMULATIVE total, so a replayed or late older turn can't double count. Absent when
+   * the transcript shows none.
+   */
+  usage?: Usage;
+  /** The same, for subagents (other models, so priced separately). Absent when there were none. */
+  subagents?: SubagentUsage;
 }
 
-/** One exchange as redacted, capped messages. */
+function promptMessage(userText: string): TurnMessage {
+  return { role: 'user', content: capText(redactSecrets(userText).trim()) };
+}
+
+/**
+ * One exchange as redacted, capped messages: the prompt, then everything the transcript shows after it
+ * (thinking, tool calls, tool results, replies) in order. A hand-built exchange with only reply text
+ * (no transcript behind it) falls back to prompt + reply.
+ */
 function exchangeMessages(exchange: EarlierExchange): TurnMessage[] {
-  const messages: TurnMessage[] = [{ role: 'user', content: capText(redactSecrets(exchange.userText).trim()) }];
-  const reply = exchange.assistantText ? capText(redactSecrets(exchange.assistantText).trim()) : '';
-  if (reply) {
-    messages.push({ role: 'assistant', content: reply });
+  const out: TurnMessage[] = [promptMessage(exchange.userText)];
+  if (exchange.messages) {
+    for (const raw of exchange.messages) {
+      const message = sanitizeMessage(raw);
+      if (message) {
+        out.push(message);
+      }
+    }
+  } else if (exchange.assistantText) {
+    const reply = capText(redactSecrets(exchange.assistantText).trim());
+    if (reply) {
+      out.push({ role: 'assistant', content: reply });
+    }
   }
-  return messages;
+  return out;
+}
+
+/** Characters an exchange will occupy once capped (redaction only ever shortens it, so this is an upper bound). */
+function cappedSize(exchange: EarlierExchange): number {
+  const prompt = Math.min(exchange.userText.length, MAX_TURN_TEXT_CHARS);
+  if (exchange.messages) {
+    return prompt + exchange.messages.reduce((n, m) => n + messageSize(m), 0);
+  }
+  return prompt + Math.min(exchange.assistantText?.length ?? 0, MAX_TURN_TEXT_CHARS);
+}
+
+/** How many messages an exchange would have contributed (for `omitted`). */
+function messageCount(exchange: EarlierExchange): number {
+  return 1 + (exchange.messages ? exchange.messages.length : exchange.assistantText ? 1 : 0);
 }
 
 /**
  * The messages sent with turn `turnIndex`: every earlier user and assistant text since the skill was
- * invoked, in order, then this turn's user message. Turn N has N−1 earlier exchanges, so a turn never
- * carries anything the user said before the skill ran. Text only, redacted exactly like the turn
- * itself. If the transcript no longer shows all N−1 earlier exchanges, or the history is over budget,
- * the OLDEST are the ones missing and `truncated` is set.
+ * invoked, in order, then this turn's user message. "Since the skill was invoked" is the session's
+ * `anchor` — the timestamp of its first captured turn — and only exchanges a hook actually captured
+ * (`captured`) are included, so nothing the user said before the skill ran, or while capture was off,
+ * is uploaded, however many exchanges the transcript holds that no hook saw (`/compact`, image
+ * prompts, a second Stop for one prompt). Without a usable anchor there is no history at all. Text
+ * only, redacted exactly like the turn itself. If the start of the skill's conversation is no longer
+ * in the transcript window, or the history is over budget, the OLDEST part is what is missing and
+ * `truncated` is set.
  */
-export function prepareTurnMessages(turn: HookTurn, turnIndex: number): PreparedMessages {
-  const wanted = Math.max(0, turnIndex - 1);
-  const available = wanted === 0 ? [] : (turn.earlier ?? []).slice(-wanted);
+export function prepareTurnMessages(
+  turn: HookTurn,
+  turnIndex: number,
+  anchor: string | undefined,
+  captured: ReadonlySet<string>
+): PreparedMessages {
+  const anchorMs = anchor ? Date.parse(anchor) : Number.NaN;
+  const earlier = turn.earlier ?? [];
 
-  const exchanges = available.map(exchangeMessages);
-  let size = exchanges.reduce((sum, ms) => sum + ms.reduce((n, m) => n + m.content.length, 0), 0);
-  let omitted = 0;
-  while (exchanges.length > 0 && size > HISTORY_BUDGET_CHARS) {
-    const dropped = exchanges.shift() as TurnMessage[];
-    size -= dropped.reduce((n, m) => n + m.content.length, 0);
-    omitted += dropped.length;
+  // Exchanges at or after the anchor that a hook actually captured, in order. One with no usable
+  // timestamp can't be placed, so it is left out (fail closed); inside the skill's conversation that
+  // is a gap worth flagging. So is an answered exchange no hook captured (capture was off, or the hook
+  // was killed): it is never swept up into a later upload. An uncaptured exchange with no reply (a
+  // command, an interrupted prompt) is dropped quietly, because there was no turn to capture.
+  const since: EarlierExchange[] = [];
+  let gap = false;
+  const usage = emptyUsage();
+  const subagents = emptySubagentUsage();
+  addUsage(usage, turn.usage);
+  mergeSubagents(subagents, turn.subagents);
+  if (turnIndex > 1 && !Number.isNaN(anchorMs)) {
+    for (const e of earlier) {
+      const ms = e.timestamp ? Date.parse(e.timestamp) : Number.NaN;
+      if (Number.isNaN(ms)) {
+        gap ||= since.length > 0;
+      } else if (ms >= anchorMs) {
+        if (e.timestamp && captured.has(e.timestamp)) {
+          since.push(e);
+          addUsage(usage, e.usage);
+          mergeSubagents(subagents, e.subagents);
+        } else if (e.assistantText) {
+          gap = true;
+        }
+      }
+    }
   }
 
-  const messages = exchanges.flat();
+  // Newest first, so the budget keeps the most recent; the newest is kept whatever its size.
+  const kept: EarlierExchange[] = [];
+  let used = 0;
+  for (let i = since.length - 1; i >= 0; i--) {
+    const size = cappedSize(since[i]);
+    if (kept.length > 0 && used + size > HISTORY_BUDGET_CHARS) {
+      break;
+    }
+    kept.unshift(since[i]);
+    used += size;
+  }
+  const dropped = since.slice(0, since.length - kept.length);
+  const omitted = dropped.reduce((n, e) => n + messageCount(e), 0);
+
+  const messages = kept.flatMap(exchangeMessages);
   if (turn.userText) {
-    messages.push({ role: 'user', content: capText(redactSecrets(turn.userText).trim()) });
+    messages.push(promptMessage(turn.userText));
   }
-  const shortfall = wanted - available.length;
-  return { messages, omitted, truncated: omitted > 0 || shortfall > 0 };
+  // This turn's own tool loop (everything up to, not including, its final reply).
+  for (const raw of turn.currentMessages ?? []) {
+    const message = sanitizeMessage(raw);
+    if (message) {
+      messages.push(message);
+    }
+  }
+
+  // Did we see where the skill's conversation began? Turn 1 is that start; later turns need the
+  // anchor's own exchange to still be in the window.
+  const stamps = turn.earlierStamps ?? earlier.flatMap((e) => (e.timestamp ? [e.timestamp] : []));
+  // A captured exchange that can't be rendered (an image-only prompt: no text of its own, so there is
+  // no user message to pair its reply with) is missing from the history; say so.
+  const rendered = new Set(earlier.flatMap((e) => (e.timestamp ? [e.timestamp] : [])));
+  const unrenderable =
+    turnIndex > 1 && !Number.isNaN(anchorMs) && stamps.some((st) => Date.parse(st) >= anchorMs && captured.has(st) && !rendered.has(st));
+  const anchorSeen = turnIndex <= 1 || (anchor !== undefined && (turn.exchangeTimestamp === anchor || stamps.includes(anchor)));
+  return {
+    messages,
+    omitted,
+    truncated: omitted > 0 || gap || unrenderable || !anchorSeen,
+    ...(totalTokens(usage) > 0 ? { usage } : {}),
+    ...(subagents.calls > 0 ? { subagents } : {}),
+  };
 }
 
 /**
  * An Anthropic-shaped envelope for ONE turn captured by a hook, carrying the conversation so far.
  *
- * `request_body.messages` is every earlier user and assistant text since the skill was invoked, in
- * order, ending on this turn's user message (`prepareTurnMessages`); `response_body` is this turn's
+ * `request_body.messages` is the conversation since the skill was invoked, in order, ending on the last
+ * message before this turn's reply (`prepareTurnMessages`, passed in as `prepared`); `response_body` is this turn's
  * reply. The server keeps one chat log per session and the newest turn replaces the stored one, so a
  * late-arriving older turn (a replay) is ignored by it.
  *
@@ -79,14 +182,27 @@ export function prepareTurnMessages(turn: HookTurn, turnIndex: number): Prepared
  * `claudecode://session/<id>` scheme `analyze-claude-sessions` uses. The server needs the session id
  * and the turn number from it. `response_body.id` is `<session>:<turn>:<digest>`, and the digest ties
  * it to the turn's content. It is no longer the server's dedup key, but stays unique per turn for
- * debugging and correlation. Only user and assistant text goes in — no tool calls, tool results or
- * thinking — and all of it is secret-scrubbed.
+ * debugging and correlation. What goes in is the conversation as structured blocks: prompts, thinking,
+ * tool calls, tool results and replies (subagent traffic and injected context excluded), all
+ * secret-scrubbed and capped (see blocks.ts).
  */
+/**
+ * The blocks of this turn's reply: the transcript's own (thinking, then text) when it shows the final
+ * message, otherwise just the text the hook was given.
+ */
+function replyBlocks(turn: HookTurn, assistantText: string): ContentBlock[] {
+  const blocks = (turn.finalReply ?? []).map(sanitizeBlock).filter((b): b is ContentBlock => b !== undefined);
+  return blocks.some((b) => b.type === 'text') ? blocks : [{ type: 'text', text: assistantText }];
+}
+
 export function buildTurnEnvelope(
   agent: HookAgent,
   turn: HookTurn,
   turnIndex: number,
-  digest: string
+  digest: string,
+  prepared: PreparedMessages,
+  /** The skill's text, sent as `request_body.system`. Redacted and capped here. */
+  system?: string
 ): CaptureEnvelope {
   const assistantText = capText(redactSecrets(turn.assistantText).trim());
 
@@ -96,14 +212,16 @@ export function buildTurnEnvelope(
     status_code: 200,
     request_body: {
       model: turn.model,
-      messages: prepareTurnMessages(turn, turnIndex).messages,
+      ...(system ? { system: capText(redactSecrets(system).trim()) } : {}),
+      messages: prepared.messages,
     },
     response_body: {
       id: `${turn.sessionId}:${turnIndex}:${digest.slice(0, 8)}`,
       type: 'message',
       role: 'assistant',
       model: turn.model,
-      content: [{ type: 'text', text: assistantText }],
+      content: replyBlocks(turn, assistantText),
+      ...(prepared.usage ? { usage: prepared.usage } : {}),
     },
     turnCount: turnIndex,
     projectPath: turn.cwd,

@@ -19,6 +19,35 @@ export interface TurnState {
   lastDigest?: string;
   /** Who this session is attributed to, resolved on its first turn so git isn't consulted every turn. */
   tester?: TesterIdentity;
+  /**
+   * When the session's first captured turn was written (ISO 8601). History sent with later turns
+   * starts here, so nothing said before the skill was invoked is uploaded.
+   */
+  anchor?: string;
+  /**
+   * Timestamps of the exchanges a hook actually captured, newest last (bounded). History sent with a
+   * later turn is limited to these: what the user typed while capture was off (a resumed session, the
+   * kill switch, no key, a killed hook) is never swept up into a later upload.
+   */
+  captured?: string[];
+  /** The anchor was seeded after turn 1, so the start of the conversation was never sent (always flagged). */
+  anchorLate?: boolean;
+  /**
+   * The skill's text (the body Claude Code injected when it was invoked), kept once found so every
+   * later turn can send it without the invocation still being inside the transcript window.
+   */
+  skillText?: string;
+}
+
+const MAX_CAPTURED_STAMPS = 1000;
+
+/** `captured` with one more exchange recorded (de-duplicated, bounded to the newest MAX_CAPTURED_STAMPS). */
+export function withCaptured(captured: readonly string[] | undefined, stamp: string | undefined): string[] {
+  const all = captured ?? [];
+  if (!stamp || all.includes(stamp)) {
+    return [...all];
+  }
+  return [...all, stamp].slice(-MAX_CAPTURED_STAMPS);
 }
 
 const TESTER_SOURCES: readonly TesterIdentity['source'][] = ['env', 'git', 'machine'];
@@ -40,6 +69,10 @@ export async function loadTurnState(agent: string, sessionId: string): Promise<T
     return {
       turnIndex: typeof parsed.turnIndex === 'number' && parsed.turnIndex >= 0 ? Math.floor(parsed.turnIndex) : 0,
       lastDigest: typeof parsed.lastDigest === 'string' ? parsed.lastDigest : undefined,
+      anchor: typeof parsed.anchor === 'string' && !Number.isNaN(Date.parse(parsed.anchor)) ? parsed.anchor : undefined,
+      captured: Array.isArray(parsed.captured) ? parsed.captured.filter((x): x is string => typeof x === 'string').slice(-MAX_CAPTURED_STAMPS) : undefined,
+      anchorLate: parsed.anchorLate === true ? true : undefined,
+      skillText: typeof parsed.skillText === 'string' && parsed.skillText ? parsed.skillText : undefined,
       tester:
         parsed.tester &&
         typeof parsed.tester.id === 'string' &&

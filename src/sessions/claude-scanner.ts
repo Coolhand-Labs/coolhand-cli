@@ -2,12 +2,15 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { redactSecrets } from './redact-secrets.js';
+import type { ContentBlock, RawMessage } from './blocks.js';
+import { addSubagent, addUsage, emptySubagentUsage, emptyUsage, type SubagentUsage, type Usage } from './usage.js';
 import type { SessionFileMeta } from './session-filter.js';
 
 /** One message in the reconstructed conversation. */
 export interface ConversationMessage {
   role: string;
-  content: string;
+  /** A plain string, or content blocks (thinking, tool calls and results) for hook-captured turns. */
+  content: string | ContentBlock[];
 }
 
 /**
@@ -24,6 +27,8 @@ export interface CaptureEnvelope {
   status_code: number;
   request_body: {
     model?: string;
+    /** The skill's text, for hook-captured turns. */
+    system?: string;
     messages: ConversationMessage[];
   };
   response_body: {
@@ -392,16 +397,96 @@ function isInterruptMarker(text: string): boolean {
   return text.startsWith('[Request interrupted by user');
 }
 
-/** Plain text of a REAL user prompt: a string, or the `text` blocks of an array. Tool results are not prompts. */
-function promptText(content: unknown): string {
+/**
+ * The OUTPUT of a local command (`/compact`, `/context`, `/status`, `/cost`, …) or of bash mode
+ * (`!cmd`) is stored as a non-meta user line. It is not something the user typed and can hold account
+ * details, paths and tool config, so it is never a prompt and is never uploaded.
+ */
+const COMMAND_OUTPUT_TAGS = ['<local-command-stdout>', '<local-command-stderr>', '<bash-input>', '<bash-stdout>', '<bash-stderr>'];
+function isCommandOutput(text: string): boolean {
+  const head = text.trimStart();
+  return COMMAND_OUTPUT_TAGS.some((tag) => head.startsWith(tag));
+}
+
+/**
+ * Host- and harness-injected context that rides in user lines but was never typed: Conductor's
+ * `<system_instruction>`, background-task `<task-notification>`s, `<system-reminder>`s and the IDE
+ * extension's `<ide_opened_file>` / `<ide_selection>` blocks. They carry file paths, selected code
+ * and workspace details, and a hook that re-uploads the conversation every turn would send them again
+ * and again. Removed before anything is recorded.
+ */
+const INJECTED_TAGS = '(?:system_instruction|system-reminder|task-notification|local-command-caveat|user-prompt-submit-hook|ide_[a-z_]+)';
+
+/**
+ * Remove `<tag>…</tag>` elements of the injected kinds above. A single left-to-right pass: for each
+ * opening tag it looks once, forwards, for that tag's closer; an opening tag with no closer takes the
+ * rest of the text with it (fail closed). Linear in the length of the text — a regex with a lazy
+ * `[\s\S]*?` per opener is quadratic on a pasted log full of unclosed tags, and this runs over up to
+ * 8 MB of transcript inside a hook with a timeout. It also means a prompt that merely discusses one of
+ * these tags loses the rest of that text: the cost of failing closed.
+ */
+function stripInjectedContext(text: string): string {
+  const opener = new RegExp(`<(${INJECTED_TAGS})>`, 'g');
+  let out = '';
+  let from = 0;
+  for (;;) {
+    opener.lastIndex = from;
+    const match = opener.exec(text);
+    if (!match) {
+      out += text.slice(from);
+      break;
+    }
+    out += text.slice(from, match.index);
+    const closer = `</${match[1]}>`;
+    const end = text.indexOf(closer, match.index + match[0].length);
+    if (end < 0) {
+      break;
+    }
+    from = end + closer.length;
+  }
+  return out.trim();
+}
+
+/** All the text of a message's content, untouched: a string, or the `text` blocks of an array. */
+function rawText(content: unknown): string {
   if (typeof content === 'string') {
     return content;
   }
   if (Array.isArray(content)) {
     return content
+      .map((b) => (b && typeof b === 'object' && (b as { type?: unknown }).type === 'text' ? String((b as { text?: unknown }).text ?? '') : ''))
+      .join('\n');
+  }
+  return '';
+}
+
+const SKILL_BODY_PREFIX = 'Base directory for this skill:';
+
+/**
+ * Claude Code injects an invoked skill as a meta user line: `Base directory for this skill: <dir>`,
+ * a blank line, then the skill's text. The directory (a local path) is kept apart from the text.
+ */
+function parseSkillBody(text: string): { dir: string; text: string } | undefined {
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith(SKILL_BODY_PREFIX)) {
+    return undefined;
+  }
+  const newline = trimmed.indexOf('\n');
+  const dir = (newline < 0 ? trimmed : trimmed.slice(0, newline)).slice(SKILL_BODY_PREFIX.length).trim();
+  const body = newline < 0 ? '' : trimmed.slice(newline + 1).trim();
+  return dir && body ? { dir, text: body } : undefined;
+}
+
+/** Plain text of a REAL user prompt: a string, or the `text` blocks of an array. Tool results are not prompts. */
+function promptText(content: unknown): string {
+  if (typeof content === 'string') {
+    return stripInjectedContext(content);
+  }
+  if (Array.isArray(content)) {
+    return content
       .map((block) =>
         block && typeof block === 'object' && (block as { type?: unknown }).type === 'text'
-          ? String((block as { text?: unknown }).text ?? '')
+          ? stripInjectedContext(String((block as { text?: unknown }).text ?? ''))
           : ''
       )
       .filter((part) => part.length > 0)
@@ -414,9 +499,23 @@ function promptText(content: unknown): string {
 export interface Exchange {
   /** Undefined for a prompt with no text of its own (e.g. an image), or an assistant reply with no prompt in view. */
   userText?: string;
+  /** When the user line was written (ISO 8601), straight from the transcript. */
+  timestamp?: string;
   assistantText?: string;
   /** Request id of the message `assistantText` came from. */
   assistantKey?: string;
+  /** Tokens the main-thread assistant messages of this exchange spent (each message counted once). */
+  usage?: Usage;
+  /** What subagents (Agent tool calls) made during this exchange spent, per model. */
+  subagents?: SubagentUsage;
+  /**
+   * Everything after the user's prompt, in order, as the transcript has it: each model call's blocks
+   * (thinking, text, tool calls) merged into one assistant message, and each batch of tool results as a
+   * user message. Raw: redacted and capped only when sent (see `sanitizeMessage`).
+   */
+  messages?: RawMessage[];
+  /** The skill body Claude Code injected after a slash command (`/skill`), if this exchange invoked one. */
+  skill?: { dir: string; text: string };
 }
 
 export interface ParsedExchanges {
@@ -438,6 +537,9 @@ export function parseExchanges(content: string): ParsedExchanges {
   let current: Exchange | undefined;
   let groupKey: string | undefined;
   let parts: string[] = [];
+  // Claude Code repeats a message's usage on every content-block line of it: count each message, and each subagent run, once.
+  const countedMessages = new Set<string>();
+  const countedAgents = new Set<string>();
 
   const begin = (userText: string | undefined): void => {
     current = { userText };
@@ -468,6 +570,28 @@ export function parseExchanges(content: string): ParsedExchanges {
     }
 
     if (event.type === 'user') {
+      // An Agent tool call's result reports what the subagent spent, and on which model.
+      const result = event.toolUseResult;
+      if (current && result && typeof result === 'object' && !Array.isArray(result)) {
+        const run = result as Record<string, unknown>;
+        const agentId = typeof run.agentId === 'string' ? run.agentId : '';
+        if (agentId && run.usage && typeof run.usage === 'object' && !countedAgents.has(agentId)) {
+          countedAgents.add(agentId);
+          const model = typeof run.resolvedModel === 'string' && run.resolvedModel ? run.resolvedModel : 'unknown';
+          addSubagent((current.subagents ??= emptySubagentUsage()), model, run.usage);
+        }
+      }
+      // Tool results come back as user lines; they are part of the exchange's conversation.
+      if (current && Array.isArray(message.content)) {
+        const results = message.content.filter(isToolResultBlock);
+        if (results.length > 0) {
+          (current.messages ??= []).push({ role: 'user', blocks: results });
+        }
+      }
+      // The expanded skill body, injected right after the slash command that invoked it.
+      if (event.isMeta === true && current && !current.skill) {
+        current.skill = parseSkillBody(rawText(message.content));
+      }
       // Meta lines are injected context and compaction summaries are generated, not typed. A line
       // carrying any tool_result is the tool loop talking, whatever else rides along with it.
       if (
@@ -478,12 +602,22 @@ export function parseExchanges(content: string): ParsedExchanges {
         continue;
       }
       const text = slashCommandPrompt(promptText(message.content).trim());
+      if (isCommandOutput(text)) {
+        continue;
+      }
       // A prompt with no text of its own (e.g. an image) still starts a new turn: the reply that
       // follows must not be paired with the previous prompt.
-      const textlessPrompt = !text && Array.isArray(message.content) && message.content.length > 0;
+      // (A line whose every text block was injected context and has nothing else in it is not a prompt.)
+      const textlessPrompt =
+        !text &&
+        Array.isArray(message.content) &&
+        message.content.some((b) => !!b && typeof b === 'object' && (b as { type?: unknown }).type !== 'text');
       if ((text && !isInterruptMarker(text)) || textlessPrompt) {
         // A new prompt starts a new exchange; whatever assistant text we had belonged to the old one.
         begin(text || undefined);
+        if (typeof event.timestamp === 'string' && event.timestamp) {
+          (current as Exchange).timestamp = event.timestamp;
+        }
       }
       continue;
     }
@@ -494,11 +628,23 @@ export function parseExchanges(content: string): ParsedExchanges {
       }
       const exchange = current as Exchange;
       const key = turnKey(event, message, '');
+      if (key && !countedMessages.has(key) && message.usage && typeof message.usage === 'object') {
+        countedMessages.add(key);
+        addUsage((exchange.usage ??= emptyUsage()), message.usage);
+      }
       if (key !== groupKey) {
         groupKey = key;
         parts = [];
       }
       const blocks = Array.isArray(message.content) ? message.content : [];
+      // One assistant message per model call: its content-block lines share a request id.
+      const sequence = (exchange.messages ??= []);
+      const lastMessage = sequence[sequence.length - 1];
+      if (lastMessage && lastMessage.role === 'assistant' && lastMessage.key === key && key) {
+        lastMessage.blocks.push(...blocks);
+      } else {
+        sequence.push({ role: 'assistant', key: key || undefined, blocks: [...blocks] });
+      }
       for (const block of blocks) {
         if (block && typeof block === 'object' && (block as { type?: unknown }).type === 'text') {
           const text = (block as { text?: unknown }).text;

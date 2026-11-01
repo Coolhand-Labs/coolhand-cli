@@ -60,4 +60,8 @@ Running `coolhand login` against a different client adds a second entry to `clie
 
 ## Files written by `capture-turn`
 
-Besides `config.json`, the [`capture-turn` hook](./hook-capture.md) keeps a few files under the same directory: `machine-id` (anonymous machine id), `capture-turns/` (per-session progress, which includes the resolved tester identity, i.e. the git email unless `--anonymous` is used, and `hook.log`), and `pending/capture-turn-*.json` (turns waiting to be re-sent, each with the public key it was sent with and the turn's scrubbed text, kept until 7 days after their last replay attempt).
+Besides `config.json`, the [`capture-turn` hook](./hook-capture.md) keeps a few files under the same directory:
+
+- `machine-id`: the anonymous machine id.
+- `capture-turns/`: one progress file per session, holding the resolved tester identity (the git email unless `--anonymous` is used), the timestamp that anchors the session's history, and the timestamps, with no text, of the exchanges that were captured. Also `hook.log`, a separate file in the same directory.
+- `pending/capture-turn-*.json`: turns waiting to be re-sent. Each holds the public key it was sent with, the turn's scrubbed text and the conversation so far. They are kept until 7 days after their last replay attempt, at most 200 records and 64 MB in total.

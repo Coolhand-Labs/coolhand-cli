@@ -941,10 +941,10 @@ When an agent is blocked — because a capability does not exist in its environm
 ### capture-turn
 
 ```bash
-coolhand capture-turn --agent claude [--skill NAME] [--api-key KEY] [--base-url URL] [--anonymous]
+coolhand capture-turn --agent claude [--skill NAME] [--api-key KEY] [--base-url URL] [--skill-version V] [--anonymous] [--no-declare]
 ```
 
-Agent hook entrypoint. An AI agent runs it after every turn and pipes the hook's JSON payload to stdin; `capture-turn` sends that turn to Coolhand as one LLM request log: `request_body.messages` is the user and assistant text of the conversation since the skill was invoked, ending on this turn's user message, and `response_body` is this turn's reply (see [The conversation so far](./hook-capture.md#the-conversation-so-far)). It authenticates with a **public** API key given on the command line or in `COOLHAND_API_KEY`, so the person using the agent never logs in. It does not read the stored config, ignores `--client-id`, and never prompts.
+Agent hook entrypoint. An AI agent runs it after every turn and pipes the hook's JSON payload to stdin; `capture-turn` sends that turn to Coolhand as one LLM request log: `request_body.messages` is the conversation since the skill was invoked (prompts, thinking, tool calls, tool results and replies, redacted and capped), ending before this turn's reply, and `response_body` is this turn's final reply (see [The conversation so far](./hook-capture.md#the-conversation-so-far)). It authenticates with a **public** API key given on the command line or in `COOLHAND_API_KEY`, so the person using the agent never logs in. It does not read the stored config, ignores `--client-id`, and never prompts.
 
 A hook must not disturb its agent, so `capture-turn` always exits 0 and writes nothing to stdout or stderr. Failures are appended to `~/.coolhand/capture-turns/hook.log`, and turns that could not be delivered are saved to `~/.coolhand/pending/` and replayed after the next successful send. With no key it sends nothing. A mistyped flag is logged there as well rather than printed, unless a person runs the command in a terminal. Each turn is attributed (`metadata.tester`) to `COOLHAND_CAPTURE_USER` if set, otherwise the git email, otherwise an anonymous machine id; see [Who ran it](./hook-capture.md#who-ran-it). Set `COOLHAND_CAPTURE_DISABLED=1` to make the command do nothing at all.
 
@@ -953,7 +953,9 @@ Only `claude` (Claude Code's `Stop` hook) is supported so far. See [docs/hook-ca
 | Flag | Description |
 |------|-------------|
 | `--agent claude` | Required. Which agent's hook payload to expect |
-| `--skill NAME` | Optional. Skill that enabled the hook; sent as `metadata.skill` |
+| `--skill NAME` | Optional. Skill that enabled the hook. Sent as `metadata.skill`, and it declares the skill's workload, selects the skill text sent as `request_body.system`, and (with `--no-declare`) can be kept as a label only |
 | `--api-key KEY` | Public API key only, never a private key. Falls back to `COOLHAND_API_KEY`. Prefer the environment variable where you can: command-line arguments are visible in `ps` |
 | `--base-url URL` | Coolhand base URL (default `https://coolhandlabs.com`) |
+| `--skill-version V` | Optional. The skill's version; sent as `metadata.skill_version` (never in the declaration). Keep it equal to the skill's frontmatter `version:` |
+| `--no-declare` | With `--skill`, don't declare a workload for the skill. By default `--skill NAME` declares one workload per skill (`claude-skill:NAME`) and the log is attached to it; see [the skill's workload, its text and token usage](./hook-capture.md#the-skills-workload-its-text-and-token-usage) |
 | `--anonymous` | Attribute turns to the anonymous machine id instead of the git email, and leave out the working directory. Overrides `COOLHAND_CAPTURE_USER` |

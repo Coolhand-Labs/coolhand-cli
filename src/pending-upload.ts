@@ -1,4 +1,5 @@
-import { Coolhand, type CoolhandCallData, type LLMRequestLogFeedback } from 'coolhand-node';
+import { Coolhand, type DeclaredContext, type LLMRequestLogFeedback } from 'coolhand-node';
+import { logTurn } from './hooks/log-turn.js';
 import { loadConfig, getClient } from './config.js';
 import { DEFAULT_BASE_URL } from './types.js';
 import type { PendingRecord } from './pending-store.js';
@@ -33,14 +34,16 @@ export async function uploadRecord(record: PendingRecord, opts: { timeoutMs?: nu
     return result !== null && result !== undefined;
   }
   if (record.kind === 'turn') {
-    const { envelope, collector, metadata } = record.payload as {
-      envelope: CoolhandCallData;
+    const { envelope, collector, metadata, declared } = record.payload as {
+      envelope: unknown;
       collector?: string;
       metadata?: Record<string, unknown>;
+      declared?: DeclaredContext;
     };
     // A replay may duplicate a turn that actually landed (the server does not dedup), so mark it for consumers.
-    const result = await coolhand.logRequest(envelope, {
+    const result = await logTurn(coolhand, envelope, {
       collector,
+      declared,
       metadata: {
         ...metadata,
         replayed: true,

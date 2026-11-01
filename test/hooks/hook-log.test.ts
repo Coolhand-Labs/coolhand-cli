@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { logHookEvent } from '../../src/hooks/hook-log.js';
-import { loadTurnState, saveTurnState, turnsDir } from '../../src/hooks/turn-state.js';
+import { loadTurnState, saveTurnState, turnsDir, withCaptured } from '../../src/hooks/turn-state.js';
 import { createTmpHome, TmpHome } from '../helpers/tmp-home.js';
 
 describe('hook housekeeping', () => {
@@ -47,6 +47,20 @@ describe('hook housekeeping', () => {
     await saveTurnState('claude', 'fresh', { turnIndex: 1 });
 
     await expect(fs.access(leftover)).rejects.toThrow();
+  });
+
+  it('records captured exchanges without duplicates and keeps only the newest 1000', async () => {
+    expect(withCaptured(undefined, undefined)).toEqual([]);
+    expect(withCaptured(['a'], 'a')).toEqual(['a']);
+    expect(withCaptured(['a'], 'b')).toEqual(['a', 'b']);
+    const many = Array.from({ length: 1000 }, (_, i) => `t${i}`);
+    const next = withCaptured(many, 'new');
+    expect(next).toHaveLength(1000);
+    expect(next[0]).toBe('t1');
+    expect(next[999]).toBe('new');
+
+    await saveTurnState('claude', 'c', { turnIndex: 2, captured: ['x', 'y'], anchorLate: true, anchor: '2026-10-28T10:00:00.000Z' });
+    expect(await loadTurnState('claude', 'c')).toMatchObject({ captured: ['x', 'y'], anchorLate: true, anchor: '2026-10-28T10:00:00.000Z' });
   });
 
   it('round-trips the cached tester', async () => {

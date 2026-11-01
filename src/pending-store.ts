@@ -36,6 +36,8 @@ export interface PendingRecord {
   baseUrl?: string;
   /** Replay attempts started so far (counted before the upload, so a hook killed mid-upload still uses one). Hook-spooled turns are dropped after a few: with no server-side dedup, every retry that actually landed is a duplicate log. */
   attempts?: number;
+  /** Short label put in the file name, e.g. to find records of one hook session without reading them. [a-z0-9-] only. */
+  fileTag?: string;
   /** The send timed out, so the server may have stored the turn: a replay of this record can duplicate it. */
   ambiguous?: boolean;
   /** ISO timestamp of when the record was saved locally. */
@@ -61,7 +63,8 @@ export async function savePendingRecord(record: PendingRecord): Promise<string> 
   const dir = await ensurePendingDir();
   const safeCommand = record.command.replace(/[^a-zA-Z0-9_-]/g, '_');
   const safeStamp = record.savedAt.replace(/[:.]/g, '-');
-  const fileName = `${safeCommand}-${safeStamp}-${randomBytes(4).toString('hex')}.json`;
+  const safeTag = record.fileTag ? `.${record.fileTag.replace(/[^a-z0-9-]/g, '')}` : '';
+  const fileName = `${safeCommand}-${safeStamp}-${randomBytes(4).toString('hex')}${safeTag}.json`;
   const filePath = path.join(dir, fileName);
   await atomicWriteFile(filePath, `${JSON.stringify(record, null, 2)}\n`, FILE_MODE);
   return filePath;

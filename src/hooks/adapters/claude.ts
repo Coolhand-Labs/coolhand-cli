@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
-import { lastTurnFrom, parseExchanges } from '../../sessions/claude-scanner.js';
+import { rawMessageText, type RawMessage } from '../../sessions/blocks.js';
+import { lastTurnFrom, parseExchanges, type Exchange } from '../../sessions/claude-scanner.js';
 import type { EarlierExchange, HookInput, HookTurn } from '../types.js';
 
 /**
@@ -27,6 +28,32 @@ function sameText(a: string | undefined, b: string): boolean {
   return a !== undefined && a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Is the transcript's latest exchange this turn? Yes when its reply is the one the hook was given, or
+ * when it has a prompt but no reply yet (the transcript is written asynchronously and can lag the hook
+ * by exactly the reply). No when it shows some other reply: that is an earlier turn.
+ */
+function transcriptShowsThisTurn(tail: { userText?: string; assistantText?: string }, assistantText: string): boolean {
+  if (tail.assistantText === undefined) {
+    return tail.userText !== undefined;
+  }
+  return sameText(tail.assistantText, assistantText);
+}
+
+/**
+ * Split this turn's messages into its tool loop and its final reply. The final reply is the last
+ * assistant message, and only when its text is the reply the hook was given (otherwise the transcript
+ * hasn't caught up, and the reply is sent as the text the hook has, with the loop as far as it shows).
+ */
+function splitCurrent(messages: RawMessage[] | undefined, reply: string): { currentMessages: RawMessage[]; finalReply?: unknown[] } {
+  const all = messages ?? [];
+  const last = all[all.length - 1];
+  if (last && last.role === 'assistant' && sameText(rawMessageText(last), reply)) {
+    return { currentMessages: all.slice(0, -1), finalReply: last.blocks };
+  }
+  return { currentMessages: all };
+}
+
 function str(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined;
 }
@@ -52,16 +79,24 @@ export async function claudeTurn(input: HookInput): Promise<HookTurn | null> {
 
   let tail: ReturnType<typeof lastTurnFrom> = {};
   let earlier: EarlierExchange[] = [];
+  let exchangeTimestamp: string | undefined;
+  let current: Exchange | undefined;
+  let skillBodies: HookTurn['skillBodies'];
+  let earlierStamps: string[] = [];
   const transcriptPath = str(input.transcript_path);
   if (transcriptPath) {
     try {
       const parsed = parseExchanges(await readTail(transcriptPath, TRANSCRIPT_TAIL_BYTES));
       tail = lastTurnFrom(parsed);
       // Everything before the latest exchange that has a prompt of its own, oldest first.
+      exchangeTimestamp = parsed.exchanges[parsed.exchanges.length - 1]?.timestamp;
+      earlierStamps = parsed.exchanges.slice(0, -1).flatMap((e) => (e.timestamp ? [e.timestamp] : []));
       earlier = parsed.exchanges
         .slice(0, -1)
         .filter((e): e is typeof e & { userText: string } => typeof e.userText === 'string')
-        .map((e) => ({ userText: e.userText, assistantText: e.assistantText }));
+        .map((e) => ({ timestamp: e.timestamp, userText: e.userText, assistantText: e.assistantText, usage: e.usage, subagents: e.subagents, messages: e.messages }));
+      current = parsed.exchanges[parsed.exchanges.length - 1];
+      skillBodies = parsed.exchanges.flatMap((e) => (e.skill ? [{ ...e.skill, timestamp: e.timestamp }] : []));
     } catch {
       // Unreadable transcript: fall through with whatever the payload itself carries.
     }
@@ -80,6 +115,15 @@ export async function claudeTurn(input: HookInput): Promise<HookTurn | null> {
     // The transcript can lag the payload; only trust its request id if it is for the same reply.
     turnKey: sameText(tail.assistantText, assistantText) ? tail.assistantKey : undefined,
     cwd: str(input.cwd),
+    // Only trust the transcript's latest exchange as THIS turn (and so as the start of the skill's
+    // conversation, if this is turn 1) when it shows this turn's reply, or shows its prompt and no
+    // reply yet. A lagging transcript would otherwise make an earlier, pre-skill prompt the anchor.
+    exchangeTimestamp: transcriptShowsThisTurn(tail, assistantText) ? exchangeTimestamp : undefined,
     earlier,
+    earlierStamps,
+    usage: current?.usage,
+    subagents: current?.subagents,
+    skillBodies,
+    ...splitCurrent(current?.messages, assistantText),
   };
 }

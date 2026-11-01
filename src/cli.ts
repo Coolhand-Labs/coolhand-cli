@@ -95,7 +95,7 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-total', 'include-metrics', 'no-metrics', 'include-deprecated', 'force', 'anonymous']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-total', 'include-metrics', 'no-metrics', 'include-deprecated', 'force', 'anonymous', 'no-declare']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
 const REPEATABLE_FLAGS = new Set(['project', 'exclude-project', 'skill', 'exclude-skill', 'source']);
@@ -220,13 +220,15 @@ const COMMANDS: CommandMeta[] = [
   },
   {
     name: 'capture-turn',
-    oneLiner: 'Agent hook: send the turn that just finished (user and assistant text) to Coolhand',
+    oneLiner: 'Agent hook: send the turn that just finished, with the conversation so far, to Coolhand',
     usage: 'coolhand capture-turn --agent claude [--skill NAME] [options]   (reads the hook JSON on stdin)',
     options: [
       { flag: '--agent claude', description: 'Which agent is calling the hook (required)' },
       { flag: '--skill NAME', description: 'Skill that enabled the hook; sent as metadata' },
       { flag: '--api-key KEY', description: 'Public API key only, never a private key (or set COOLHAND_API_KEY). No login needed' },
       { flag: '--base-url URL', description: 'Coolhand base URL (default: https://coolhandlabs.com)' },
+      { flag: '--skill-version V', description: "The skill's version; sent as metadata.skill_version" },
+      { flag: '--no-declare', description: "Don't declare a workload for the skill (by default `--skill NAME` declares one workload per skill)" },
       { flag: '--anonymous', description: 'Anonymous machine id instead of the git email or COOLHAND_CAPTURE_USER; also omits the working directory' },
     ],
   },
@@ -1814,6 +1816,9 @@ function captureTurnOptions(parsed: ParsedArgs): CaptureTurnOptions {
   if (typeof skill === 'string') {
     opts.skill = skill;
   }
+  if (typeof parsed.flags['skill-version'] === 'string' && parsed.flags['skill-version'].trim()) {
+    opts.skillVersion = parsed.flags['skill-version'].trim().slice(0, 100);
+  }
   if (typeof parsed.flags['api-key'] === 'string') {
     opts.apiKey = parsed.flags['api-key'];
   }
@@ -1825,6 +1830,9 @@ function captureTurnOptions(parsed: ParsedArgs): CaptureTurnOptions {
   const anonymous = parsed.flags.anonymous;
   if (anonymous === true || (typeof anonymous === 'string' && !/^(false|0|no)$/i.test(anonymous))) {
     opts.anonymous = true;
+  }
+  if (parsed.flags['no-declare'] === true) {
+    opts.declare = false;
   }
   return opts;
 }

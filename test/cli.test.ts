@@ -1087,6 +1087,12 @@ describe('run', () => {
     expect(runCaptureTurnCommand).toHaveBeenCalledWith({ agent: 'claude' });
   });
 
+  test('capture-turn --no-declare turns off the workload declaration', async () => {
+    (runCaptureTurnCommand as jest.Mock).mockClear();
+    await run(['capture-turn', '--agent', 'claude', '--skill', 'qa-login', '--no-declare']);
+    expect(runCaptureTurnCommand).toHaveBeenCalledWith({ agent: 'claude', skill: 'qa-login', declare: false });
+  });
+
   test('capture-turn keeps the last --skill when the flag is repeated', async () => {
     (runCaptureTurnCommand as jest.Mock).mockClear();
     await run(['capture-turn', '--agent', 'claude', '--skill', 'first', '--skill', 'second']);

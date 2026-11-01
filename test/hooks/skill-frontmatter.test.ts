@@ -58,6 +58,23 @@ shDescribe('skills that carry the capture hook', () => {
     expect({ status: syntax.status, stderr: syntax.stderr }).toEqual({ status: 0, stderr: '' });
   });
 
+  it.each(SKILLS)('%s: the hook\'s --skill is the skill\'s name and its --skill-version is the skill\'s version', (file) => {
+    const meta = frontmatter(file) as { name?: string; version?: string; hooks: { Stop: Array<{ hooks: Array<{ command: string }> }> } };
+    const command = meta.hooks.Stop[0].hooks[0].command;
+    const flag = (name: string) => [...command.matchAll(new RegExp(`--${name} ([^ ;]+)`, 'g'))].map((m) => m[1]);
+
+    // The workload key is derived from --skill: a stale or mistyped name would file the logs under the wrong workload.
+    expect(flag('skill').length).toBeGreaterThan(0);
+    for (const value of flag('skill')) {
+      expect(value).toBe(meta.name);
+    }
+    // Both branches of the hook (installed CLI, and npx) must pass the same version, and it must be the skill's own.
+    expect(flag('skill-version')).toHaveLength(flag('skill').length);
+    for (const value of flag('skill-version')) {
+      expect(value).toBe(String(meta.version));
+    }
+  });
+
   it('the strict parse really does reject the frontmatter mistake that silently drops hooks', () => {
     expect(() => yaml.load('argument-hint: [low|medium] [--max-rounds N]')).toThrow();
   });

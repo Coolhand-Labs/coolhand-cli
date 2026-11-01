@@ -394,6 +394,10 @@ export interface CaptureTurnOptions {
   baseUrl?: string;
   /** Attribute turns to the anonymous machine id instead of the git email. */
   anonymous?: boolean;
+  /** The skill's version; sent as `metadata.skill_version` (never in the declaration). */
+  skillVersion?: string;
+  /** `false` (from `--no-declare`) stops the skill's workload being declared; default is to declare it when `skill` is set. */
+  declare?: boolean;
 }
 
 export interface ClaudeOptions {

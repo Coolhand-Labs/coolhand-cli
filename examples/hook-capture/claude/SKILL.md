@@ -1,5 +1,6 @@
 ---
 name: qa-example
+version: 0.1.0
 description: Example QA skill whose turns are captured to Coolhand. Use when the user asks to run the example QA checklist.
 hooks:
   Stop:
@@ -8,7 +9,7 @@ hooks:
           # Synchronous on purpose: an `async: true` hook is killed when Claude Code exits, so the last turn
           # of a headless (`claude -p`) run would be lost. `timeout` (seconds) must exceed the worst case. See docs/hook-capture.md.
           timeout: 30
-          command: "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent claude --skill qa-example; else npx -y coolhand-cli capture-turn --agent claude --skill qa-example; fi >/dev/null 2>&1 || true"
+          command: "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent claude --skill qa-example --skill-version 0.1.0; else npx -y coolhand-cli capture-turn --agent claude --skill qa-example --skill-version 0.1.0; fi >/dev/null 2>&1 || true"
 ---
 
 # Example QA checklist
