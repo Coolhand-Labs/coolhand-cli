@@ -12,7 +12,7 @@ description: Example QA skill whose turns are captured to Coolhand. Use when the
 Make sure the Coolhand CLI is installed and capture is set up, then continue:
 
 ```bash
-(command -v coolhand >/dev/null || npm i -g coolhand-cli) \
+(coolhand help capture-turn >/dev/null 2>&1 || npm i -g coolhand-cli@latest) \
   && COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY coolhand capture-setup --skill qa-example
 ```
 

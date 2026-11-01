@@ -24,7 +24,7 @@ hooks:
     - hooks:
         - type: command
           timeout: 30
-          command: "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1; then coolhand capture-turn --agent claude --skill qa-login --skill-version 1.0.0; else npx -y coolhand-cli capture-turn --agent claude --skill qa-login --skill-version 1.0.0; fi >/dev/null 2>&1 || true"
+          command: "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1 && coolhand help capture-turn >/dev/null 2>&1; then coolhand capture-turn --agent claude --skill qa-login --skill-version 1.0.0; else npx -y coolhand-cli capture-turn --agent claude --skill qa-login --skill-version 1.0.0; fi >/dev/null 2>&1 || true"
 ---
 ```
 
@@ -32,10 +32,10 @@ hooks:
 - The command is POSIX `sh` syntax. It assumes the hook runs under `sh` or `bash`, as Claude Code does on macOS and Linux. A hook run under PowerShell would capture nothing and say nothing.
 - The trailing `>/dev/null 2>&1 || true` makes the wrapper exit 0 and print nothing whatever happens, including an offline first `npx` download.
 - `capture-turn` first ships in the release after 0.12.0 (the exact version is not known until it is cut). Don't pin `coolhand-cli@0.12.0` or older in the wrapper: those versions lack the command and the hook would silently do nothing. If you pin, pin to the first release that includes `capture-turn`.
-- A machine with an older global install gets nothing captured (and no error) until it runs `npm i -g coolhand-cli@latest`. (The wrapper takes the installed `coolhand` whenever there is one; it does not fall back to `npx` if that copy doesn't know `capture-turn`.)
+- A machine with an older global install still works: the wrapper asks the installed `coolhand` whether it knows `capture-turn` (`coolhand help capture-turn`) and uses `npx -y coolhand-cli` when it does not, so an old copy is bypassed rather than silently doing nothing. That costs the `npx` download on every turn until the global copy is upgraded (`npm i -g coolhand-cli@latest`).
 - This follows Claude Code's documented skill-hook behaviour (hooks register when the skill is invoked and keep running for the rest of the session; command hooks accept `async: true`). Exercised live in headless Claude Code 2.1.292 (`claude -p` with stream-json input, one process, several turns): the hook fires after the turn that invoked the skill and after every later turn, and subagents inside the skill do not trigger it. A separate `claude -p --resume` process does not re-register the skill's hooks. So a resumed session captures nothing until the skill is invoked again in it; a hook written to Claude Code's settings (not provided here) would be the workaround.
 - **The skill's frontmatter must be valid YAML, or the hook is silently dropped.** Claude Code still loads the skill from a lenient fallback parse but ignores `hooks`, and nothing is logged anywhere. An unquoted `argument-hint: [low|medium] [--max-rounds N]` (a flow sequence followed by more text) is enough to cause it. Quote such values, and confirm the first turn creates `~/.coolhand/capture-turns/claude-<session>-*.json`.
-- The `command -v coolhand … || npx -y coolhand-cli` part uses an installed CLI when there is one and otherwise downloads it on first use. Node.js 20 or later is required for either.
+- The `command -v coolhand … && coolhand help capture-turn … else npx -y coolhand-cli` part uses an installed CLI that knows `capture-turn` and otherwise downloads the latest on first use. Node.js 20 or later is required for either.
 - Put the public key in the environment variable rather than `--api-key`, so it is not on the `capture-turn` command line. The inline `export` in the wrapper still puts it in the wrapper shell's arguments while the hook runs, so treat the key as visible to other local users of the machine. It is an ingest-only key: it can write request logs and cannot read anything back.
 - The key sits in the skill file in plain text, so treat it as public: anyone who can read the skill can send logs with it. Use the **public** key only; never put a private key here. The CLI cannot tell them apart.
 
