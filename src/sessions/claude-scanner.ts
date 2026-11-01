@@ -526,8 +526,8 @@ export interface ParsedExchanges {
 
 /**
  * Walk a transcript (or a window of one — a leading partial line is skipped like any other
- * unparseable line) and return its user→assistant exchanges in order. Only `text` content is kept:
- * no tool calls, tool results or thinking. Synthetic `isMeta` user lines (injected skill bodies,
+ * unparseable line) and return its user→assistant exchanges in order. Each exchange carries its prompt and reply text and
+ * its `messages` (raw blocks: thinking, tool calls and results included). Synthetic `isMeta` user lines (injected skill bodies,
  * caveats), compaction summaries, interrupt markers and subagent (sidechain) traffic are not prompts.
  * A typed slash command is recovered as typed. Pure function, never throws.
  */
@@ -681,7 +681,7 @@ export function lastTurnFrom(parsed: ParsedExchanges): LastTurn {
 
 /**
  * Pull the latest user prompt and the final assistant message out of a transcript (or a window of
- * one). Only `text` content is returned. Pure function, never throws.
+ * one). Text only, the final reply's blocks aside. Pure function, never throws.
  */
 export function extractLastTurn(content: string): LastTurn {
   return lastTurnFrom(parseExchanges(content));

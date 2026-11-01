@@ -41,13 +41,28 @@ export function totalTokens(u: Usage): number {
   return u.input_tokens + u.output_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens;
 }
 
+/** A model name from the transcript as a safe `by_model` key: bounded, and never one that names an object prototype. */
+function modelKey(model: string): string {
+  const key = model.slice(0, 100);
+  return key === '__proto__' || key === 'constructor' || key === 'prototype' ? 'unknown' : key;
+}
+
+/** The usage kept for `model`, made on first use. Only an own property counts: `toString` is not a usage record. */
+function modelSlot(by_model: Record<string, Usage>, model: string): Usage {
+  const key = modelKey(model);
+  if (!Object.prototype.hasOwnProperty.call(by_model, key)) {
+    by_model[key] = emptyUsage();
+  }
+  return by_model[key];
+}
+
 /** Add one subagent run (an Agent tool result) under the model it ran on. */
 export function addSubagent(into: SubagentUsage, model: string, raw: unknown): void {
   const run = emptyUsage();
   addUsage(run, raw);
   into.calls += 1;
   addUsage(into.total, run);
-  addUsage((into.by_model[model] ??= emptyUsage()), run);
+  addUsage(modelSlot(into.by_model, model), run);
 }
 
 /** Fold `from` into `into`. */
@@ -58,6 +73,6 @@ export function mergeSubagents(into: SubagentUsage, from: SubagentUsage | undefi
   into.calls += from.calls;
   addUsage(into.total, from.total);
   for (const [model, u] of Object.entries(from.by_model)) {
-    addUsage((into.by_model[model] ??= emptyUsage()), u);
+    addUsage(modelSlot(into.by_model, model), u);
   }
 }

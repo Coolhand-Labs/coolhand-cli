@@ -9,11 +9,12 @@ import { withSilencedConsole } from '../hooks/silence.js';
 import { replaySpooledTurns, sendTurn } from '../hooks/send-turn.js';
 import { digestTurn, loadTurnState, saveTurnState, withCaptured } from '../hooks/turn-state.js';
 import type { HookInput, HookTurn } from '../hooks/types.js';
+import { cleanText } from '../sessions/blocks.js';
 import { buildTurnEnvelope, prepareTurnMessages } from '../sessions/turn-envelope.js';
 import type { CaptureTurnOptions } from '../types.js';
 import type { DeclaredContext } from 'coolhand-node';
 
-/** Cap on the skill text kept in a session's state and sent as `system` (it is also capped when sent). */
+/** Cap on the skill text kept in a session's state and sent as `system`. It is redacted before it is kept. */
 const MAX_SKILL_TEXT_CHARS = 100_000;
 
 /**
@@ -29,7 +30,7 @@ function findSkillText(turn: HookTurn, skill: string | undefined, anchor: string
   for (const body of turn.skillBodies ?? []) {
     const name = body.dir.split(/[\\/]/).filter(Boolean).pop();
     if (name === skill && body.timestamp && Date.parse(body.timestamp) >= anchorMs) {
-      return body.text.slice(0, MAX_SKILL_TEXT_CHARS);
+      return cleanText(body.text, MAX_SKILL_TEXT_CHARS);
     }
   }
   return undefined;

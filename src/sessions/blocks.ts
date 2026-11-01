@@ -5,12 +5,29 @@ export const MAX_TURN_TEXT_CHARS = 100_000;
 const MAX_THINKING_CHARS = 4_000;
 const MAX_TOOL_STRING_CHARS = 2_000;
 const MAX_TOOL_RESULT_CHARS = 2_000;
-/** Redaction is run on at most this much of any one string; the rest would be cut off anyway. */
-const REDACT_WINDOW_CHARS = 50_000;
+/**
+ * Redaction is run on at most `max + REDACT_EXTRA_CHARS` of a string (it is quadratic on unterminated PEM
+ * blocks, and the rest would be cut off anyway). When a string is longer, the last `REDACT_TAIL_CHARS` of what
+ * was redacted are dropped too: a secret cut by the end of the window is not matched, and must not be left
+ * half-visible.
+ */
+const REDACT_EXTRA_CHARS = 50_000;
+const REDACT_TAIL_CHARS = 8_000;
+const MAX_KEY_CHARS = 200;
 const MAX_INPUT_ARRAY_ITEMS = 50;
 const MAX_INPUT_KEYS = 50;
 const MAX_INPUT_DEPTH = 6;
 const TRUNCATED = '…[truncated]';
+const REDACTED = '[REDACTED]';
+/** A numeric field with one of these names is a count or a limit (`max_tokens`), not a secret. */
+const COUNT_KEY = /tokens|limit|count|length|size/i;
+/** A command-line flag that takes a secret as its next argument (`['--password', 'hunter2']`). */
+const SECRET_FLAG = /^--?(?:(?:[a-z]{1,20}-){0,3}(?:password|passwd|token|secret|api-?key|auth(?:orization)?|access-?key|private-?key)(?:-(?:key|value))?|pass|pwd)$/i;
+/**
+ * Names of tool-input fields whose value is a secret whatever it looks like. `redactSecrets` finds
+ * `password=...` in text, but a structured input (`{"password": "hunter2"}`) has the key and the value apart.
+ */
+const SECRET_KEY = /api[_-]?key|secret(?!ary)|token(?!izer)|passw(?:or)?d|pwd|(?<![a-z])pass(?![a-z])|passphrase|access[_-]?key|private[_-]?key|ssh[_-]?key|auth(?!ors?(?![a-z])|ored|ority)|bearer|jwt|dsn|connection[_-]?string|credential|signing[_-]?key|encryption[_-]?key|cookie/i;
 
 /** A message as it sits in the transcript: raw blocks, not yet redacted or capped. */
 export interface RawMessage {
@@ -32,36 +49,58 @@ export interface TurnMessage {
   content: string | ContentBlock[];
 }
 
-function cap(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}${TRUNCATED}` : text;
+/** Redact, then cap (`redact: false` only measures what would be kept). The marker says text was cut. */
+function clean(text: string, max: number, redact = true): string {
+  if (!redact) {
+    const kept = text.slice(0, max).trim();
+    return text.length > max ? `${kept}${TRUNCATED}` : kept;
+  }
+  const window = max + REDACT_EXTRA_CHARS;
+  const windowed = text.length > window;
+  const body = redactSecrets(windowed ? text.slice(0, window) : text).trim();
+  if (!windowed && body.length <= max) {
+    return body;
+  }
+  const keep = windowed ? Math.min(max, body.length - REDACT_TAIL_CHARS) : max;
+  return `${body.slice(0, Math.max(keep, 0))}${TRUNCATED}`;
 }
 
-/** Redact, then cap. */
-function clean(text: string, max: number): string {
-  return cap(redactSecrets(text.slice(0, REDACT_WINDOW_CHARS)).trim(), max);
+/** Redacted and capped to `max` characters, with a marker when cut: the one way any captured text is sanitized. */
+export function cleanText(text: string, max = MAX_TURN_TEXT_CHARS): string {
+  return clean(text, max);
 }
 
 /** Redact and cap the strings of a tool call's input, keeping its shape; bound arrays, keys and depth. */
-function sanitizeInput(value: unknown, depth = 0): unknown {
+function sanitizeInput(value: unknown, depth = 0, secret = false, redact = true): unknown {
   if (typeof value === 'string') {
-    return clean(value, MAX_TOOL_STRING_CHARS);
+    return secret && redact ? REDACTED : clean(value, MAX_TOOL_STRING_CHARS, redact);
   }
-  if (value === null || typeof value === 'number' || typeof value === 'boolean') {
+  if (typeof value === 'number') {
+    return secret && redact ? REDACTED : value;
+  }
+  if (value === null || typeof value === 'boolean') {
     return value;
   }
   if (depth >= MAX_INPUT_DEPTH) {
     return TRUNCATED;
   }
   if (Array.isArray(value)) {
-    return value.slice(0, MAX_INPUT_ARRAY_ITEMS).map((item) => sanitizeInput(item, depth + 1));
+    // The element after a secret-named flag (`['--password', 'hunter2']`) is the secret.
+    return value
+      .slice(0, MAX_INPUT_ARRAY_ITEMS)
+      .map((item, i, items) => sanitizeInput(item, depth + 1, secret || (i > 0 && typeof items[i - 1] === 'string' && SECRET_FLAG.test(items[i - 1] as string)), redact));
   }
   if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    // A {name, value} pair (an HTTP header, an env var) names the secret in one field and holds it in the other.
+    const namesSecret = ['name', 'key', 'header', 'variable'].some((k) => typeof record[k] === 'string' && SECRET_KEY.test(record[k] as string));
     const out: Record<string, unknown> = {};
-    for (const [key, inner] of Object.entries(value as Record<string, unknown>).slice(0, MAX_INPUT_KEYS)) {
-      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+    for (const [key, inner] of Object.entries(record).slice(0, MAX_INPUT_KEYS)) {
+      const name = clean(key, MAX_KEY_CHARS, redact);
+      if (name === '__proto__' || name === 'constructor' || name === 'prototype') {
         continue;
       }
-      out[key] = sanitizeInput(inner, depth + 1);
+      out[name] = sanitizeInput(inner, depth + 1, secret || (SECRET_KEY.test(key) && !(typeof inner === 'number' && COUNT_KEY.test(key))) || (namesSecret && (key === 'value' || key === 'val')), redact);
     }
     return out;
   }
@@ -111,12 +150,12 @@ export function sanitizeBlock(block: unknown): ContentBlock | undefined {
       if (typeof b.name !== 'string' || !b.name) {
         return undefined;
       }
-      return { type: 'tool_use', ...(typeof b.id === 'string' ? { id: b.id } : {}), name: b.name.slice(0, 200), input: sanitizeInput(b.input) ?? {} };
+      return { type: 'tool_use', ...(typeof b.id === 'string' ? { id: b.id.slice(0, 200) } : {}), name: b.name.slice(0, 200), input: sanitizeInput(b.input) ?? {} };
     }
     case 'tool_result':
       return {
         type: 'tool_result',
-        ...(typeof b.tool_use_id === 'string' ? { tool_use_id: b.tool_use_id } : {}),
+        ...(typeof b.tool_use_id === 'string' ? { tool_use_id: b.tool_use_id.slice(0, 200) } : {}),
         content: clean(resultText(b.content), MAX_TOOL_RESULT_CHARS),
         ...(b.is_error === true ? { is_error: true } : {}),
       };
@@ -148,7 +187,7 @@ function jsonLength(value: unknown): number {
   }
 }
 
-/** An upper bound on the characters `sanitizeMessage` would keep, computed without redacting anything. */
+/** Close to the characters `sanitizeMessage` would keep, computed without redacting anything. */
 export function messageSize(raw: RawMessage): number {
   let size = 0;
   for (const block of raw.blocks) {
@@ -161,7 +200,7 @@ export function messageSize(raw: RawMessage): number {
     } else if (b.type === 'thinking' && typeof b.thinking === 'string') {
       size += Math.min(b.thinking.length, MAX_THINKING_CHARS);
     } else if (b.type === 'tool_use') {
-      size += Math.min(jsonLength(b.input ?? {}), MAX_TOOL_STRING_CHARS * 4) + 50;
+      size += jsonLength(sanitizeInput(b.input ?? {}, 0, false, false)) + 50;
     } else if (b.type === 'tool_result') {
       size += Math.min(resultText(b.content).length, MAX_TOOL_RESULT_CHARS) + 50;
     }

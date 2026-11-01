@@ -28,6 +28,23 @@ describe('buildTurnEnvelope', () => {
     expect(build({ ...turn, userText: undefined }, 1, undefined).request_body.messages).toEqual([]);
   });
 
+  it('stays fast on a huge pathological prompt, reply and skill text, and still redacts', () => {
+    const pem = '-----BEGIN RSA PRIVATE KEY-----\nAAAA '.repeat(40_000); // unterminated PEM headers, 1.4 MB
+    const started = Date.now();
+    const env = buildTurnEnvelope('claude', { ...turn, userText: `${SECRET} ${pem}`, assistantText: `${SECRET} ${pem}` }, 1, 'd', prep(turn, 1, undefined), `${SECRET} ${pem}`);
+
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(JSON.stringify(env)).not.toContain(SECRET);
+    expect((env.request_body.system as string).endsWith('…[truncated]')).toBe(true);
+  });
+
+  it.each([['a.'.repeat(75_000)], ['eyJ-'.repeat(37_500)], ['word-'.repeat(30_000)]])('stays fast on a long run of token-like characters (%#)', (blob) => {
+    const started = Date.now();
+    buildTurnEnvelope('claude', { ...turn, userText: blob, assistantText: blob }, 1, 'd', prep(turn, 1, undefined), blob);
+
+    expect(Date.now() - started).toBeLessThan(6_000);
+  });
+
   it('cuts each half to the size cap and says so', () => {
     const big = 'y'.repeat(MAX_TURN_TEXT_CHARS + 500);
     const env = build({ ...turn, userText: big, assistantText: big }, 1, undefined);
