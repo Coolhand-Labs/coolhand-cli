@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "bash": "[ -n \"$COOLHAND_CAPTURE_API_KEY\" ] || exit 0; export COOLHAND_API_KEY=\"$COOLHAND_CAPTURE_API_KEY\"; node \"$COPILOT_PROJECT_DIR/dist/bin.js\" capture-turn --agent copilot --skill qa-spike >/dev/null 2>&1 || true",
+        "timeoutSec": 30
+      }
+    ]
+  }
+}
