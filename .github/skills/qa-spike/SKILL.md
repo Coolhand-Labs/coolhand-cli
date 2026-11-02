@@ -25,15 +25,11 @@ A three-turn session used only to test capture. The hook is declared in this fil
 
 The user may not use a terminal, so do this for them. Do not ask them to run anything.
 
-1. Check, silently:
+1. Check, silently, **with your file-reading tool, not the terminal** (a terminal command makes VS Code ask the user for approval every time, and reading a file does not): try to read `.github/hooks/coolhand-capture.json` in the workspace, and `~/.copilot/hooks/coolhand-capture.json` in the user's home folder (use the full path, for example `/Users/<name>/.copilot/hooks/coolhand-capture.json`, taking the home folder from the paths you can see in this chat). A "file not found" result is the normal outcome when it is not installed, not an error to report.
 
-```bash
-test -f .github/hooks/coolhand-capture.json || test -f ~/.copilot/hooks/coolhand-capture.json && echo installed || echo missing
-```
+2. If either file could be read, capture is installed: go straight to the steps below and say nothing about it.
 
-2. If it prints `installed`, go straight to the steps below.
-
-3. If it prints `missing`, first explain to the user, in friendly plain language and in your own words, all of the following (a short message, no jargon, no code):
+3. If neither file exists, capture is missing. First explain to the user, in friendly plain language and in your own words, all of the following (a short message, no jargon, no code):
    - **What it is:** a small settings file, `coolhand-capture.json`, that you are about to save in their Copilot settings folder (`~/.copilot/hooks`).
    - **What it does:** after each chat message it checks whether this QA skill was used. If it was, it sends that QA conversation (their messages, the AI's replies, and the steps the AI took) to Coolhand so the QA team can review how the skill performed. Secrets such as keys and passwords are automatically removed first where they are recognised (it is a best-effort filter, so they should not paste real secrets into the chat), and the person's git email is attached so results can be traced to them. It sends nothing from chats that do not use this skill.
    - **Why they should accept:** without it the results of this QA run are not recorded at all, so the run cannot be reviewed. Nothing else on their computer changes.
@@ -42,10 +38,10 @@ test -f .github/hooks/coolhand-capture.json || test -f ~/.copilot/hooks/coolhand
    Then install it by running this in the terminal, replacing `<base>` with this skill's base directory (shown at the top of this skill as "Base directory for this skill"):
 
 ```bash
-mkdir -p ~/.copilot/hooks && { cp "<base>/coolhand-capture.json" ~/.copilot/hooks/coolhand-capture.json || curl -fsSL https://raw.githubusercontent.com/Coolhand-Labs/coolhand-cli/qa-skill-hook-userlevel/.github/skills/qa-spike/coolhand-capture.json -o ~/.copilot/hooks/coolhand-capture.json; }
+mkdir -p ~/.copilot/hooks && { cp "<base>/coolhand-capture.json" ~/.copilot/hooks/coolhand-capture.json || curl -fsSL https://raw.githubusercontent.com/Coolhand-Labs/coolhand-cli/qa-skill-hook-userlevel/.github/skills/qa-spike/coolhand-capture.json -o ~/.copilot/hooks/coolhand-capture.json; } && test -f ~/.copilot/hooks/coolhand-capture.json
 ```
 
-4. Check it worked (`test -f ~/.copilot/hooks/coolhand-capture.json`). If it did, tell the user: "Done. Please start a new chat and run /qa-spike again so recording starts." and **stop** (Copilot only reads hooks when a chat starts, so this chat will not be recorded). If it did not, tell them the install failed and to ask whoever set up the skill for help. Do not run the steps below in either case.
+4. The install command above ends with `test -f`, so it succeeds only if the file is in place. If it succeeded, tell the user: "Done. Please start a new chat and run /qa-spike again so recording starts." and **stop** (Copilot only reads hooks when a chat starts, so this chat will not be recorded). If it did not, tell them the install failed and to ask whoever set up the skill for help. Do not run the steps below in either case.
 
 ## Steps
 
