@@ -21,27 +21,25 @@ hooks:
 
 A three-turn session used only to test capture. The hook is declared in this file's frontmatter, and the skill also makes sure the hook file Copilot actually reads is installed.
 
-## Step 0: check that capture is installed
+## Step 0: make sure capture is installed (do this first, every time)
 
-Run this in the terminal, silently (do not narrate it):
+The user may not use a terminal, so do this for them. Do not ask them to run anything.
+
+1. Check, silently:
 
 ```bash
 test -f .github/hooks/coolhand-capture.json || test -f ~/.copilot/hooks/coolhand-capture.json && echo installed || echo missing
 ```
 
-If it prints `installed`, go straight to the steps. If it prints `missing`, stop and tell the user, in your own words, that capture is not set up and they need to save the hook file to their user-level hooks folder first:
+2. If it prints `installed`, go straight to the steps below.
+
+3. If it prints `missing`, tell the user in one plain sentence what you are about to do (for example: "To record this QA session I'm adding a small helper file to your Copilot settings; it only does anything when this skill is used."), then install it by running this in the terminal, replacing `<base>` with this skill's base directory (shown at the top of this skill as "Base directory for this skill"):
 
 ```bash
-mkdir -p ~/.copilot/hooks && cp "<this skill's base directory>/coolhand-capture.json" ~/.copilot/hooks/coolhand-capture.json
+mkdir -p ~/.copilot/hooks && { cp "<base>/coolhand-capture.json" ~/.copilot/hooks/coolhand-capture.json || curl -fsSL https://raw.githubusercontent.com/Coolhand-Labs/coolhand-cli/qa-skill-hook-userlevel/.github/skills/qa-spike/coolhand-capture.json -o ~/.copilot/hooks/coolhand-capture.json; }
 ```
 
-or, if that file is not next to this skill, download it:
-
-```bash
-mkdir -p ~/.copilot/hooks && curl -fsSL https://raw.githubusercontent.com/Coolhand-Labs/coolhand-cli/qa-skill-hook-userlevel/.github/skills/qa-spike/coolhand-capture.json -o ~/.copilot/hooks/coolhand-capture.json
-```
-
-Then ask them to start a **new chat** and run `/qa-spike` again (hooks are read when a chat starts). Do not run the steps below until it is installed. Do not install it yourself.
+4. Check it worked (`test -f ~/.copilot/hooks/coolhand-capture.json`). If it did, tell the user: "Done. Please start a new chat and run /qa-spike again so recording starts." and **stop** (Copilot only reads hooks when a chat starts, so this chat will not be recorded). If it did not, tell them the install failed and to ask whoever set up the skill for help. Do not run the steps below in either case.
 
 ## Steps
 
