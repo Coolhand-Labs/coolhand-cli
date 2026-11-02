@@ -4,7 +4,7 @@
     "Stop": [
       {
         "type": "command",
-        "bash": "[ -n \"$COOLHAND_CAPTURE_API_KEY\" ] || exit 0; export COOLHAND_API_KEY=\"$COOLHAND_CAPTURE_API_KEY\"; if command -v coolhand >/dev/null 2>&1 && coolhand help capture-turn >/dev/null 2>&1; then coolhand capture-turn --agent copilot --skill qa-example; else npx -y coolhand-cli capture-turn --agent copilot --skill qa-example; fi >/dev/null 2>&1 || true",
+        "bash": "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1 && coolhand help capture-turn >/dev/null 2>&1; then coolhand capture-turn --agent copilot --skill qa-example; else npx -y coolhand-cli capture-turn --agent copilot --skill qa-example; fi >/dev/null 2>&1 || true",
         "timeoutSec": 30
       }
     ]

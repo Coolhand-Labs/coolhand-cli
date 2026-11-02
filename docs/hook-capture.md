@@ -121,19 +121,41 @@ The git email is personal data. Pass `--anonymous` to keep it off the wire: it w
 
 ## VS Code Copilot
 
-`coolhand capture-turn --agent copilot --skill NAME` captures a skill's turns from VS Code GitHub Copilot (agent mode) the same way, with one difference: **a Copilot skill cannot carry a hook** (a `hooks:` block in `SKILL.md` is ignored), so the hook lives in a workspace file, `.github/hooks/coolhand-capture.json`, and runs after every chat message in the workspace.
+`coolhand capture-turn --agent copilot --skill NAME` captures a skill's turns from VS Code GitHub Copilot (agent mode) the same way, with one big difference: **a Copilot skill cannot carry a hook.** A `hooks:` block in `SKILL.md` frontmatter is ignored (tested: the hook never ran). The hook has to be in a hook file that Copilot reads, and that file runs after every chat message, in every chat, so `capture-turn` decides what to send.
 
-That is why the command needs `--skill`. Each time the hook fires, `capture-turn` reads the chat's transcript (`transcript_path` in the payload) and sends the turn only if the transcript shows the skill was invoked in that chat; the conversation sent starts at the message that invoked it. A chat that never invoked the skill, or invoked another one, sends nothing, and it is not recorded anywhere either.
+That is why the command needs `--skill`. Each time the hook fires, `capture-turn` reads the chat's transcript (`transcript_path` in the payload) and sends the turn only if the transcript shows that skill was invoked in that chat; the conversation sent starts at the message that invoked it. A chat that never invoked the skill, or invoked another one, sends nothing and records nothing.
 
-To set it up:
+### Making a skill capture its runs
 
-1. Copy [`examples/hook-capture/copilot/coolhand-capture.json`](../examples/hook-capture/copilot/coolhand-capture.json) to `.github/hooks/coolhand-capture.json` in your workspace and change `qa-example` to your skill's name (the folder name or the `name:` in its `SKILL.md`).
-2. Set `COOLHAND_CAPTURE_API_KEY` to your Coolhand **public** API key in the environment VS Code runs in. The hook does nothing until it is set, so committing the hook file does not make everyone who clones the repo send their chats; each person opts in. The command passes it on as `COOLHAND_API_KEY`, and never writes the key into the file.
-3. Register only the `Stop` event, as the example does. Copilot also accepts the camelCase `agentStop`, and registering both runs the hook twice.
+Adding capture to a Copilot skill takes two things: the hook file, and a first step in the skill that makes sure the file is installed. The example in [examples/hook-capture/copilot](../examples/hook-capture/copilot/SKILL.md) has both, so the people who run your skill never open a terminal.
 
-Everything else (the conversation so far, redaction, caps, the spool, the workload, `--anonymous`, `COOLHAND_CAPTURE_DISABLED`) works as described above. What is different in what is recorded: the model's thinking is included only when Copilot writes it to the transcript; token usage comes from the transcript's `session.usage_record` events, with cached tokens split out of the input count; and the skill text sent as `request_body.system` is the body Copilot recorded when it invoked the skill.
+1. **Put the hook file beside your `SKILL.md`.** Copy [`coolhand-capture.json`](../examples/hook-capture/copilot/coolhand-capture.json) into the skill's folder. In it, replace `qa-example` (twice) with your skill's name (the folder name or the `name:` in its frontmatter) and `YOUR_PUBLIC_API_KEY` with your Coolhand **public** API key, which can only write logs. Register only the `Stop` event: Copilot honours both `Stop` and `agentStop`, and registering both runs the hook twice.
+2. **Add the "Step 0" block from the example `SKILL.md` as the first step of your skill**, and change the skill name in it (`/qa-example` in the closing message). It tells the agent to:
+   - check, with its **file-reading tool** and not the terminal, whether `.github/hooks/coolhand-capture.json` or `~/.copilot/hooks/coolhand-capture.json` exists (a terminal command makes VS Code ask for approval on every run; a file read does not need to);
+   - if neither exists, **explain in plain language** what the file is, what it sends and what it does not, why accepting matters, that VS Code will ask to approve one terminal command, and how to undo it. Keep this explanation: it is the person's consent, and it should say what is attached (their git email as the tester, and the redacted conversation);
+   - install the file by copying it from beside the skill into `~/.copilot/hooks/` (with a download from this repo as a fallback), and confirm it landed;
+   - tell the user to **start a new chat** and run the skill again, and stop. Copilot reads hooks when a chat starts, so the chat that installed the file is not recorded.
+3. **Keep the skill's name consistent.** The `--skill` value in the hook file must equal the skill's folder name or its `name:`, or the skill is never recognised and nothing is sent.
+4. **Leave Claude Code alone.** The Step 0 block says to skip it for any agent other than Copilot, so one `SKILL.md` can carry Claude Code's own `hooks:` block as well (see [Declaring the hook in a skill](#declaring-the-hook-in-a-skill)) and the Copilot step.
 
-What has and has not been verified: the adapter is tested on payloads and transcripts recorded from a real session (see below) and the hook command runs in `sh`, but a full run from VS Code to a Coolhand log, with a network outage and an older global `coolhand`, has not been done yet. The `command` and `powershell` hook keys, and Windows, are untested; the example uses `bash`.
+What the user sees, the first time: they run the skill, the agent explains the install and VS Code asks them to allow one terminal command, the agent says "start a new chat", and every run after that is recorded with no prompts (the file check is a read).
+
+Other ways to install the same hook file, if a skill that installs its own hook is not what you want:
+
+| Where | How | Notes |
+|---|---|---|
+| Workspace file | Commit [`workspace/coolhand-capture.json`](../examples/hook-capture/copilot/workspace/coolhand-capture.json) as `.github/hooks/coolhand-capture.json` in the repo that holds the skill | Verified. Applies only in workspaces that contain the file. It sends only when `COOLHAND_CAPTURE_API_KEY` is set in the environment VS Code runs in, so each person opts in and no key is stored in the file. |
+| User-level file | Save the hook file as `~/.copilot/hooks/coolhand-capture.json`, by IT (MDM, a login script) or by the skill as above | Verified with the self-installing skill. Applies in every workspace on that machine. |
+| Plugin or custom agent | Bundle the hook with the skills in a Copilot plugin, or declare it in a custom agent's frontmatter | Documented by VS Code, not tested. See Coolhand-Labs/skills#34. |
+
+Everything else (the conversation so far, redaction, caps, the spool, the workload, `--anonymous`, `COOLHAND_CAPTURE_DISABLED`) works as described above. What is different in what is recorded: the model's thinking is included only when Copilot writes it to the transcript; token usage comes from the transcript's `session.usage_record` events, with cached tokens split out of the input count; the skill text sent as `request_body.system` is the body Copilot recorded when it invoked the skill; and the conversation includes the skill's own Step 0 (the file check, the chat rename) because those are part of the chat.
+
+### Limits and what is verified
+
+- **One skill per hook entry.** `--skill` takes one name, so a library of ten skills needs ten entries, each running after every message. Capturing any skill from a library is not built.
+- **The server labels Copilot logs as Claude Code** (`source_application: claude_code_hook`, `source_api: anthropic`). Tracked in Coolhand-Labs/coolhand#2091.
+- **Verified in VS Code:** a workspace hook file and a user-level hook file both capture a three-turn skill session as one cumulative log, and the self-installing skill installs the file and asks for a new chat. A hook declared only in the skill's frontmatter captures nothing.
+- **Not verified:** whether reading `~/.copilot/hooks/…` with the file tool is approved without a prompt (reading a file inside the workspace was); that the download fallback works (it points at `main` and only works once this file is merged and public); offline spooling and the older-global-`coolhand` fallback from inside VS Code; Windows; and the `command` and `powershell` hook keys (the examples use `bash`). A `coolhand-cli` release containing `--agent copilot` is needed for the `npx` fallback in the hook command to work.
 
 ## VS Code Copilot: spike findings
 

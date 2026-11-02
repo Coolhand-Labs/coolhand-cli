@@ -6,9 +6,10 @@ import * as path from 'path';
  * what the spike showed Copilot accepts, and nothing that makes a hook run twice.
  */
 
-const FILE = path.join(__dirname, '..', '..', 'examples', 'hook-capture', 'copilot', 'coolhand-capture.json');
+const DIR = path.join(__dirname, '..', '..', 'examples', 'hook-capture', 'copilot');
 
-describe('examples/hook-capture/copilot/coolhand-capture.json', () => {
+describe.each(['coolhand-capture.json', path.join('workspace', 'coolhand-capture.json')])('examples/hook-capture/copilot/%s', (name) => {
+  const FILE = path.join(DIR, name);
   const config = JSON.parse(readFileSync(FILE, 'utf8')) as { version: unknown; hooks: Record<string, Array<Record<string, unknown>>> };
 
   it('is a version 1 hook file', () => {

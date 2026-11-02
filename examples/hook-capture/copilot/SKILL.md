@@ -5,7 +5,29 @@ description: Example QA skill whose turns are captured to Coolhand. Use when the
 
 # Example QA checklist
 
-This skill carries no hook: VS Code Copilot ignores a `hooks:` block in a skill's frontmatter. Capture comes from the workspace hook file `.github/hooks/coolhand-capture.json` (see `coolhand-capture.json` next to this file). That hook runs after every chat message in the workspace, but `coolhand capture-turn --agent copilot --skill qa-example` sends a turn only when the chat's transcript shows this skill was invoked, so other chats send nothing. It sends nothing at all unless `COOLHAND_CAPTURE_API_KEY` is set in the environment VS Code runs in.
+## Step 0: make sure capture is installed (GitHub Copilot in VS Code only; do this first, every time)
+
+Skip this whole step if you are not GitHub Copilot in VS Code (Claude Code, for one, has its own hook and needs nothing here).
+
+The user may not use a terminal, so do this for them. Do not ask them to run anything.
+
+1. Check, silently, **with your file-reading tool, not the terminal** (a terminal command makes VS Code ask the user for approval every time): try to read `.github/hooks/coolhand-capture.json` in the workspace, and `~/.copilot/hooks/coolhand-capture.json` in the user's home folder (use the full path, for example `/Users/<name>/.copilot/hooks/coolhand-capture.json`, taking the home folder from the paths you can see in this chat). "File not found" is the normal result when it is not installed, not an error to report.
+
+2. If either file could be read, capture is installed: go straight to the steps below and say nothing about it.
+
+3. If neither exists, first explain to the user, in friendly plain language and in your own words, all of the following (a short message, no jargon, no code):
+   - **What it is:** a small settings file, `coolhand-capture.json`, that you are about to save in their Copilot settings folder (`~/.copilot/hooks`).
+   - **What it does:** after each chat message it checks whether this QA skill was used. If it was, it sends that QA conversation (their messages, the AI's replies, and the steps the AI took) to Coolhand so the QA team can review how the skill performed. Secrets such as keys and passwords are automatically removed first where they are recognised (it is a best-effort filter, so they should not paste real secrets into the chat), and the person's git email is attached so results can be traced to them. It sends nothing from chats that do not use this skill.
+   - **Why they should accept:** without it the results of this QA run are not recorded at all, so the run cannot be reviewed. Nothing else on their computer changes.
+   - **What to expect next:** VS Code will ask them to approve a terminal command; they should choose **Allow** (the command only copies that one file). They can undo this at any time by deleting `~/.copilot/hooks/coolhand-capture.json`.
+
+   Then install it by running this in the terminal, replacing `<base>` with this skill's base directory (shown at the top of this skill as "Base directory for this skill"):
+
+```bash
+mkdir -p ~/.copilot/hooks && { cp "<base>/coolhand-capture.json" ~/.copilot/hooks/coolhand-capture.json || curl -fsSL https://raw.githubusercontent.com/Coolhand-Labs/coolhand-cli/main/examples/hook-capture/copilot/coolhand-capture.json -o ~/.copilot/hooks/coolhand-capture.json; } && test -f ~/.copilot/hooks/coolhand-capture.json
+```
+
+4. The install command ends with `test -f`, so it succeeds only if the file is in place. If it succeeded, tell the user: "Done. Please start a new chat and run /qa-example again so recording starts." and **stop** (Copilot only reads hooks when a chat starts, so this chat will not be recorded). If it failed, tell them the install failed and to ask whoever set up the skill for help. Do not run the steps below in either case.
 
 ## Steps
 

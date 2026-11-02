@@ -31,6 +31,7 @@ shDescribe('documented hook commands', () => {
     ['claude/SKILL.md', commandsIn(path.join(EXAMPLES, 'claude', 'SKILL.md'), ['command'])],
     ['cursor/hooks.json', commandsIn(path.join(EXAMPLES, 'cursor', 'hooks.json'), ['command'])],
     ['copilot/coolhand-capture.json', commandsIn(path.join(EXAMPLES, 'copilot', 'coolhand-capture.json'), ['bash'])],
+    ['copilot/workspace/coolhand-capture.json', commandsIn(path.join(EXAMPLES, 'copilot', 'workspace', 'coolhand-capture.json'), ['bash'])],
     ['docs/hook-capture.md', commandsIn(DOC, ['command'])],
   ];
 
@@ -47,6 +48,8 @@ shDescribe('documented hook commands', () => {
 shDescribe('the hook command picks a CLI that knows capture-turn', () => {
   const claudeCommand = commandsIn(path.join(EXAMPLES, 'claude', 'SKILL.md'), ['command'])[0];
   const skillCommand = commandsIn(path.join(__dirname, '..', '..', '.claude', 'skills', 'loop-review', 'SKILL.md'), ['command'])[0];
+  const copilotCommand = commandsIn(path.join(EXAMPLES, 'copilot', 'coolhand-capture.json'), ['bash'])[0];
+  const CASES: Array<[string, string]> = [['claude example', claudeCommand], ['loop-review skill', skillCommand], ['copilot user-level hook', copilotCommand]];
 
   /** Runs `command` with fake `coolhand` and `npx` binaries first on PATH; reports which one got the hook JSON. */
   function runHook(command: string, fakes: { coolhand?: 'old' | 'new' }): { coolhand?: string; npx?: string; status: number | null } {
@@ -67,21 +70,21 @@ shDescribe('the hook command picks a CLI that knows capture-turn', () => {
     }
   }
 
-  it.each([['claude example', claudeCommand], ['loop-review skill', skillCommand]])('%s: uses an installed CLI that knows capture-turn', (_name, command) => {
+  it.each(CASES)('%s: uses an installed CLI that knows capture-turn', (_name, command) => {
     expect(runHook(command, { coolhand: 'new' })).toEqual({ coolhand: '{"hook":1}', npx: undefined, status: 0 });
   });
 
-  it.each([['claude example', claudeCommand], ['loop-review skill', skillCommand]])('%s: bypasses an older installed CLI with npx and still passes it the hook JSON', (_name, command) => {
+  it.each(CASES)('%s: bypasses an older installed CLI with npx and still passes it the hook JSON', (_name, command) => {
     expect(runHook(command, { coolhand: 'old' })).toEqual({ coolhand: undefined, npx: '{"hook":1}', status: 0 });
   });
 
-  it.each([['claude example', claudeCommand], ['loop-review skill', skillCommand]])('%s: uses npx when no CLI is installed', (_name, command) => {
+  it.each(CASES)('%s: uses npx when no CLI is installed', (_name, command) => {
     expect(runHook(command, {})).toEqual({ coolhand: undefined, npx: '{"hook":1}', status: 0 });
   });
 });
 
-shDescribe('the Copilot hook command', () => {
-  const command = commandsIn(path.join(EXAMPLES, 'copilot', 'coolhand-capture.json'), ['bash'])[0];
+shDescribe('the Copilot workspace hook command (opt-in by environment)', () => {
+  const command = commandsIn(path.join(EXAMPLES, 'copilot', 'workspace', 'coolhand-capture.json'), ['bash'])[0];
 
   /** Runs the command with fake `coolhand` (new enough) first on PATH; reports its arguments, API key and stdin. */
   function runCopilotHook(env: Record<string, string>): { args?: string; apiKey?: string; stdin?: string; status: number | null } {
