@@ -77,6 +77,7 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand logout` | Remove a stored client |
 | `coolhand status` | Check whether a token is configured |
 | `coolhand whoami` | Show the currently configured client |
+| `coolhand update` | Upgrade to the newest stable release that is at least 48 hours old |
 | `coolhand clients` | List or switch the default client |
 | `coolhand claude` | Run Claude CLI through the Coolhand proxy |
 | `coolhand monitor` | Run an arbitrary CLI through the Coolhand proxy |
@@ -179,6 +180,7 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
 - [Auth Flow](./docs/auth-flow.md) — browser-callback sequence, state machine, timeout and error paths
 - [Configuration File](./docs/config-file.md) — full config schema, multi-client model, `COOLHAND_CONFIG_DIR` override
 - [Session Capture](./docs/session-capture.md) — session scanning, envelope format, deduplication, scope and limitations
+- [Auto-update](./docs/auto-update.md) — background upgrades with a 48-hour bake period, opt-out, and install-method rules
 - [Skill Capture](./docs/skill-capture.md) — skill discovery, dedup, and incremental upload logic for `sync-skills`
 
 ## About Coolhand Labs

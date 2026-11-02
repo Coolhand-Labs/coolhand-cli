@@ -45,6 +45,7 @@ export async function loadConfig(): Promise<ConfigFile> {
       version: 1,
       default_client_id: parsed.default_client_id ?? null,
       clients: parsed.clients ?? {},
+      ...(typeof parsed.auto_update === 'boolean' ? { auto_update: parsed.auto_update } : {}),
     };
   } catch (err) {
     throw new CliError(
@@ -97,7 +98,19 @@ export async function saveConfig(cfg: ConfigFile): Promise<void> {
 }
 
 export async function deleteConfig(): Promise<void> {
+  // `auto_update` is a machine preference, not a credential: keep it so logging out doesn't re-enable
+  // a background updater the user opted out of. A corrupt file can't carry one, so it's just removed.
+  let keep: boolean | undefined;
   try {
+    keep = (await loadConfig()).auto_update;
+  } catch {
+    keep = undefined;
+  }
+  try {
+    if (keep !== undefined) {
+      await saveConfig({ ...emptyConfig(), auto_update: keep });
+      return;
+    }
     await fs.rm(configPath(), { force: true });
   } catch (err) {
     throw new CliError('CONFIG_WRITE_FAILED', `Failed to delete config: ${(err as Error).message}`);

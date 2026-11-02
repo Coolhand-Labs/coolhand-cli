@@ -40,6 +40,7 @@ On Windows, POSIX permission bits are not enforced. The file is still confined t
 | `version`            | `1`                 | Schema version. Currently always `1`.                    |
 | `default_client_id` | `string \| null`    | Which client `whoami`/`status` reports without `--client-id`. |
 | `clients`           | `Record<string, ClientEntry>` | Keyed by `client_id`.                       |
+| `auto_update`       | `boolean` (optional) | Set to `false` to turn off the background auto-updater. Absent means enabled; only a JSON boolean is honored. See [auto-update.md](./auto-update.md). |
 
 ### ClientEntry
 
@@ -56,4 +57,4 @@ On Windows, POSIX permission bits are not enforced. The file is still confined t
 
 Running `coolhand login` against a different client adds a second entry to `clients` and marks it as the new default. Use `coolhand clients use <id>` to switch back without re-authenticating, or `coolhand status --client-id <id>` to query a specific entry.
 
-`coolhand logout` without flags removes the default client. `coolhand logout --client-id <id>` removes a specific entry. `coolhand logout --all` deletes the file entirely.
+`coolhand logout` without flags removes the default client. `coolhand logout --client-id <id>` removes a specific entry. `coolhand logout --all` deletes the file entirely, unless `auto_update` is set, in which case only that setting is kept (removing the last client behaves the same).

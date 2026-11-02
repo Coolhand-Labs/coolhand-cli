@@ -5,6 +5,10 @@
 // import '@testing-library/jest-dom';
 
 // Set up any global test utilities or mocks here
+
+// Keep the background auto-updater from spawning processes or writing state during tests.
+// Its own tests delete this variable to exercise the real behavior.
+process.env.COOLHAND_NO_AUTO_UPDATE = '1';
 global.console = {
   ...console,
   // Suppress console.log in tests unless needed
