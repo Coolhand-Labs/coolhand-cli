@@ -118,3 +118,22 @@ The git email is personal data. Pass `--anonymous` to keep it off the wire: it w
 - The skill author controls the hook's flags, not the person using the skill. Unless the skill passes `--anonymous`, the git email is sent; that person can keep it off the wire by setting `COOLHAND_CAPTURE_USER` in their own environment to any other identifier.
 - A session left idle for more than 30 days can lose its progress file (it is pruned when another session starts), so if it is continued, turn numbering restarts at 1. `metadata.turn_id` still differs per turn.
 - Progress per session lives in `~/.coolhand/capture-turns/` (files untouched for 30 days are removed whenever a new session starts). A hook that fires twice for one turn sends it once in the normal case (see the duplicates note above); two genuinely identical turns are told apart by Claude's request id.
+
+## VS Code Copilot: spike findings
+
+Recorded on 2026-11-02 from a real VS Code GitHub Copilot agent-mode session (Copilot SDK harness, `copilotVersion` 1.0.103) with a throwaway recorder hook in `.github/hooks/`. One three-turn skill session and one unrelated chat; redacted payloads and transcripts are in `test/fixtures/copilot/`. Everything not listed here is still unverified, including Windows behaviour (the PowerShell command was never run).
+
+| Question | Finding |
+|---|---|
+| Does a hook file in `.github/hooks/*.json` run? | Yes, for every chat in the workspace, including ones that never used the skill. |
+| Can a skill declare its own hooks? | No. `hooks:` in `SKILL.md` frontmatter was silently ignored (none of its commands ran). |
+| Event names | Both camelCase (`agentStop`, `userPromptSubmitted`, …) and PascalCase (`Stop`, `UserPromptSubmit`, …) are honoured. Registering both runs every hook twice. |
+| Payload shape | PascalCase events get Claude-style snake_case JSON: `hook_event_name`, `session_id`, `cwd`, `timestamp` (ISO), and for `Stop` also `transcript_path`, `stop_reason`, `stop_hook_active`. camelCase events get `sessionId`, `transcriptPath`, `stopReason`, with a numeric `timestamp`. |
+| `Stop` / `agentStop` | Fires once per user message, when the agent loop ends (three messages gave three `Stop`s). It carries no assistant text; read it from the transcript. |
+| `UserPromptSubmit` | Carries `prompt`. For a skill invoked by slash command that is the expanded text containing `<skill-context name="…">`; later messages in the same chat are just what the user typed. |
+| Tool events | `PreToolUse` / `PostToolUse` carry `tool_name`, `tool_input` and `tool_result`. |
+| `transcript_path` | `~/.copilot/session-state/<session_id>/events.jsonl`, typed JSONL: `session.start`, `skill.invoked` (`name`, `path`, `invokedAtTurn`, `trigger`), `user.message`, `assistant.message` (`content`, `toolRequests`), `tool.execution_start` / `_complete`, `assistant.turn_start` / `_end`, `session.usage_record` (token counts), `hook.start` / `_end`. |
+| Does the transcript lag the hook? | Not in this run: each reply was in the file 15 to 20 ms before `Stop` fired. Three samples, so keep the lag guard. |
+| Skill invoked? | A chat that used the skill has a `skill.invoked` event with the skill name; the unrelated chat's transcript has none. This is the gate for capturing only skill sessions. |
+| Session env var | None. Hooks get `COPILOT_PROJECT_DIR`, `COPILOT_HOOK_DIR`, `COPILOT_HOME` and `AI_AGENT=github_copilot_vscode_agent`, not the session id. |
+| Command keys | `bash` was used and worked on macOS. `command` and `powershell` are documented by VS Code but were not tested. |

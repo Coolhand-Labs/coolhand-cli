@@ -1,0 +1,7 @@
+{
+  "hook_event_name": "UserPromptSubmit",
+  "session_id": "fdea4f81-9f13-4808-a9fa-bdedb5a926b5",
+  "timestamp": "2026-11-02T16:58:08.409Z",
+  "cwd": "/Users/tester/project",
+  "prompt": "The user explicitly invoked the \"/qa-spike\" skill. Follow its instructions now.\n\n<skill-context name=\"qa-spike\">\nBase directory for this skill: /Users/tester/project/.github/skills/qa-spike\n\n# qa-spike\n\nA three-turn session used only to record hook payloads.\n\n1. Turn 1: ask the user for a one-word favourite colour and reply with it.\n2. Turn 2: read the file `package.json` (or any file in the workspace) using a tool and report its name.\n3. Turn 3: summarise turns 1 and 2 in one sentence.\n\nDo nothing else.\n\n</skill-context>"
+}
