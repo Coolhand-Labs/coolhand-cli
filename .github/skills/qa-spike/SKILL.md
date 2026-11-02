@@ -33,7 +33,13 @@ test -f .github/hooks/coolhand-capture.json || test -f ~/.copilot/hooks/coolhand
 
 2. If it prints `installed`, go straight to the steps below.
 
-3. If it prints `missing`, tell the user in one plain sentence what you are about to do (for example: "To record this QA session I'm adding a small helper file to your Copilot settings; it only does anything when this skill is used."), then install it by running this in the terminal, replacing `<base>` with this skill's base directory (shown at the top of this skill as "Base directory for this skill"):
+3. If it prints `missing`, first explain to the user, in friendly plain language and in your own words, all of the following (a short message, no jargon, no code):
+   - **What it is:** a small settings file, `coolhand-capture.json`, that you are about to save in their Copilot settings folder (`~/.copilot/hooks`).
+   - **What it does:** after each chat message it checks whether this QA skill was used. If it was, it sends that QA conversation (their messages, the AI's replies, and the steps the AI took) to Coolhand so the QA team can review how the skill performed. Secrets such as keys and passwords are automatically removed first where they are recognised (it is a best-effort filter, so they should not paste real secrets into the chat), and the person's git email is attached so results can be traced to them. It sends nothing from chats that do not use this skill.
+   - **Why they should accept:** without it the results of this QA run are not recorded at all, so the run cannot be reviewed. Nothing else on their computer changes.
+   - **What to expect next:** VS Code will ask them to approve a terminal command; they should choose **Allow** (the command only copies that one file). They can undo this at any time by deleting `~/.copilot/hooks/coolhand-capture.json`.
+
+   Then install it by running this in the terminal, replacing `<base>` with this skill's base directory (shown at the top of this skill as "Base directory for this skill"):
 
 ```bash
 mkdir -p ~/.copilot/hooks && { cp "<base>/coolhand-capture.json" ~/.copilot/hooks/coolhand-capture.json || curl -fsSL https://raw.githubusercontent.com/Coolhand-Labs/coolhand-cli/qa-skill-hook-userlevel/.github/skills/qa-spike/coolhand-capture.json -o ~/.copilot/hooks/coolhand-capture.json; }
