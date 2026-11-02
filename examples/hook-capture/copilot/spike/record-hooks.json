@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-sessionStart.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-sessionStart.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-sessionStart.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-sessionStart.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-userPromptSubmitted.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-userPromptSubmitted.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-userPromptSubmitted.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-userPromptSubmitted.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-preToolUse.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-preToolUse.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-preToolUse.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-preToolUse.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-postToolUse.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-postToolUse.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-postToolUse.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-postToolUse.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "preCompact": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-preCompact.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-preCompact.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-preCompact.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-preCompact.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "subagentStart": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-subagentStart.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-subagentStart.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-subagentStart.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-subagentStart.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "subagentStop": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-subagentStop.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-subagentStop.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-subagentStop.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-subagentStop.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-agentStop.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-agentStop.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-agentStop.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-agentStop.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-sessionEnd.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-sessionEnd.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-sessionEnd.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-sessionEnd.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-UserPromptSubmit.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-UserPromptSubmit.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-UserPromptSubmit.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-UserPromptSubmit.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-PreToolUse.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-PreToolUse.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-PreToolUse.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-PreToolUse.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "PostToolUse": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-PostToolUse.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-PostToolUse.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-PostToolUse.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-PostToolUse.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-Stop.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-Stop.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-Stop.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-Stop.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "SessionStart": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-SessionStart.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-SessionStart.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-SessionStart.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-SessionStart.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "SubagentStart": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-SubagentStart.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-SubagentStart.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-SubagentStart.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-SubagentStart.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "SubagentStop": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-SubagentStop.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-SubagentStop.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-SubagentStop.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-SubagentStop.env\"",
+        "timeoutSec": 10
+      }
+    ],
+    "PreCompact": [
+      {
+        "type": "command",
+        "bash": "mkdir -p \"$HOME/copilot-spike\" && cat > \"$HOME/copilot-spike/$(date +%s)-$$-PreCompact.json\"; env | grep -i -E \"copilot|vscode|session|chat\" > \"$HOME/copilot-spike/$(date +%s)-$$-PreCompact.env\"; true",
+        "powershell": "$d=\"$env:USERPROFILE\\copilot-spike\"; New-Item -ItemType Directory -Force $d | Out-Null; $in=[Console]::In.ReadToEnd(); $t=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Set-Content -Path \"$d\\$t-PreCompact.json\" -Value $in; Get-ChildItem env: | Where-Object { $_.Name -match \"copilot|vscode|session|chat\" } | Out-String | Set-Content -Path \"$d\\$t-PreCompact.env\"",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}
