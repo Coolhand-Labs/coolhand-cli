@@ -1,6 +1,6 @@
 import { ExitCode } from '../errors.js';
 import { PACKAGE_IDENTIFIER } from '../version.js';
-import { claudeTurn } from '../hooks/adapters/claude.js';
+import { ADAPTERS } from '../hooks/adapters/index.js';
 import { isCaptureDisabled } from '../hooks/disabled.js';
 import { logHookEvent } from '../hooks/hook-log.js';
 import { resolveTesterIdentity } from '../hooks/identity.js';
@@ -85,7 +85,7 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
     return;
   }
 
-  const parsed: HookTurn | null = await claudeTurn(input);
+  const parsed: HookTurn | null = await ADAPTERS[opts.agent](input, { skill: opts.skill });
   if (!parsed) {
     return;
   }
