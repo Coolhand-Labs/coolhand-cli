@@ -2,7 +2,7 @@
 
 `coolhand capture-turn` lets a skill send every finished turn of an agent session — the user's message and the assistant's reply, together with the conversation since the skill was invoked — to Coolhand for analysis, without the person using the skill logging in or installing anything by hand.
 
-This page covers Claude Code, the only agent supported so far. Example skills for Claude Code, Cursor and Copilot are in [examples/hook-capture](../examples/hook-capture/README.md). Cursor and VS Code Copilot do not let a skill carry its own hooks, so they need a different install step. The Cursor and Copilot examples are non-functional placeholders until a Cursor/Copilot adapter and a planned `capture-setup` command exist.
+This page covers Claude Code and VS Code GitHub Copilot, the two agents supported so far; the Claude Code details come first and [VS Code Copilot](#vs-code-copilot) has its own section. Example skills for Claude Code, Cursor and Copilot are in [examples/hook-capture](../examples/hook-capture/README.md). Cursor does not let a skill carry its own hooks either, so it needs a different install step, and its example is a non-functional placeholder until a Cursor adapter exists.
 
 ## How it works
 
@@ -45,13 +45,13 @@ Each turn is one request log with:
 
 | Field | Value |
 |-------|-------|
-| `url` | `coolhand-hook://claude/session/<session-id>/turn/<n>`. The server reads the session id and the turn number from it |
+| `url` | `coolhand-hook://<agent>/session/<session-id>/turn/<n>`. The server reads the session id and the turn number from it |
 | `request_body.messages` | The conversation so far since the skill was invoked, in order, ending on the last message before this turn's reply (this turn's prompt, or its last tool result). `{role, content}` where `content` is a string or Anthropic content blocks: `thinking`, `text`, `tool_use`, `tool_result` (see below) |
 | `response_body` | This turn's final reply only: its `thinking` and `text` blocks |
 | `response_body.id` | `<session-id>:<n>:<digest>`. Unique per turn and tied to its content. It is not the server's dedup key (the server keeps one chat log per session and the newest turn by number wins); it stays for correlation and debugging |
-| `collector` | `coolhand-cli-<version>/hook-claude` |
+| `collector` | `coolhand-cli-<version>/hook-<agent>` |
 | `metadata.session_id`, `metadata.turn_index` | Group the turns of one session |
-| `metadata.agent` | Which agent produced the turn (`claude`) |
+| `metadata.agent` | Which agent produced the turn (`claude` or `copilot`) |
 | `metadata.skill` | The `--skill` value |
 | `metadata.skill_version` | The `--skill-version` value, present only when given |
 | `metadata.tester`, `metadata.tester_source` | Who ran the session and where that came from: `env`, `git` or `machine` (see below) |
@@ -118,3 +118,38 @@ The git email is personal data. Pass `--anonymous` to keep it off the wire: it w
 - The skill author controls the hook's flags, not the person using the skill. Unless the skill passes `--anonymous`, the git email is sent; that person can keep it off the wire by setting `COOLHAND_CAPTURE_USER` in their own environment to any other identifier.
 - A session left idle for more than 30 days can lose its progress file (it is pruned when another session starts), so if it is continued, turn numbering restarts at 1. `metadata.turn_id` still differs per turn.
 - Progress per session lives in `~/.coolhand/capture-turns/` (files untouched for 30 days are removed whenever a new session starts). A hook that fires twice for one turn sends it once in the normal case (see the duplicates note above); two genuinely identical turns are told apart by Claude's request id.
+
+## VS Code Copilot
+
+`coolhand capture-turn --agent copilot --skill NAME` captures a skill's turns from VS Code GitHub Copilot (agent mode) the same way, with one difference: **a Copilot skill cannot carry a hook** (a `hooks:` block in `SKILL.md` is ignored), so the hook lives in a workspace file, `.github/hooks/coolhand-capture.json`, and runs after every chat message in the workspace.
+
+That is why the command needs `--skill`. Each time the hook fires, `capture-turn` reads the chat's transcript (`transcript_path` in the payload) and sends the turn only if the transcript shows the skill was invoked in that chat; the conversation sent starts at the message that invoked it. A chat that never invoked the skill, or invoked another one, sends nothing, and it is not recorded anywhere either.
+
+To set it up:
+
+1. Copy [`examples/hook-capture/copilot/coolhand-capture.json`](../examples/hook-capture/copilot/coolhand-capture.json) to `.github/hooks/coolhand-capture.json` in your workspace and change `qa-example` to your skill's name (the folder name or the `name:` in its `SKILL.md`).
+2. Set `COOLHAND_CAPTURE_API_KEY` to your Coolhand **public** API key in the environment VS Code runs in. The hook does nothing until it is set, so committing the hook file does not make everyone who clones the repo send their chats; each person opts in. The command passes it on as `COOLHAND_API_KEY`, and never writes the key into the file.
+3. Register only the `Stop` event, as the example does. Copilot also accepts the camelCase `agentStop`, and registering both runs the hook twice.
+
+Everything else (the conversation so far, redaction, caps, the spool, the workload, `--anonymous`, `COOLHAND_CAPTURE_DISABLED`) works as described above. What is different in what is recorded: the model's thinking is included only when Copilot writes it to the transcript; token usage comes from the transcript's `session.usage_record` events, with cached tokens split out of the input count; and the skill text sent as `request_body.system` is the body Copilot recorded when it invoked the skill.
+
+What has and has not been verified: the adapter is tested on payloads and transcripts recorded from a real session (see below) and the hook command runs in `sh`, but a full run from VS Code to a Coolhand log, with a network outage and an older global `coolhand`, has not been done yet. The `command` and `powershell` hook keys, and Windows, are untested; the example uses `bash`.
+
+## VS Code Copilot: spike findings
+
+Recorded on 2026-11-02 from a real VS Code GitHub Copilot agent-mode session (Copilot SDK harness, `copilotVersion` 1.0.103) with a throwaway recorder hook in `.github/hooks/`. One three-turn skill session and one unrelated chat; redacted payloads and transcripts are in `test/fixtures/copilot/`. Everything not listed here is still unverified, including Windows behaviour (the PowerShell command was never run).
+
+| Question | Finding |
+|---|---|
+| Does a hook file in `.github/hooks/*.json` run? | Yes, for every chat in the workspace, including ones that never used the skill. |
+| Can a skill declare its own hooks? | No. `hooks:` in `SKILL.md` frontmatter was silently ignored (none of its commands ran). |
+| Event names | Both camelCase (`agentStop`, `userPromptSubmitted`, …) and PascalCase (`Stop`, `UserPromptSubmit`, …) are honoured. Registering both runs every hook twice. |
+| Payload shape | PascalCase events get Claude-style snake_case JSON: `hook_event_name`, `session_id`, `cwd`, `timestamp` (ISO), and for `Stop` also `transcript_path`, `stop_reason`, `stop_hook_active`. camelCase events get `sessionId`, `transcriptPath`, `stopReason`, with a numeric `timestamp`. |
+| `Stop` / `agentStop` | Fires once per user message, when the agent loop ends (three messages gave three `Stop`s). It carries no assistant text; read it from the transcript. |
+| `UserPromptSubmit` | Carries `prompt`. For a skill invoked by slash command that is the expanded text containing `<skill-context name="…">`; later messages in the same chat are just what the user typed. |
+| Tool events | `PreToolUse` / `PostToolUse` carry `tool_name`, `tool_input` and `tool_result`. |
+| `transcript_path` | `~/.copilot/session-state/<session_id>/events.jsonl`, typed JSONL: `session.start`, `skill.invoked` (`name`, `path`, `invokedAtTurn`, `trigger`), `user.message`, `assistant.message` (`content`, `toolRequests`), `tool.execution_start` / `_complete`, `assistant.turn_start` / `_end`, `session.usage_record` (token counts), `hook.start` / `_end`. |
+| Does the transcript lag the hook? | Not in this run: each reply was in the file 15 to 20 ms before `Stop` fired. Three samples, so keep the lag guard. |
+| Skill invoked? | A chat that used the skill has a `skill.invoked` event with the skill name; the unrelated chat's transcript has none. This is the gate for capturing only skill sessions. |
+| Session env var | None. Hooks get `COPILOT_PROJECT_DIR`, `COPILOT_HOOK_DIR`, `COPILOT_HOME` and `AI_AGENT=github_copilot_vscode_agent`, not the session id. |
+| Command keys | `bash` was used and worked on macOS. `command` and `powershell` are documented by VS Code but were not tested. |

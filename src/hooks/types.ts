@@ -1,8 +1,8 @@
 import type { RawMessage } from '../sessions/blocks.js';
 import type { SubagentUsage, Usage } from '../sessions/usage.js';
 
-/** Agents whose hook payloads `capture-turn` understands. Only `claude` has an adapter so far. */
-export const HOOK_AGENTS = ['claude'] as const;
+/** Agents whose hook payloads `capture-turn` understands. */
+export const HOOK_AGENTS = ['claude', 'copilot'] as const;
 export type HookAgent = (typeof HOOK_AGENTS)[number];
 
 /** One completed user→assistant exchange, normalised across agents. */
