@@ -76,6 +76,23 @@ Exit code `0` if a token is configured for the default (or requested) client, `1
 
 `masked_token` is `"(no public key)"` when only a private key was granted. Likewise `masked_private_key` is `"(no private key)"` when no private key is stored — run `coolhand login --scope private` to obtain one.
 
+### update
+
+```bash
+coolhand update [--check] [--json]
+```
+
+Checks the npm registry and upgrades to the newest **stable** release that has been published for at least 48 hours, is not deprecated, and is not above the registry's `latest` tag. For a global `npm install -g` install it runs `npm install -g coolhand-cli@<version>` (plus `--before` for dependencies; see [auto-update.md](./auto-update.md)); for any other install (project-local, `npx`, pnpm/Volta/Yarn/Bun, a source checkout) it prints the command to run instead.
+
+| Flag | Description |
+|------|-------------|
+| `--check` | Report the version it would install without installing it |
+| `--json` | Emit `{"current": "0.12.0", "target": "0.13.0" \| null, "installed": false}`; `installed` is `true` after a successful install |
+
+Exits `0` when up to date or after a successful install or report; `1` with `UPDATE_ERROR` if the registry cannot be reached or the install fails. Unlike the background updater, this command ignores `COOLHAND_NO_AUTO_UPDATE`, `CI`, and `auto_update: false`.
+
+The same logic runs automatically in the background at most once a day; see [auto-update.md](./auto-update.md) for how it works and how to turn it off.
+
 ### whoami
 
 ```bash

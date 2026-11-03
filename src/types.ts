@@ -13,6 +13,8 @@ export interface ConfigFile {
   version: 1;
   default_client_id: string | null;
   clients: Record<string, ClientEntry>;
+  /** `false` turns off the background auto-updater. Preserved across saves; absent means enabled. */
+  auto_update?: boolean;
 }
 
 export interface LoginOptions {
@@ -27,6 +29,11 @@ export interface LoginOptions {
 export interface LogoutOptions {
   clientId?: string;
   all?: boolean;
+  json?: boolean;
+}
+
+export interface UpdateOptions {
+  check?: boolean;
   json?: boolean;
 }
 

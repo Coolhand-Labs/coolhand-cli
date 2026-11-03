@@ -155,6 +155,20 @@ describe('config', () => {
     expect(getClient(cfg, 'missing')).toBeUndefined();
   });
 
+  test('deleteConfig keeps a lone auto_update opt-out, and removes everything else', async () => {
+    await fs.writeFile(configPath(), JSON.stringify({ version: 1, clients: {}, auto_update: false }));
+    await deleteConfig();
+    expect((await loadConfig()).auto_update).toBe(false);
+
+    await fs.writeFile(configPath(), JSON.stringify({ version: 1, clients: {} }));
+    await deleteConfig();
+    await expect(fs.access(configPath())).rejects.toThrow();
+
+    await fs.writeFile(configPath(), '{not json');
+    await deleteConfig();
+    await expect(fs.access(configPath())).rejects.toThrow();
+  });
+
   test('deleteConfig is idempotent', async () => {
     await deleteConfig();
     await deleteConfig();
