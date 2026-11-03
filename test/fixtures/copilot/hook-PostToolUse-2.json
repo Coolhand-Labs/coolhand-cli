@@ -1,0 +1,23 @@
+{
+  "hook_event_name": "PostToolUse",
+  "session_id": "fdea4f81-9f13-4808-a9fa-bdedb5a926b5",
+  "timestamp": "2026-11-02T16:58:19.226Z",
+  "cwd": "/Users/tester/project",
+  "tool_name": "AskUserQuestion",
+  "tool_input": {
+    "message": "What is your favourite colour? Please answer with one word.",
+    "requestedSchema": {
+      "properties": {
+        "colour": {
+          "type": "string",
+          "title": "Favourite colour",
+          "description": "Enter one word."
+        }
+      }
+    }
+  },
+  "tool_result": {
+    "result_type": "success",
+    "text_result_for_llm": "User responded: wite"
+  }
+}

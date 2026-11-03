@@ -8,6 +8,7 @@ import { replaySpooledTurns, sendTurn } from '../../src/hooks/send-turn.js';
 import { loadTurnState, saveTurnState } from '../../src/hooks/turn-state.js';
 import { countPending, listTurnFiles, readPendingRecord, savePendingRecord } from '../../src/pending-store.js';
 import { createTmpHome, TmpHome } from '../helpers/tmp-home.js';
+import { events } from '../helpers/copilot-transcript.js';
 
 /**
  * No SDK mock: a local HTTP server stands in for Coolhand, so these tests prove what actually goes
@@ -1105,5 +1106,127 @@ describe('capture-turn', () => {
     expect(code).toBe(0);
     const log = await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8');
     expect(log).toContain('capture-turn (claude) failed');
+  });
+});
+
+describe('capture-turn --agent copilot', () => {
+  let home: TmpHome;
+  let server: FakeCoolhand;
+  let transcriptPath: string;
+  const savedEnv = { ...process.env };
+
+  const stop = (sessionId = 'cop-1') => ({ hook_event_name: 'Stop', session_id: sessionId, transcript_path: transcriptPath, cwd: '/tmp/proj', stop_reason: 'end_turn' });
+  const opts = () => ({ agent: 'copilot' as const, skill: 'qa-login', apiKey: 'pk_test_123', baseUrl: server.url });
+  const write = (...lines: string[]) => fs.writeFile(transcriptPath, lines.join('\n') + '\n');
+  const messagesOf = (i: number) => server.received[i].body.llm_request_log.raw_request.request_body.messages;
+
+  beforeEach(async () => {
+    home = await createTmpHome();
+    server = await startFakeCoolhand();
+    transcriptPath = path.join(home.dir, 'events.jsonl');
+    process.env.COOLHAND_CAPTURE_USER = 'tester@example.com';
+    delete process.env.COOLHAND_API_KEY;
+    delete process.env.COOLHAND_CAPTURE_DISABLED;
+  });
+
+  afterEach(async () => {
+    await server.close();
+    await home.cleanup();
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) {
+        delete process.env[key];
+      }
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  // A chat that talked before the skill was invoked, then ran it for two turns.
+  const BEFORE = [events.user('private question before the skill'), events.assistant('private answer')];
+  const TURN_1 = [
+    events.skill('qa-login'),
+    events.user('/qa-login'),
+    events.assistant('', [{ toolCallId: 'c1', name: 'run_in_terminal', arguments: { command: 'ls' } }]),
+    events.result('c1', 'file.txt'),
+    events.assistant(`Checklist started. token=${SECRET}`),
+  ];
+  const TURN_2 = [events.user('and the second step?'), events.assistant('Second step done.')];
+
+  it('sends one cumulative log per turn: nothing from before the skill, secrets redacted, the skill text as system', async () => {
+    await write(...BEFORE, ...TURN_1);
+    await run(opts(), { readInput: async () => stop() });
+    await write(...BEFORE, ...TURN_1, ...TURN_2);
+    await run(opts(), { readInput: async () => stop() });
+
+    expect(server.received).toHaveLength(2);
+    expect(server.received[0].apiKey).toBe('pk_test_123');
+    expect(messagesOf(0)).toEqual([
+      { role: 'user', content: '/qa-login' },
+      { role: 'assistant', content: [{ type: 'tool_use', id: 'c1', name: 'run_in_terminal', input: { command: 'ls' } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'c1', content: 'file.txt' }] },
+    ]);
+    // The second log is the whole conversation since the skill ran.
+    expect(messagesOf(1).map((m: { role: string }) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant', 'user']);
+    expect(messagesOf(1)[0]).toEqual({ role: 'user', content: '/qa-login' });
+    expect(messagesOf(1)[3]).toEqual({ role: 'assistant', content: expect.stringContaining('Checklist started.') });
+    expect(messagesOf(1)[4]).toEqual({ role: 'user', content: 'and the second step?' });
+
+    const raw = JSON.stringify(server.received);
+    expect(raw).not.toContain('private question before the skill');
+    expect(raw).not.toContain('private answer');
+    expect(raw).not.toContain(SECRET);
+    expect(raw).toContain('coolhand-hook://copilot/session/cop-1/turn/1');
+    expect(raw).toContain('coolhand-hook://copilot/session/cop-1/turn/2');
+    expect(raw).toContain('copilot-skill:qa-login');
+    expect(raw).toContain('SKILL BODY');
+    expect(server.received[1].body.llm_request_log.raw_request.response_body.content).toEqual([{ type: 'text', text: 'Second step done.' }]);
+  });
+
+  it('sends nothing for a chat that never invoked the skill, or that invoked another one', async () => {
+    await write(...BEFORE);
+    await run(opts(), { readInput: async () => stop('unrelated') });
+    await write(events.skill('some-other-skill'), events.user('/other'), events.assistant('other done'));
+    await run(opts(), { readInput: async () => stop('other') });
+    await run({ ...opts(), skill: undefined }, { readInput: async () => stop('no-skill-flag') });
+
+    expect(server.received).toHaveLength(0);
+    // The one case that is a misconfiguration, not a quiet chat, says so in the log.
+    expect(await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8')).toContain('--skill is required');
+    expect(await listTurnFiles()).toHaveLength(0);
+  });
+
+  it('does not resend a double-fired Stop', async () => {
+    await write(...TURN_1);
+    await run(opts(), { readInput: async () => stop() });
+    await run(opts(), { readInput: async () => stop() });
+    expect(server.received).toHaveLength(1);
+  });
+
+  it('spools the turn when Coolhand refuses it and exits 0', async () => {
+    await server.close();
+    server = await startFakeCoolhand(500);
+    await write(...TURN_1);
+
+    expect(await run(opts(), { readInput: async () => stop() })).toBe(0);
+    expect(await listTurnFiles()).toHaveLength(1);
+    expect((await readPendingRecord((await listTurnFiles())[0])).kind).toBe('turn');
+  });
+
+  it("replays another session's spooled turn on a later successful send", async () => {
+    await server.close();
+    server = await startFakeCoolhand(500);
+    await write(...TURN_1);
+    await run(opts(), { readInput: async () => stop('older-session') });
+    const spooledFile = (await listTurnFiles())[0];
+
+    await server.close();
+    server = await startFakeCoolhand(200);
+    const spooled = await fs.readFile(spooledFile, 'utf8');
+    await fs.writeFile(spooledFile, spooled.replace(/"baseUrl": ".*"/, `"baseUrl": "${server.url}"`));
+    await run(opts(), { readInput: async () => stop('newer-session') });
+
+    // The new turn, then the spooled one from the other session.
+    expect(server.received).toHaveLength(2);
+    expect(await listTurnFiles()).toHaveLength(0);
+    expect(JSON.stringify(server.received)).toContain('coolhand-hook://copilot/session/older-session/turn/1');
   });
 });

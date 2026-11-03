@@ -1,0 +1,8 @@
+{
+  "hook_event_name": "SessionStart",
+  "session_id": "621c3473-096b-40b3-81b8-b92048626c35",
+  "timestamp": "2026-11-02T16:59:58.041Z",
+  "cwd": "/Users/tester/project",
+  "source": "new",
+  "initial_prompt": "what is 2+2?"
+}

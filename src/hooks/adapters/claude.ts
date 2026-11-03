@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
-import { rawMessageText, type RawMessage } from '../../sessions/blocks.js';
 import { lastTurnFrom, parseExchanges, type Exchange } from '../../sessions/claude-scanner.js';
 import type { EarlierExchange, HookInput, HookTurn } from '../types.js';
+import { earlierFrom, earlierStampsFrom, sameText, splitCurrent, str } from './shared.js';
 
 /**
  * How much of the transcript's tail to read. A turn full of tool output can run to megabytes, and the
@@ -23,11 +23,6 @@ async function readTail(filePath: string, maxBytes: number): Promise<string> {
   }
 }
 
-/** Equal once whitespace is collapsed: the payload and the transcript may join a reply's text blocks differently. */
-function sameText(a: string | undefined, b: string): boolean {
-  return a !== undefined && a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
-}
-
 /**
  * Is the transcript's latest exchange this turn? Yes when its reply is the one the hook was given, or
  * when it has a prompt but no reply yet (the transcript is written asynchronously and can lag the hook
@@ -38,24 +33,6 @@ function transcriptShowsThisTurn(tail: { userText?: string; assistantText?: stri
     return tail.userText !== undefined;
   }
   return sameText(tail.assistantText, assistantText);
-}
-
-/**
- * Split this turn's messages into its tool loop and its final reply. The final reply is the last
- * assistant message, and only when its text is the reply the hook was given (otherwise the transcript
- * hasn't caught up, and the reply is sent as the text the hook has, with the loop as far as it shows).
- */
-function splitCurrent(messages: RawMessage[] | undefined, reply: string): { currentMessages: RawMessage[]; finalReply?: unknown[] } {
-  const all = messages ?? [];
-  const last = all[all.length - 1];
-  if (last && last.role === 'assistant' && sameText(rawMessageText(last), reply)) {
-    return { currentMessages: all.slice(0, -1), finalReply: last.blocks };
-  }
-  return { currentMessages: all };
-}
-
-function str(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
 /**
@@ -90,11 +67,8 @@ export async function claudeTurn(input: HookInput): Promise<HookTurn | null> {
       tail = lastTurnFrom(parsed);
       // Everything before the latest exchange that has a prompt of its own, oldest first.
       exchangeTimestamp = parsed.exchanges[parsed.exchanges.length - 1]?.timestamp;
-      earlierStamps = parsed.exchanges.slice(0, -1).flatMap((e) => (e.timestamp ? [e.timestamp] : []));
-      earlier = parsed.exchanges
-        .slice(0, -1)
-        .filter((e): e is typeof e & { userText: string } => typeof e.userText === 'string')
-        .map((e) => ({ timestamp: e.timestamp, userText: e.userText, assistantText: e.assistantText, usage: e.usage, subagents: e.subagents, messages: e.messages }));
+      earlierStamps = earlierStampsFrom(parsed.exchanges);
+      earlier = earlierFrom(parsed.exchanges);
       current = parsed.exchanges[parsed.exchanges.length - 1];
       skillBodies = parsed.exchanges.flatMap((e) => (e.skill ? [{ ...e.skill, timestamp: e.timestamp }] : []));
     } catch {
