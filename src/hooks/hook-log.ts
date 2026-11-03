@@ -26,7 +26,7 @@ export async function logHookEvent(message: string): Promise<void> {
     } catch {
       // No log yet.
     }
-    await fs.appendFile(file, `${new Date().toISOString()} ${redact(message)}\n`, { mode: 0o600 });
+    await fs.appendFile(file, `${new Date().toISOString()} ${redact(message).replace(/[\r\n]+/g, ' ')}\n`, { mode: 0o600 });
   } catch {
     // Nowhere left to report to.
   }

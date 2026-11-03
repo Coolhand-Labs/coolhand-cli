@@ -67,4 +67,12 @@ describe('hook housekeeping', () => {
     await saveTurnState('claude', 's', { turnIndex: 2, tester: { id: 'a@b.c', source: 'git' } });
     expect((await loadTurnState('claude', 's')).tester).toEqual({ id: 'a@b.c', source: 'git' });
   });
+
+  it('keeps a message with embedded newlines on one log line', async () => {
+    await logHookEvent('first\nforged 2026-01-01T00:00:00Z entry\r\nthird');
+
+    const lines = (await fs.readFile(path.join(turnsDir(), 'hook.log'), 'utf8')).trimEnd().split('\n');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('first forged 2026-01-01T00:00:00Z entry third');
+  });
 });

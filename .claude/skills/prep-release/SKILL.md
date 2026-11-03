@@ -71,7 +71,14 @@ Process the user's chosen PRs one at a time, not as a batch:
    conflicts, skip it, note it in the running list as "skipped — needs
    rebase," and continue with the rest. Don't resolve conflicts on someone
    else's branch unilaterally.
-2. `gh pr merge <n> --squash --delete-branch` for each surviving PR.
+2. `gh pr merge <n> --squash --delete-branch --admin` for each surviving PR.
+   `main` has an "only maintainers can merge" ruleset (no review is required),
+   so a plain merge is refused with "the base branch policy prohibits the
+   merge"; `--admin` is how a maintainer merges. The user has standing approval
+   to use `--admin` here for the PRs they chose in Phase 1; don't stop to ask.
+   It is for that ruleset only: never use it to get past failing checks or a
+   conflicting `mergeStateStatus` (skip those PRs instead). This skill never
+   merges the Phase 5 release-prep PR; `/finish-release` does.
 3. After each merge, sync local `main` before evaluating the next PR. First
    check `git status --porcelain` — if it's not empty, stop and surface it
    to the user rather than discarding unknown local state; otherwise
@@ -234,7 +241,8 @@ same "hand it to a human" rule `/loop-review` uses for stuck findings.
   running `npm install` for the lockfile are all in scope and don't need a
   stop-and-ask — they're mechanical, reversible, and gated on Phase 4
   already being green before the PR opens.
-- Squash-merging PRs the user explicitly chose in Phase 1, and pushing the
+- Squash-merging PRs the user explicitly chose in Phase 1 (with `--admin`, per
+  Phase 2 step 2), and pushing the
   `release/vX.Y.Z` branch to open its own PR, are both in scope.
 - Never push a commit directly to `main`. All release-branch work lands on
   `main` only via the Phase 5 PR, which the user reviews and merges

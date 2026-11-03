@@ -1,7 +1,9 @@
+import { acquireLock } from '../../src/auto-update/state.js';
 import { run as runUpdate } from '../../src/commands/update.js';
 import { CliError } from '../../src/errors.js';
 import { logger } from '../../src/logger.js';
 import { PACKAGE_VERSION } from '../../src/version.js';
+import { createTmpHome, TmpHome } from '../helpers/tmp-home.js';
 
 describe('update command', () => {
   let fetchSpy: jest.SpyInstance;
@@ -92,6 +94,37 @@ describe('update command', () => {
       await expect(
         runUpdate({}, { selfInstall: true, install, versionOnDisk: () => PACKAGE_VERSION })
       ).rejects.toMatchObject({ code: 'UPDATE_ERROR' });
+    });
+
+    describe('with the update lock', () => {
+      let home: TmpHome;
+      beforeEach(async () => {
+        home = await createTmpHome();
+      });
+      afterEach(async () => {
+        await home.cleanup();
+      });
+
+      test('refuses to install while a background update holds the lock', async () => {
+        fetchSpy = registry(72);
+        const release = await acquireLock();
+        const install = jest.fn().mockResolvedValue(true);
+        try {
+          await expect(runUpdate({}, { selfInstall: true, install })).rejects.toMatchObject({ code: 'UPDATE_ERROR' });
+          expect(install).not.toHaveBeenCalled();
+        } finally {
+          await release!();
+        }
+      });
+
+      test('releases the lock after installing, even when npm fails', async () => {
+        fetchSpy = registry(72);
+        await expect(runUpdate({}, { selfInstall: true, install: jest.fn().mockResolvedValue(false) })).rejects.toMatchObject({ code: 'UPDATE_ERROR' });
+
+        const release = await acquireLock();
+        expect(release).not.toBeNull();
+        await release!();
+      });
     });
 
     test('--check never installs', async () => {
