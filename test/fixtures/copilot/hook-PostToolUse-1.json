@@ -1,0 +1,15 @@
+{
+  "hook_event_name": "PostToolUse",
+  "session_id": "fdea4f81-9f13-4808-a9fa-bdedb5a926b5",
+  "timestamp": "2026-11-02T16:58:12.716Z",
+  "cwd": "/Users/tester/project",
+  "tool_name": "rename_chat",
+  "tool_input": {
+    "title": "QA hook payload spike",
+    "automatic": true
+  },
+  "tool_result": {
+    "result_type": "success",
+    "text_result_for_llm": "Renaming chat."
+  }
+}

@@ -29,7 +29,7 @@ It is off entirely when:
 - `COOLHAND_NO_AUTO_UPDATE` or `CI` is set to anything other than empty, `0`, or `false`.
 - `config.json` contains `"auto_update": false` (only a JSON boolean is honored).
 
-Output is quiet under `--json`, and nothing runs for `help`, `version`, `update`, `--help`/`-h`, or invocations that start with a flag, such as `--version`.
+Output is quiet under `--json`, and nothing runs for `help`, `version`, `update`, the `capture-turn` hook (it fires after every agent turn), `--help`/`-h`, or invocations that start with a flag, such as `--version`.
 
 `npm` is always run from your home directory, not the current directory, so a project-level `.npmrc` in a repo you happen to be in cannot redirect the install.
 

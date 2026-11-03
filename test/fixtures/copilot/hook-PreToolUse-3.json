@@ -1,0 +1,14 @@
+{
+  "hook_event_name": "PreToolUse",
+  "session_id": "fdea4f81-9f13-4808-a9fa-bdedb5a926b5",
+  "timestamp": "2026-11-02T16:59:29.566Z",
+  "cwd": "/Users/tester/project",
+  "tool_name": "Read",
+  "tool_input": {
+    "path": "/Users/tester/project/package.json",
+    "view_range": [
+      1,
+      50
+    ]
+  }
+}

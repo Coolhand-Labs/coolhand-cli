@@ -1,0 +1,18 @@
+{
+  "hook_event_name": "PostToolUse",
+  "session_id": "fdea4f81-9f13-4808-a9fa-bdedb5a926b5",
+  "timestamp": "2026-11-02T16:59:29.639Z",
+  "cwd": "/Users/tester/project",
+  "tool_name": "Read",
+  "tool_input": {
+    "path": "/Users/tester/project/package.json",
+    "view_range": [
+      1,
+      50
+    ]
+  },
+  "tool_result": {
+    "result_type": "success",
+    "text_result_for_llm": "{\n  \"name\": \"coolhand-cli\",\n  \"version\": \"0.12.0\",\n  \"description\": \"CLI for authenticating with Coolhand and retrieving API tokens from a local dev environment\",\n  \"type\": \"module\",\n  \"main\": \"dist/index.js\",\n  \"types\": \"dist/index.d.ts\",\n  \"bin\": {\n    \"coolhand\": \"dist/bin.js\",\n    \"coolhand-cli\": \"dist/bin.js\"\n  },\n  \"exports\": {\n    \".\": {\n      \"types\": \"./dist/index.d.ts\",\n      \"import\": \"./dist/index.js\"\n    },\n    \"./package.json\": \"./package.json\"\n  },\n  \"keywords\": [\n    \"coolhand\",\n    \"cli\",\n    \"auth\",\n    \"login\",\n    \"feedback\",\n    \"llm\",\n    \"api\"\n  ],\n  \"author\": \"Test Author\",\n  \"license\": \"Apache-2.0\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/Coolhand-Labs/coolhand-cli.git\"\n  },\n  \"bugs\": {\n    \"url\": \"https://github.com/Coolhand-Labs/coolhand-cli/issues\"\n  },\n  \"homepage\": \"https://coolhandlabs.com\",\n  \"engines\": {\n    \"node\": \">=20.0.0\"\n  },\n  \"files\": [\n    \"dist/\",\n    \"README.md\",\n    \"LICENSE\"\n  ],\n  \"scripts\": {\n    \"sync-version\": \"node scripts/sync-version.mjs\",\n    \"prepare\": \"npm run build\",\n    \"build\": \"npm run sync-version && tsc && chmod +x dist/bin.js\",\n    \"prepublishOnly\": \"npm run build && npm run lint && npm run typecheck && npm test\","
+  }
+}

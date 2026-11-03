@@ -60,7 +60,7 @@
     "live-smoke": "bash scripts/run-live-smoke.sh"
   },
   "dependencies": {
-    "coolhand-node": "^0.17.0",
+    "coolhand-node": "^0.17.1",
     "mockttp": "^4.2.1"
   },
   "overrides": {
@@ -79,6 +79,7 @@
     "eslint-plugin-jest": "^29.16.0",
     "globals": "^17.8.0",
     "jest": "^30.2.0",
+    "js-yaml": "^4.2.0",
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"

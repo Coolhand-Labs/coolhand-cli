@@ -28,7 +28,7 @@ function neutralCwd(): string {
 }
 
 /** Commands that must never trigger (or announce) an update: the updater itself, the other background job, and passive output. */
-const NO_AUTO_UPDATE = new Set(['__auto-update', '__flush-pending', 'update', 'help', 'version']);
+const NO_AUTO_UPDATE = new Set(['__auto-update', '__flush-pending', 'capture-turn', 'update', 'help', 'version']);
 
 /** Package-manager layouts that own their own global installs; `npm install -g` would create a second copy instead of upgrading this one. */
 const FOREIGN_MANAGERS = ['_npx', '.volta', '.pnpm', 'pnpm', '.yarn', '.bun'];

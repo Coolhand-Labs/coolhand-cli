@@ -71,7 +71,7 @@ describe('maybeAutoUpdate', () => {
     expect(spawnFn).toHaveBeenCalledTimes(1);
   });
 
-  test.each(['__auto-update', '__flush-pending', 'update', 'help', 'version', '--version', '-h'])(
+  test.each(['__auto-update', '__flush-pending', 'capture-turn', 'update', 'help', 'version', '--version', '-h'])(
     'does nothing for %s',
     async (command) => {
       await call(command);
