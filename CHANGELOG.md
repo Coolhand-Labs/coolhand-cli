@@ -21,6 +21,14 @@ All notable changes to `coolhand-cli` will be documented in this file.
   `coolhand-capture-example.json` and take `--skill 'YOUR_SKILL_PATTERN'`; the per-skill hook files
   and the download fallback are removed. The examples are not part of the npm package. (#220)
 
+### Security
+- The proxy now redacts the `anthropic-api-key` request header before uploading a captured request.
+- `download-client-file` creates new files readable only by their owner (`0600`).
+
+### Fixed
+- `logout --client-id` no longer reports removing a client when the id matches a built-in object
+  property name (for example `constructor`) rather than a stored client.
+
 ## [0.13.0] - 2026-11-03
 
 ### Added
