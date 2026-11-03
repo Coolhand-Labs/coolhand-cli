@@ -3,7 +3,7 @@ import { logHookEvent } from '../hook-log.js';
 import { createInterface } from 'readline';
 import { isWantedLine, parseCopilotExchanges } from '../../sessions/copilot-scanner.js';
 import type { AdapterContext, HookInput, HookTurn } from '../types.js';
-import { earlierFrom, earlierStampsFrom, skillMatches, splitCurrent, str } from './shared.js';
+import { earlierFrom, earlierStampsFrom, isSkillPattern, skillMatchesPattern, splitCurrent, str } from './shared.js';
 
 /**
  * The transcript is written asynchronously and Claude's can lag its `Stop` by the reply. Copilot's was in the file
@@ -32,9 +32,23 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Does this exchange's skill invocation name `skill`: by its declared name or by its directory's name. */
+/** Does this exchange's skill invocation name `skill`: by its declared name or by its directory's name, or a `--skill` pattern. */
 function invokes(e: { skills?: Array<{ name: string; dir: string }> }, skill: string): boolean {
-  return (e.skills ?? []).some((s) => skillMatches(skill, s));
+  return (e.skills ?? []).some((s) => skillMatchesPattern(skill, s));
+}
+
+/** The skill a `--skill` value matched in this session: for a pattern the first one invoked (never the pattern itself), for a plain name that name. */
+function resolveSkill(exchanges: Array<{ skills?: Array<{ name: string; dir: string }> }>, skill: string): string | undefined {
+  if (!isSkillPattern(skill)) {
+    return skill;
+  }
+  for (const e of exchanges) {
+    const hit = (e.skills ?? []).find((s) => skillMatchesPattern(skill, s));
+    if (hit) {
+      return hit.name;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -45,7 +59,8 @@ function invokes(e: { skills?: Array<{ name: string; dir: string }> }, skill: st
  *
  * A Copilot hook runs for EVERY chat in the workspace, so a turn is sent only when the transcript shows
  * the `--skill` skill was invoked in this session (a `skill.invoked` event), at or before this turn.
- * Without `--skill`, or for a chat that never invoked it, nothing is sent.
+ * `--skill` may be a pattern (`*`, `acme-*`): then any matching skill counts, and the first one invoked in
+ * the session is returned as `skill`. Without `--skill`, or for a chat that never invoked it, nothing is sent.
  *
  * Returns `null` for any other event, an unrelated chat, or when there is nothing to send.
  */
@@ -86,8 +101,13 @@ export async function copilotTurn(input: HookInput, ctx: AdapterContext = {}): P
     return null;
   }
 
+  const resolved = resolveSkill(exchanges, skill);
+  if (!resolved) {
+    return null;
+  }
   return {
     sessionId,
+    skill: resolved,
     userText: current.userText,
     assistantText: current.assistantText,
     model: parsed.model,

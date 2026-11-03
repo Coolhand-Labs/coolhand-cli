@@ -233,14 +233,14 @@ const COMMANDS: CommandMeta[] = [
   {
     name: 'capture-turn',
     oneLiner: 'Agent hook: send the turn that just finished, with the conversation so far, to Coolhand',
-    usage: 'coolhand capture-turn --agent claude|copilot [--skill NAME] [options]   (reads the hook JSON on stdin)',
+    usage: 'coolhand capture-turn --agent claude|copilot [--skill NAME|PATTERN] [options]   (reads the hook JSON on stdin)',
     options: [
       { flag: '--agent claude|copilot', description: 'Which agent is calling the hook (required)' },
-      { flag: '--skill NAME', description: 'Skill that enabled the hook; sent as metadata (required for --agent copilot, which sends only chats that invoked it)' },
+      { flag: '--skill NAME', description: "Skill that enabled the hook; sent as metadata (required for --agent copilot, which sends only chats that invoked it). For copilot, a trailing * is a pattern: '*' captures any skill, 'acme-*' any skill named acme-…; quote it" },
       { flag: '--api-key KEY', description: 'Public API key only, never a private key (or set COOLHAND_API_KEY). No login needed' },
       { flag: '--base-url URL', description: 'Coolhand base URL (default: https://coolhandlabs.com)' },
       { flag: '--skill-version V', description: "The skill's version; sent as metadata.skill_version" },
-      { flag: '--no-declare', description: "Don't declare a workload for the skill (by default `--skill NAME` declares one workload per skill)" },
+      { flag: '--no-declare', description: "Don't declare a workload for the skill (by default the skill, or the one a --skill pattern matched, gets one workload)" },
       { flag: '--anonymous', description: 'Anonymous machine id instead of the git email or COOLHAND_CAPTURE_USER; also omits the working directory' },
     ],
   },

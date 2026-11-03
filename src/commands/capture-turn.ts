@@ -1,7 +1,7 @@
 import { ExitCode } from '../errors.js';
 import { PACKAGE_IDENTIFIER } from '../version.js';
 import { ADAPTERS } from '../hooks/adapters/index.js';
-import { skillMatches } from '../hooks/adapters/shared.js';
+import { isSkillPattern, skillMatches } from '../hooks/adapters/shared.js';
 import { isCaptureDisabled } from '../hooks/disabled.js';
 import { logHookEvent } from '../hooks/hook-log.js';
 import { resolveTesterIdentity } from '../hooks/identity.js';
@@ -37,11 +37,11 @@ function findSkillText(turn: HookTurn, skill: string | undefined, anchor: string
 }
 
 /** The workload this skill's logs belong to: one per skill, declared by key (the server find-or-creates it). */
-function declaredWorkload(opts: CaptureTurnOptions): DeclaredContext | undefined {
-  if (!opts.skill || opts.declare === false) {
+function declaredWorkload(opts: CaptureTurnOptions, skillName: string | undefined): DeclaredContext | undefined {
+  if (!skillName || opts.declare === false) {
     return undefined;
   }
-  const skill = opts.skill.slice(0, 200);
+  const skill = skillName.slice(0, 200);
   return { reporter: 'coolhand-cli', workload: { key: `${opts.agent}-skill:${skill}`, name: skill } };
 }
 
@@ -89,6 +89,10 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
     await logHookEvent('capture-turn (copilot): --skill is required (a Copilot hook runs for every chat and sends only the skill\'s); nothing sent.');
     return;
   }
+  if (opts.skill && isSkillPattern(opts.skill) && opts.agent !== 'copilot') {
+    await logHookEvent(`capture-turn (${opts.agent}): --skill patterns (${opts.skill}) are only supported for --agent copilot; nothing sent.`);
+    return;
+  }
   const parsed: HookTurn | null = await ADAPTERS[opts.agent](input, { skill: opts.skill });
   if (!parsed) {
     return;
@@ -102,6 +106,13 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
     return;
   }
   const turnIndex = state.turnIndex + 1;
+  // A pattern is resolved by the adapter to the first matching skill invoked in the session (the transcript is cumulative,
+  // so every turn resolves it the same way); it is never recorded as the skill's name.
+  const skill = opts.skill && isSkillPattern(opts.skill) ? turn.skill : opts.skill;
+  if (opts.skill && isSkillPattern(opts.skill) && !skill) {
+    await logHookEvent(`capture-turn (${opts.agent}): --skill ${opts.skill} matched no skill in ${turn.sessionId}; nothing sent.`);
+    return;
+  }
 
   // Resolved on the session's first turn and reused; --anonymous never reads or stores a cached identity.
   const tester =
@@ -111,7 +122,7 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
   const anchor = turnIndex > 1 ? state.anchor : turn.exchangeTimestamp;
   const seededLate = turnIndex > 1 && !state.anchor;
   const history = prepareTurnMessages(turn, turnIndex, anchor, new Set(state.captured ?? []));
-  const skillText = state.skillText ?? findSkillText(turn, opts.skill, anchor ?? state.anchor);
+  const skillText = state.skillText ?? findSkillText(turn, skill, anchor ?? state.anchor);
   const envelope = buildTurnEnvelope(opts.agent, turn, turnIndex, digest, history, skillText);
   const outcome = await sendTurn(envelope, {
     apiKey,
@@ -119,7 +130,7 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
     collector: `${PACKAGE_IDENTIFIER}/hook-${opts.agent}`,
     session: turn.sessionId,
     turn: turnIndex,
-    declared: declaredWorkload(opts),
+    declared: declaredWorkload(opts, skill),
     metadata: {
       session_id: turn.sessionId,
       turn_index: turnIndex,
@@ -133,7 +144,7 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
       agent: opts.agent,
       tester: tester.id,
       tester_source: tester.source,
-      ...(opts.skill ? { skill: opts.skill } : {}),
+      ...(skill ? { skill: skill.slice(0, 200) } : {}),
       ...(opts.skillVersion ? { skill_version: opts.skillVersion } : {}),
       ...(turn.cwd ? { project_path: turn.cwd } : {}),
     },

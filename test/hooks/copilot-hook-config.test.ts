@@ -8,7 +8,7 @@ import * as path from 'path';
 
 const DIR = path.join(__dirname, '..', '..', 'examples', 'hook-capture', 'copilot');
 
-describe.each(['coolhand-capture-qa-example.json', path.join('workspace', 'coolhand-capture-qa-example.json')])('examples/hook-capture/copilot/%s', (name) => {
+describe.each(['coolhand-capture-example.json', path.join('workspace', 'coolhand-capture-example.json')])('examples/hook-capture/copilot/%s', (name) => {
   const FILE = path.join(DIR, name);
   const config = JSON.parse(readFileSync(FILE, 'utf8')) as { version: unknown; hooks: Record<string, Array<Record<string, unknown>>> };
 
@@ -28,7 +28,8 @@ describe.each(['coolhand-capture-qa-example.json', path.join('workspace', 'coolh
     expect(hook.type).toBe('command');
     expect(hook.timeoutSec).toBeGreaterThanOrEqual(10);
     expect(typeof hook.bash).toBe('string');
-    expect(hook.bash).toContain('capture-turn --agent copilot --skill qa-example');
+    // One hook serves every skill: the skill is a quoted pattern the CLI resolves, never a name baked into the file.
+    expect(hook.bash).toContain("capture-turn --agent copilot --skill 'YOUR_SKILL_PATTERN'");
     expect(hook.bash).toContain('coolhand help capture-turn');
     expect(hook.bash).toContain('npx -y coolhand-cli');
   });
