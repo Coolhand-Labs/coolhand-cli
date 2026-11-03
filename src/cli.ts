@@ -224,7 +224,7 @@ const COMMANDS: CommandMeta[] = [
     usage: 'coolhand capture-turn --agent claude|copilot [--skill NAME] [options]   (reads the hook JSON on stdin)',
     options: [
       { flag: '--agent claude|copilot', description: 'Which agent is calling the hook (required)' },
-      { flag: '--skill NAME', description: 'Skill that enabled the hook; sent as metadata' },
+      { flag: '--skill NAME', description: 'Skill that enabled the hook; sent as metadata (required for --agent copilot, which sends only chats that invoked it)' },
       { flag: '--api-key KEY', description: 'Public API key only, never a private key (or set COOLHAND_API_KEY). No login needed' },
       { flag: '--base-url URL', description: 'Coolhand base URL (default: https://coolhandlabs.com)' },
       { flag: '--skill-version V', description: "The skill's version; sent as metadata.skill_version" },

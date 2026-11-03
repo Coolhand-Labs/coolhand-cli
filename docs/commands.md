@@ -953,7 +953,7 @@ Supported agents are `claude` (Claude Code's `Stop` hook) and `copilot` (VS Code
 | Flag | Description |
 |------|-------------|
 | `--agent claude\|copilot` | Required. Which agent's hook payload to expect |
-| `--skill NAME` | Optional. Skill that enabled the hook. Sent as `metadata.skill`, and it declares the skill's workload, selects the skill text sent as `request_body.system`, and (with `--no-declare`) can be kept as a label only |
+| `--skill NAME` | Optional for `claude`, **required for `copilot`** (which sends only chats that invoked this skill, and nothing without it). Skill that enabled the hook. Sent as `metadata.skill`, and it declares the skill's workload, selects the skill text sent as `request_body.system`, and (with `--no-declare`) can be kept as a label only |
 | `--api-key KEY` | Public API key only, never a private key. Falls back to `COOLHAND_API_KEY`. Prefer the environment variable where you can: command-line arguments are visible in `ps` |
 | `--base-url URL` | Coolhand base URL (default `https://coolhandlabs.com`) |
 | `--skill-version V` | Optional. The skill's version; sent as `metadata.skill_version` (never in the declaration). Keep it equal to the skill's frontmatter `version:` |

@@ -2,9 +2,10 @@ import type { RawMessage } from './blocks.js';
 import type { Exchange } from './claude-scanner.js';
 import type { Usage } from './usage.js';
 
-/** An exchange from a Copilot `events.jsonl`, plus the name of the skill invoked just before its prompt, if any. */
+/** An exchange from a Copilot `events.jsonl`, plus the skills invoked for it, if any. */
 export interface CopilotExchange extends Exchange {
-  skillName?: string;
+  /** Every skill invoked for this exchange: the one typed before the prompt and any the model loaded during the turn. */
+  skills?: Array<{ name: string; dir: string; text: string }>;
 }
 
 export interface ParsedCopilotExchanges {
@@ -55,9 +56,11 @@ function usageFrom(raw: unknown): Usage | undefined {
   };
 }
 
+/** What a tool returned. A failed call has not been seen in a recording, so its error text is looked for where it plausibly is. */
 function resultText(result: unknown): string {
   const r = obj(result);
-  const content = r?.content;
+  const candidates = [r?.content, r?.detailedContent, obj(r?.error)?.message];
+  const content = candidates.find((c) => typeof c === 'string' && c.trim()) ?? r?.content ?? r?.error;
   if (typeof content === 'string') {
     return content;
   }
@@ -68,14 +71,15 @@ function resultText(result: unknown): string {
  * Walk a Copilot `events.jsonl` (VS Code agent mode) and return its user→assistant exchanges in order.
  * An exchange starts at a `user.message` and holds what followed as raw messages: each model call's
  * thinking, text and tool calls as one assistant message, and each batch of tool results as one user
- * message. A `skill.invoked` event is attached to the exchange of the prompt that comes next. Unreadable
+ * message. A `skill.invoked` event the user typed (`trigger: user-invoked`) is attached to the exchange of the
+ * prompt that comes next; one the model loaded during a turn is attached to the exchange already open. Unreadable
  * lines are skipped. Pure function, never throws.
  */
 export function parseCopilotExchanges(content: string): ParsedCopilotExchanges {
   const exchanges: CopilotExchange[] = [];
   let model: string | undefined;
   let current: CopilotExchange | undefined;
-  let pendingSkill: { name: string; dir: string; text: string } | undefined;
+  let pendingSkills: NonNullable<CopilotExchange['skills']> = [];
 
   const add = (exchange: CopilotExchange, message: RawMessage): void => {
     (exchange.messages ??= []).push(message);
@@ -102,16 +106,22 @@ export function parseCopilotExchanges(content: string): ParsedCopilotExchanges {
         const file = text(data.path);
         const name = text(data.name);
         if (name) {
-          pendingSkill = { name, dir: file ? file.replace(/[\\/][^\\/]*$/, '') : name, text: text(data.content) ?? '' };
+          const skill = { name, dir: file ? file.replace(/[\\/][^\\/]*$/, '') : name, text: text(data.content) ?? '' };
+          // A skill the user typed (`/skill`) is logged just BEFORE its prompt. One the model loads itself is
+          // logged during the turn it belongs to, so it goes to the exchange already open.
+          if (current && text(data.trigger) !== undefined && data.trigger !== 'user-invoked') {
+            (current.skills ??= []).push(skill);
+          } else {
+            pendingSkills.push(skill);
+          }
         }
         break;
       }
       case 'user.message': {
         current = { userText: text(data.content), timestamp };
-        if (pendingSkill) {
-          current.skill = { dir: pendingSkill.dir, text: pendingSkill.text };
-          current.skillName = pendingSkill.name;
-          pendingSkill = undefined;
+        if (pendingSkills.length > 0) {
+          current.skills = pendingSkills;
+          pendingSkills = [];
         }
         exchanges.push(current);
         break;
@@ -162,7 +172,10 @@ export function parseCopilotExchanges(content: string): ParsedCopilotExchanges {
         break;
       }
       case 'session.usage_record': {
-        const usage = usageFrom(data.usage);
+        // Only the conversation's own model calls (every recorded call of the main thread says so); other
+        // kinds of call, such as background helpers, are not what this turn spent.
+        const kind = text(obj(data.usage)?.interactionType);
+        const usage = kind === undefined || kind === 'conversation-agent' ? usageFrom(data.usage) : undefined;
         if (current && usage) {
           const total = (current.usage ??= { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 });
           total.input_tokens += usage.input_tokens;

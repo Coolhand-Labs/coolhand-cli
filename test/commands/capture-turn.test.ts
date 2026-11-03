@@ -1189,6 +1189,8 @@ describe('capture-turn --agent copilot', () => {
     await run({ ...opts(), skill: undefined }, { readInput: async () => stop('no-skill-flag') });
 
     expect(server.received).toHaveLength(0);
+    // The one case that is a misconfiguration, not a quiet chat, says so in the log.
+    expect(await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8')).toContain('--skill is required');
     expect(await listTurnFiles()).toHaveLength(0);
   });
 

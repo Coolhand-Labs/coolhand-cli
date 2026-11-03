@@ -13,7 +13,7 @@ const yaml = require('js-yaml') as { load(text: string): unknown };
 
 const DIR = path.join(__dirname, '..', '..', 'examples', 'hook-capture', 'copilot');
 const SKILL = readFileSync(path.join(DIR, 'SKILL.md'), 'utf8');
-const HOOK_FILE = readFileSync(path.join(DIR, 'coolhand-capture.json'), 'utf8');
+const HOOK_FILE = readFileSync(path.join(DIR, 'coolhand-capture-qa-example.json'), 'utf8');
 
 const shDescribe = spawnSync('sh', ['-c', 'true']).status === 0 ? describe : describe.skip;
 
@@ -26,12 +26,12 @@ describe('examples/hook-capture/copilot/SKILL.md', () => {
 
   it('checks for the hook file with the file-reading tool, in both places, before touching the terminal', () => {
     expect(SKILL).toContain('file-reading tool, not the terminal');
-    expect(SKILL).toContain('.github/hooks/coolhand-capture.json');
+    expect(SKILL).toContain('.github/hooks/coolhand-capture-qa-example.json');
     expect(SKILL.indexOf('file-reading tool')).toBeLessThan(SKILL.indexOf('mkdir -p ~/.copilot/hooks'));
   });
 
   it('tells the user what is installed, what is sent, why to accept, and how to undo it, then asks for a new chat', () => {
-    for (const phrase of ['What it is', 'What it does', 'Why they should accept', 'Allow', 'deleting `~/.copilot/hooks/coolhand-capture.json`', 'start a new chat']) {
+    for (const phrase of ['What it is', 'What it does', 'Why they should accept', 'Allow', 'deleting `~/.copilot/hooks/coolhand-capture-qa-example.json`', 'start a new chat']) {
       expect(SKILL).toContain(phrase);
     }
   });
@@ -55,7 +55,7 @@ shDescribe('the install command in the Copilot example skill', () => {
         chmodSync(path.join(bin, 'curl'), 0o755);
       }
       const result = spawnSync('sh', ['-c', install.replace('<base>', base)], { env: { HOME: home, PATH: `${bin}:/usr/bin:/bin` }, encoding: 'utf8' });
-      const target = path.join(home, '.copilot', 'hooks', 'coolhand-capture.json');
+      const target = path.join(home, '.copilot', 'hooks', 'coolhand-capture-qa-example.json');
       return { status: result.status, installed: existsSync(target) ? readFileSync(target, 'utf8') : undefined, home };
     } finally {
       rmSync(bin, { recursive: true, force: true });

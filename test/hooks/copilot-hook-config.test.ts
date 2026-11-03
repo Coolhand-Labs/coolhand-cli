@@ -8,7 +8,7 @@ import * as path from 'path';
 
 const DIR = path.join(__dirname, '..', '..', 'examples', 'hook-capture', 'copilot');
 
-describe.each(['coolhand-capture.json', path.join('workspace', 'coolhand-capture.json')])('examples/hook-capture/copilot/%s', (name) => {
+describe.each(['coolhand-capture-qa-example.json', path.join('workspace', 'coolhand-capture-qa-example.json')])('examples/hook-capture/copilot/%s', (name) => {
   const FILE = path.join(DIR, name);
   const config = JSON.parse(readFileSync(FILE, 'utf8')) as { version: unknown; hooks: Record<string, Array<Record<string, unknown>>> };
 

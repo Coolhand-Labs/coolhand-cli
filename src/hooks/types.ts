@@ -43,8 +43,11 @@ export interface HookTurn {
   currentMessages?: RawMessage[];
   /** The raw blocks (thinking, text) of this turn's final reply, when the transcript shows it. */
   finalReply?: unknown[];
-  /** Skill bodies the transcript shows being injected, with when. The caller picks the one for its skill. */
-  skillBodies?: Array<{ dir: string; text: string; timestamp?: string }>;
+  /**
+   * Skill bodies the transcript shows being injected, with when. The caller picks the one for its skill: `name` (the
+   * declared name, when the agent records it) or the name of `dir` can match `--skill`.
+   */
+  skillBodies?: Array<{ dir: string; text: string; timestamp?: string; name?: string }>;
 }
 
 /** A user message and the assistant's final text reply to it, from earlier in the session. */
@@ -63,3 +66,9 @@ export type { TurnMessage } from '../sessions/blocks.js';
 
 /** A parsed hook payload: whatever JSON the agent wrote to stdin. */
 export type HookInput = Record<string, unknown>;
+
+/** What an adapter needs besides the hook payload. */
+export interface AdapterContext {
+  /** The `--skill` the hook was installed for. */
+  skill?: string;
+}

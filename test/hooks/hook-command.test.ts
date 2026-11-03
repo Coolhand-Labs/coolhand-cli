@@ -30,8 +30,8 @@ shDescribe('documented hook commands', () => {
   const cases: Array<[string, string[]]> = [
     ['claude/SKILL.md', commandsIn(path.join(EXAMPLES, 'claude', 'SKILL.md'), ['command'])],
     ['cursor/hooks.json', commandsIn(path.join(EXAMPLES, 'cursor', 'hooks.json'), ['command'])],
-    ['copilot/coolhand-capture.json', commandsIn(path.join(EXAMPLES, 'copilot', 'coolhand-capture.json'), ['bash'])],
-    ['copilot/workspace/coolhand-capture.json', commandsIn(path.join(EXAMPLES, 'copilot', 'workspace', 'coolhand-capture.json'), ['bash'])],
+    ['copilot/coolhand-capture-qa-example.json', commandsIn(path.join(EXAMPLES, 'copilot', 'coolhand-capture-qa-example.json'), ['bash'])],
+    ['copilot/workspace/coolhand-capture-qa-example.json', commandsIn(path.join(EXAMPLES, 'copilot', 'workspace', 'coolhand-capture-qa-example.json'), ['bash'])],
     ['docs/hook-capture.md', commandsIn(DOC, ['command'])],
   ];
 
@@ -48,7 +48,7 @@ shDescribe('documented hook commands', () => {
 shDescribe('the hook command picks a CLI that knows capture-turn', () => {
   const claudeCommand = commandsIn(path.join(EXAMPLES, 'claude', 'SKILL.md'), ['command'])[0];
   const skillCommand = commandsIn(path.join(__dirname, '..', '..', '.claude', 'skills', 'loop-review', 'SKILL.md'), ['command'])[0];
-  const copilotCommand = commandsIn(path.join(EXAMPLES, 'copilot', 'coolhand-capture.json'), ['bash'])[0];
+  const copilotCommand = commandsIn(path.join(EXAMPLES, 'copilot', 'coolhand-capture-qa-example.json'), ['bash'])[0];
   const CASES: Array<[string, string]> = [['claude example', claudeCommand], ['loop-review skill', skillCommand], ['copilot user-level hook', copilotCommand]];
 
   /** Runs `command` with fake `coolhand` and `npx` binaries first on PATH; reports which one got the hook JSON. */
@@ -84,7 +84,7 @@ shDescribe('the hook command picks a CLI that knows capture-turn', () => {
 });
 
 shDescribe('the Copilot workspace hook command (opt-in by environment)', () => {
-  const command = commandsIn(path.join(EXAMPLES, 'copilot', 'workspace', 'coolhand-capture.json'), ['bash'])[0];
+  const command = commandsIn(path.join(EXAMPLES, 'copilot', 'workspace', 'coolhand-capture-qa-example.json'), ['bash'])[0];
 
   /** Runs the command with fake `coolhand` (new enough) first on PATH; reports its arguments, API key and stdin. */
   function runCopilotHook(env: Record<string, string>): { args?: string; apiKey?: string; stdin?: string; status: number | null } {

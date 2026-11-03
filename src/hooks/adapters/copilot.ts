@@ -1,12 +1,14 @@
 import { createReadStream } from 'fs';
-import path from 'path';
+import { logHookEvent } from '../hook-log.js';
 import { createInterface } from 'readline';
 import { isWantedLine, parseCopilotExchanges } from '../../sessions/copilot-scanner.js';
-import type { EarlierExchange, HookInput, HookTurn } from '../types.js';
-import type { AdapterContext } from './index.js';
-import { splitCurrent, str } from './shared.js';
+import type { AdapterContext, HookInput, HookTurn } from '../types.js';
+import { earlierFrom, earlierStampsFrom, skillMatches, splitCurrent, str } from './shared.js';
 
-/** The transcript is written asynchronously and can lag `Stop` by the reply: wait this long, this many times, for it. */
+/**
+ * The transcript is written asynchronously and Claude's can lag its `Stop` by the reply. Copilot's was in the file
+ * 15 to 20 ms BEFORE `Stop` in the three recorded turns, so this is a precaution: wait this long, this many times, for it.
+ */
 const LAG_WAIT_MS = 250;
 const LAG_RETRIES = 4;
 
@@ -15,6 +17,7 @@ const LAG_RETRIES = 4;
  * every model call, so it is streamed and filtered rather than read whole.
  */
 async function readEvents(filePath: string): Promise<string> {
+  // `parseCopilotExchanges` applies the same filter, so it stays safe when called on a whole file; this pass only keeps memory small.
   const kept: string[] = [];
   const lines = createInterface({ input: createReadStream(filePath, { encoding: 'utf8' }), crlfDelay: Infinity });
   for await (const line of lines) {
@@ -30,8 +33,8 @@ function wait(ms: number): Promise<void> {
 }
 
 /** Does this exchange's skill invocation name `skill`: by its declared name or by its directory's name. */
-function invokes(e: { skillName?: string; skill?: { dir: string } }, skill: string): boolean {
-  return e.skillName === skill || path.basename(e.skill?.dir ?? '') === skill;
+function invokes(e: { skills?: Array<{ name: string; dir: string }> }, skill: string): boolean {
+  return (e.skills ?? []).some((s) => skillMatches(skill, s));
 }
 
 /**
@@ -71,7 +74,9 @@ export async function copilotTurn(input: HookInput, ctx: AdapterContext = {}): P
       }
       await wait(LAG_WAIT_MS);
     }
-  } catch {
+  } catch (err) {
+    // Not the normal "unrelated chat" path: say why nothing was captured, so a broken hook can be told from a quiet one.
+    await logHookEvent(`capture-turn (copilot): could not read the transcript: ${(err as NodeJS.ErrnoException).code ?? (err as Error).message}`);
     return null;
   }
 
@@ -81,11 +86,6 @@ export async function copilotTurn(input: HookInput, ctx: AdapterContext = {}): P
     return null;
   }
 
-  const earlierExchanges = exchanges.slice(0, -1);
-  const earlier: EarlierExchange[] = earlierExchanges
-    .filter((e): e is typeof e & { userText: string } => typeof e.userText === 'string')
-    .map((e) => ({ timestamp: e.timestamp, userText: e.userText, assistantText: e.assistantText, usage: e.usage, messages: e.messages }));
-
   return {
     sessionId,
     userText: current.userText,
@@ -94,10 +94,10 @@ export async function copilotTurn(input: HookInput, ctx: AdapterContext = {}): P
     turnKey: current.assistantKey,
     cwd: str(input.cwd),
     exchangeTimestamp: current.timestamp,
-    earlier,
-    earlierStamps: earlierExchanges.flatMap((e) => (e.timestamp ? [e.timestamp] : [])),
+    earlier: earlierFrom(exchanges),
+    earlierStamps: earlierStampsFrom(exchanges),
     usage: current.usage,
-    skillBodies: exchanges.flatMap((e) => (e.skill ? [{ ...e.skill, timestamp: e.timestamp }] : [])),
+    skillBodies: exchanges.flatMap((e) => (e.skills ?? []).map((s) => ({ dir: s.dir, text: s.text, name: s.name, timestamp: e.timestamp }))),
     ...splitCurrent(current.messages, current.assistantText),
   };
 }
