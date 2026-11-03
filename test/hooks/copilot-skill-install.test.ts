@@ -45,13 +45,18 @@ shDescribe('the install command in the Copilot example skill', () => {
   const install = SKILL.match(/```bash\n(mkdir -p ~\/\.copilot\/hooks[^\n]*)\n```/)?.[1] ?? '';
 
   /** Runs the command with `<base>` replaced and HOME pointed at a scratch folder; reports where the file landed. */
-  function runInstall(base: string, fakes: { curl?: string } = {}): { status: number | null; installed?: string; home: string } {
+  function runInstall(base: string, fakes: { curl?: string; curlFails?: boolean } = {}): { status: number | null; installed?: string; home: string } {
     const home = mkdtempSync(path.join(tmpdir(), 'cop-install-'));
     const bin = mkdtempSync(path.join(tmpdir(), 'cop-bin-'));
     try {
       if (fakes.curl !== undefined) {
         // A fake curl that writes the body to the path given after -o.
         writeFileSync(path.join(bin, 'curl'), `#!/bin/sh\nwhile [ "$1" != -o ]; do shift; done\nprintf '%s' '${fakes.curl}' > "$2"\n`, { mode: 0o755 });
+        chmodSync(path.join(bin, 'curl'), 0o755);
+      }
+      if (fakes.curlFails) {
+        // The download fallback must not reach the real network: the file is now published on main.
+        writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\nexit 22\n', { mode: 0o755 });
         chmodSync(path.join(bin, 'curl'), 0o755);
       }
       const result = spawnSync('sh', ['-c', install.replace('<base>', base)], { env: { HOME: home, PATH: `${bin}:/usr/bin:/bin` }, encoding: 'utf8' });
@@ -82,7 +87,7 @@ shDescribe('the install command in the Copilot example skill', () => {
   });
 
   it('fails, instead of reporting success, when the file cannot be installed', () => {
-    const { status, installed, home } = runInstall(path.join(DIR, 'nowhere'));
+    const { status, installed, home } = runInstall(path.join(DIR, 'nowhere'), { curlFails: true });
     rmSync(home, { recursive: true, force: true });
     expect(status).not.toBe(0);
     expect(installed).toBeUndefined();
