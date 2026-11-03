@@ -6,6 +6,7 @@ import {
   configDir,
   configPath,
   deleteConfig,
+  findClient,
   getClient,
   loadConfig,
   removeClient,
@@ -451,5 +452,26 @@ describe('resolveClientForDryRun', () => {
     const a = entry('a');
     const b = entry('b');
     await expect(resolveClientForDryRun(cfg({ a, b }))).rejects.toMatchObject({ code: 'NOT_CONFIGURED' });
+  });
+});
+
+describe('findClient', () => {
+  const entry = {
+    client_id: 'a',
+    client_name: 'Client a',
+    api_key: 'key_a',
+    base_url: 'https://coolhandlabs.com',
+    saved_at: '2026-01-01T00:00:00Z',
+  };
+  const cfg = { version: 1 as const, default_client_id: null, clients: { a: entry } };
+
+  test('finds a stored client and ignores inherited object members', () => {
+    expect(findClient(cfg, 'a')).toEqual(entry);
+    expect(findClient(cfg, 'constructor')).toBeUndefined();
+    expect(findClient(cfg, 'toString')).toBeUndefined();
+  });
+
+  test('--client-id naming an inherited member is CLIENT_NOT_FOUND, not a TypeError', async () => {
+    await expect(resolveClient(cfg, 'toString')).rejects.toMatchObject({ code: 'CLIENT_NOT_FOUND' });
   });
 });

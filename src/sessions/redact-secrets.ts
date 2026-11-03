@@ -15,11 +15,14 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
   /ch_pub_[A-Za-z0-9_-]{8,}/g, // Coolhand public token
   /ch_priv_[A-Za-z0-9_-]{8,}/g, // Coolhand private token
   /sk-[A-Za-z0-9_-]{16,}/g, // OpenAI / Anthropic style secret key
-  /ghp_[A-Za-z0-9]{20,}/g, // GitHub personal access token
-  /gho_[A-Za-z0-9]{20,}/g, // GitHub OAuth token
+  /gh[pousr]_[A-Za-z0-9]{20,}/g, // GitHub personal access / OAuth / user-to-server / server-to-server / refresh token
   /github_pat_[A-Za-z0-9_]{20,}/g, // GitHub fine-grained PAT
-  /AKIA[0-9A-Z]{16}/g, // AWS access key id
+  /\b(?:AKIA|ASIA|AROA|AIDA)[0-9A-Z]{16}\b/g, // AWS access key id (long-lived and temporary)
   /xox[baprs]-[A-Za-z0-9-]{10,}/g, // Slack token (bot/user/app/refresh/config)
+  /xapp-\d-[A-Za-z0-9-]{10,}/g, // Slack app-level token
+  /SG\.[\w-]{16,}\.[\w-]{16,}/g, // SendGrid API key
+  /\b(?:rk_live|rk_test)_[0-9A-Za-z]{16,}/g, // Stripe restricted key
+  /whsec_[A-Za-z0-9]{24,}/g, // Stripe webhook signing secret
   /AIza[0-9A-Za-z_-]{35}/g, // Google API key
   /sk_live_[0-9A-Za-z]{16,}/g, // Stripe live secret key
   /sk_test_[0-9A-Za-z]{16,}/g, // Stripe test secret key
@@ -33,12 +36,14 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
   /hf_[A-Za-z0-9]{30,}/g, // Hugging Face token
   /ya29\.[A-Za-z0-9_-]+/g, // Google OAuth access token
   /pypi-[A-Za-z0-9_-]{20,}/g, // PyPI API token
-  /\b([a-z][a-z0-9+.-]{0,31}:\/\/)[^\s/:@]+:[^\s/@]+@/gi, // credentials embedded in a URL (scheme://user:pass@host)
+  /\b([a-z][a-z0-9+.-]{0,31}:\/\/)[^\s/:@]*:[^\s/]+@/gi, // credentials embedded in a URL (scheme://user:pass@host, empty user allowed, `@` inside the password)
   /\b[A-Fa-f0-9]{40,}\b/g, // long hex blobs (generic tokens / hashes)
   // PEM-formatted private key blocks (SSH/RSA/EC/OpenSSH/PGP/encrypted) — no assignment keyword
   // sits next to the base64 body, so ASSIGNMENT_QUOTED/BARE never catch these; a `cat ~/.ssh/id_rsa`
   // in a tool output or a deploy key embedded in a config file would otherwise sail through whole.
-  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY[A-Z0-9 ]*-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY[A-Z0-9 ]*-----/g,
+  // The body is bounded and may end at the next BEGIN header or the end of the text, so a truncated key
+  // (`head -5 id_rsa`) is still redacted and a long run of unterminated headers cannot go quadratic.
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY[A-Z0-9 ]*-----[\s\S]{0,16384}?(?:-----END [A-Z0-9 ]*PRIVATE KEY[A-Z0-9 ]*-----|(?=-----BEGIN )|$)/g,
 ];
 
 // Two variants: a QUOTED value may contain spaces ("my secret value"); a BARE value stops at

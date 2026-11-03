@@ -1,6 +1,6 @@
 import { HttpError, HelpCenterDocsService } from 'coolhand-node';
 import { CliError } from '../errors.js';
-import { loadConfig } from '../config.js';
+import { findClient, loadConfig } from '../config.js';
 import { logger, stripAnsiEscapes } from '../logger.js';
 import { ClientEntry, ConfigFile, DEFAULT_BASE_URL } from '../types.js';
 
@@ -24,7 +24,7 @@ function sameServer(a: string, b: string): boolean {
  */
 function selectStoredClient(cfg: ConfigFile, clientId?: string): ClientEntry | undefined {
   if (clientId !== undefined) {
-    const entry = cfg.clients[clientId];
+    const entry = findClient(cfg, clientId);
     if (!entry) {
       throw new CliError('CLIENT_NOT_FOUND', `No client "${clientId}" is configured.`);
     }
@@ -32,8 +32,9 @@ function selectStoredClient(cfg: ConfigFile, clientId?: string): ClientEntry | u
   }
   const preferred = [process.env.COOLHAND_CLIENT_ID, cfg.default_client_id];
   for (const id of preferred) {
-    if (id && cfg.clients[id]) {
-      return cfg.clients[id];
+    const entry = id ? findClient(cfg, id) : undefined;
+    if (entry) {
+      return entry;
     }
   }
   const clients = Object.values(cfg.clients);

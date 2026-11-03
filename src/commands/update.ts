@@ -6,6 +6,7 @@ import {
   manualInstallHint,
   updateHint,
 } from '../auto-update/index.js';
+import { acquireLock } from '../auto-update/state.js';
 import { CliError, ExitCode } from '../errors.js';
 import { logger } from '../logger.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../version.js';
@@ -47,9 +48,19 @@ export async function run(opts: UpdateOptions, deps: UpdateDeps = {}): Promise<n
     return ExitCode.OK;
   }
 
+  // The background job takes this lock too: two `npm install -g` runs into one prefix can leave a half-written package.
+  const release = await acquireLock();
+  if (!release) {
+    throw new CliError('UPDATE_ERROR', 'Another update appears to be running. Try again in a minute.');
+  }
   logger.info(`Updating ${PACKAGE_NAME} ${PACKAGE_VERSION} → ${target}…`);
   // Keep npm's stdout out of --json output so it stays parseable; npm's errors still reach stderr.
-  const ok = await (deps.install ?? installVersion)(target, opts.json ? ['ignore', 'ignore', 'inherit'] : 'inherit');
+  let ok: boolean;
+  try {
+    ok = await (deps.install ?? installVersion)(target, opts.json ? ['ignore', 'ignore', 'inherit'] : 'inherit');
+  } finally {
+    await release();
+  }
   if (!ok) {
     throw new CliError('UPDATE_ERROR', `\`${manualInstallHint(target)}\` failed. You may need to run it with different permissions.`);
   }
