@@ -7,7 +7,7 @@ Claude Code and Copilot differ here. In **Claude Code** each skill carries its o
 ## Before you start
 
 - Use your Coolhand **public** API key in every hook. It can only write logs. Never use a private key: the CLI cannot tell them apart.
-- Capture needs `coolhand-cli` 0.13.0 or later. Older versions lack the command and the hook silently does nothing. The Copilot `--skill` patterns on this page (`'*'`, `'acme-*'`) need a release after 0.13.0, and an older install treats the pattern as a literal skill name and sends nothing.
+- Capture needs `coolhand-cli` 0.13.0 or later. Older versions lack the command and the hook silently does nothing. The Copilot `--skill` patterns on this page (`'*'`, `'acme-*'`) need 0.13.1 or later, and an older install treats the pattern as a literal skill name and sends nothing.
 - Install the CLI globally on every machine that runs the skills: `npm i -g coolhand-cli@latest`. Without it the hook runs `npx -y coolhand-cli` on every turn.
 - A `--skill` value must equal the skill's folder name or its frontmatter `name:` (on Copilot, a pattern is matched against the declared `name:`). If they differ, the skill is never recognised and nothing is sent.
 

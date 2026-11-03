@@ -1,6 +1,6 @@
 import { ExitCode } from '../errors.js';
 import { logger } from '../logger.js';
-import { deleteConfig, loadConfig, removeClient } from '../config.js';
+import { deleteConfig, findClient, loadConfig, removeClient } from '../config.js';
 import type { LogoutOptions } from '../types.js';
 
 export async function run(opts: LogoutOptions): Promise<number> {
@@ -26,7 +26,7 @@ export async function run(opts: LogoutOptions): Promise<number> {
     return ExitCode.OK;
   }
 
-  const existed = Boolean(cfg.clients[targetId]);
+  const existed = Boolean(findClient(cfg, targetId));
   await removeClient(targetId);
 
   if (opts.json) {
