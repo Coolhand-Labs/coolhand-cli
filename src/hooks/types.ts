@@ -9,6 +9,8 @@ export type HookAgent = (typeof HOOK_AGENTS)[number];
 export interface HookTurn {
   /** The agent's own session/conversation id. Stable across every turn of a session. */
   sessionId: string;
+  /** The skill this turn belongs to, when the adapter resolved it from a `--skill` pattern. */
+  skill?: string;
   /** What the user typed. Missing when the agent's payload and transcript don't expose it. */
   userText?: string;
   /** The assistant's final reply for the turn. Always non-empty. */
@@ -43,8 +45,11 @@ export interface HookTurn {
   currentMessages?: RawMessage[];
   /** The raw blocks (thinking, text) of this turn's final reply, when the transcript shows it. */
   finalReply?: unknown[];
-  /** Skill bodies the transcript shows being injected, with when. The caller picks the one for its skill. */
-  skillBodies?: Array<{ dir: string; text: string; timestamp?: string }>;
+  /**
+   * Skill bodies the transcript shows being injected, with when. The caller picks the one for its skill: `name` (the
+   * declared name, when the agent records it) or the name of `dir` can match `--skill`.
+   */
+  skillBodies?: Array<{ dir: string; text: string; timestamp?: string; name?: string }>;
 }
 
 /** A user message and the assistant's final text reply to it, from earlier in the session. */
@@ -63,3 +68,9 @@ export type { TurnMessage } from '../sessions/blocks.js';
 
 /** A parsed hook payload: whatever JSON the agent wrote to stdin. */
 export type HookInput = Record<string, unknown>;
+
+/** What an adapter needs besides the hook payload. */
+export interface AdapterContext {
+  /** The `--skill` the hook was installed for. */
+  skill?: string;
+}

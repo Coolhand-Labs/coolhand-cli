@@ -45,6 +45,7 @@ export async function loadConfig(): Promise<ConfigFile> {
       version: 1,
       default_client_id: parsed.default_client_id ?? null,
       clients: parsed.clients ?? {},
+      ...(typeof parsed.auto_update === 'boolean' ? { auto_update: parsed.auto_update } : {}),
     };
   } catch (err) {
     throw new CliError(
@@ -97,11 +98,28 @@ export async function saveConfig(cfg: ConfigFile): Promise<void> {
 }
 
 export async function deleteConfig(): Promise<void> {
+  // `auto_update` is a machine preference, not a credential: keep it so logging out doesn't re-enable
+  // a background updater the user opted out of. A corrupt file can't carry one, so it's just removed.
+  let keep: boolean | undefined;
   try {
+    keep = (await loadConfig()).auto_update;
+  } catch {
+    keep = undefined;
+  }
+  try {
+    if (keep !== undefined) {
+      await saveConfig({ ...emptyConfig(), auto_update: keep });
+      return;
+    }
     await fs.rm(configPath(), { force: true });
   } catch (err) {
     throw new CliError('CONFIG_WRITE_FAILED', `Failed to delete config: ${(err as Error).message}`);
   }
+}
+
+/** A stored client by id, own properties only: `constructor` or `toString` must not resolve to an inherited member. */
+export function findClient(cfg: ConfigFile, id: string): ClientEntry | undefined {
+  return Object.prototype.hasOwnProperty.call(cfg.clients, id) ? cfg.clients[id] : undefined;
 }
 
 export function getClient(cfg: ConfigFile, clientId?: string): ClientEntry | undefined {
@@ -109,7 +127,7 @@ export function getClient(cfg: ConfigFile, clientId?: string): ClientEntry | und
   if (!id) {
     return undefined;
   }
-  return cfg.clients[id];
+  return findClient(cfg, id);
 }
 
 export async function upsertClient(entry: ClientEntry, makeDefault = true): Promise<ConfigFile> {
@@ -117,7 +135,7 @@ export async function upsertClient(entry: ClientEntry, makeDefault = true): Prom
   // Merge onto any existing entry for this client_id so a partial entry (e.g. a
   // public-only re-login) doesn't silently drop fields it didn't provide, such as a
   // previously-stored private_key.
-  const existing = cfg.clients[entry.client_id];
+  const existing = findClient(cfg, entry.client_id);
   cfg.clients[entry.client_id] = existing ? { ...existing, ...entry } : entry;
   if (makeDefault || !cfg.default_client_id) {
     cfg.default_client_id = entry.client_id;
@@ -128,7 +146,7 @@ export async function upsertClient(entry: ClientEntry, makeDefault = true): Prom
 
 export async function removeClient(clientId: string): Promise<ConfigFile | null> {
   const cfg = await loadConfig();
-  if (!cfg.clients[clientId]) {
+  if (!findClient(cfg, clientId)) {
     return cfg;
   }
   delete cfg.clients[clientId];
@@ -146,7 +164,7 @@ export async function removeClient(clientId: string): Promise<ConfigFile | null>
 
 export async function setDefault(clientId: string): Promise<ConfigFile> {
   const cfg = await loadConfig();
-  if (!cfg.clients[clientId]) {
+  if (!findClient(cfg, clientId)) {
     throw new CliError('CLIENT_NOT_FOUND', `No client with id "${clientId}" is configured.`);
   }
   cfg.default_client_id = clientId;
@@ -209,7 +227,7 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
   }
   // 1. Explicit --client-id
   if (clientId !== undefined) {
-    const entry = cfg.clients[clientId];
+    const entry = findClient(cfg, clientId);
     if (!entry) {
       throw new CliError('CLIENT_NOT_FOUND', `No client "${clientId}" is configured.`);
     }
@@ -224,7 +242,7 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
   // is most likely an accidental mis-set in a script, not a deliberate selection.
   const envClientId = process.env.COOLHAND_CLIENT_ID;
   if (envClientId) {
-    const entry = cfg.clients[envClientId];
+    const entry = findClient(cfg, envClientId);
     if (!entry) {
       throw new CliError(
         'CLIENT_NOT_FOUND',
@@ -237,7 +255,7 @@ export async function resolveClient(cfg: ConfigFile, clientId?: string): Promise
 
   // 3. Configured default
   if (cfg.default_client_id) {
-    const entry = cfg.clients[cfg.default_client_id];
+    const entry = findClient(cfg, cfg.default_client_id);
     if (entry) {
       process.stderr.write(`Client: ${stripAnsiEscapes(entry.client_name)} (${entry.client_id})\n`);
       return entry;

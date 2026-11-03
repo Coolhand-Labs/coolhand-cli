@@ -4,6 +4,37 @@ All notable changes to `coolhand-cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-03
+
+### Added
+- `capture-turn` command: a hook entrypoint an AI agent runs after every turn. It sends the turn,
+  together with the conversation since a skill was invoked (prompts, thinking, tool calls and
+  results, redacted for secrets and size-capped), to Coolhand as one log per session, authenticated
+  with a **public** API key (`--api-key` or `COOLHAND_API_KEY`) so the person running the skill never
+  logs in. It always exits 0 and prints nothing; failures go to `~/.coolhand/capture-turns/hook.log`,
+  and undeliverable turns are spooled to `~/.coolhand/pending/` and replayed after the next
+  successful send. `COOLHAND_CAPTURE_DISABLED=1` turns it off. Supports Claude Code. See
+  [docs/hook-capture.md](./docs/hook-capture.md). (#190)
+- `capture-turn --agent copilot` captures a skill's turns from VS Code GitHub Copilot (agent mode).
+  Copilot skills cannot carry hooks, so the example skill installs its own user-level hook file under
+  `~/.copilot/hooks/`. Cursor is not supported yet. (#211)
+- `update [--check] [--json]` command, and automatic upgrades of global `npm install -g` installs:
+  at most daily, a detached background job installs the newest stable release that is at least 48
+  hours old, not deprecated, and not above npm's `latest` tag, pinned and installed with `--before`
+  so dependencies get the same bake. Other installs (npx, project-local, pnpm, Volta, Yarn, Bun) only
+  get a one-time notice. Opt out with `"auto_update": false` in `config.json` or
+  `COOLHAND_NO_AUTO_UPDATE=1`; it is also off in CI, under `--json`, and for `capture-turn`. See
+  [docs/auto-update.md](./docs/auto-update.md). (#212)
+
+### Changed
+- Upgraded `coolhand-node` from `^0.17.0` to `^0.17.1`, which fixes patching of `http`/`https` under
+  native ESM on Node 20.16+ / 22.3+. (#191)
+- Bumped dependencies: `mockttp` to 4.6.5 (#198), and dev dependencies `globals` to 17.13.0 (#199)
+  and `@typescript-eslint/eslint-plugin` to 8.72.0 (#200). The lockfile refresh in #191 also moves
+  the transitive `qs` to 6.17.1, clearing an `npm audit` advisory.
+- README and `examples/skill-integration.md` link to `Coolhand-Labs/skills`, the new name of the
+  feedback collection skill repository. (#208)
+
 ## [0.12.0] - 2026-10-21
 
 ### Added

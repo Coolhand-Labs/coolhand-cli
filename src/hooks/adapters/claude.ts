@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import { lastTurnFrom, parseExchanges, type Exchange } from '../../sessions/claude-scanner.js';
 import type { EarlierExchange, HookInput, HookTurn } from '../types.js';
-import { sameText, splitCurrent, str } from './shared.js';
+import { earlierFrom, earlierStampsFrom, sameText, splitCurrent, str } from './shared.js';
 
 /**
  * How much of the transcript's tail to read. A turn full of tool output can run to megabytes, and the
@@ -67,11 +67,8 @@ export async function claudeTurn(input: HookInput): Promise<HookTurn | null> {
       tail = lastTurnFrom(parsed);
       // Everything before the latest exchange that has a prompt of its own, oldest first.
       exchangeTimestamp = parsed.exchanges[parsed.exchanges.length - 1]?.timestamp;
-      earlierStamps = parsed.exchanges.slice(0, -1).flatMap((e) => (e.timestamp ? [e.timestamp] : []));
-      earlier = parsed.exchanges
-        .slice(0, -1)
-        .filter((e): e is typeof e & { userText: string } => typeof e.userText === 'string')
-        .map((e) => ({ timestamp: e.timestamp, userText: e.userText, assistantText: e.assistantText, usage: e.usage, subagents: e.subagents, messages: e.messages }));
+      earlierStamps = earlierStampsFrom(parsed.exchanges);
+      earlier = earlierFrom(parsed.exchanges);
       current = parsed.exchanges[parsed.exchanges.length - 1];
       skillBodies = parsed.exchanges.flatMap((e) => (e.skill ? [{ ...e.skill, timestamp: e.timestamp }] : []));
     } catch {

@@ -77,6 +77,7 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand logout` | Remove a stored client |
 | `coolhand status` | Check whether a token is configured |
 | `coolhand whoami` | Show the currently configured client |
+| `coolhand update` | Upgrade to the newest stable release that is at least 48 hours old |
 | `coolhand clients` | List or switch the default client |
 | `coolhand claude` | Run Claude CLI through the Coolhand proxy |
 | `coolhand monitor` | Run an arbitrary CLI through the Coolhand proxy |
@@ -151,7 +152,7 @@ coolhand login --write-env .env
 # sets COOLHAND_API_KEY=<token> in .env, idempotent on re-run
 ```
 
-The CLI works especially well with the [Coolhand feedback collection skill](https://github.com/Coolhand-Labs/feedback-collection-skill) for Claude Code. The skill scans your project for LLM inference calls and implements best-practice human feedback collection — it reads `COOLHAND_API_KEY` from the environment, which `coolhand login --write-env .env` puts in place.
+The CLI works especially well with the [Coolhand feedback collection skill](https://github.com/Coolhand-Labs/skills) for Claude Code. The skill scans your project for LLM inference calls and implements best-practice human feedback collection — it reads `COOLHAND_API_KEY` from the environment, which `coolhand login --write-env .env` puts in place.
 
 ## Configuration file
 
@@ -180,6 +181,7 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
 - [Auth Flow](./docs/auth-flow.md) — browser-callback sequence, state machine, timeout and error paths
 - [Configuration File](./docs/config-file.md) — full config schema, multi-client model, `COOLHAND_CONFIG_DIR` override
 - [Session Capture](./docs/session-capture.md) — session scanning, envelope format, deduplication, scope and limitations
+- [Auto-update](./docs/auto-update.md) — background upgrades with a 48-hour bake period, opt-out, and install-method rules
 - [Skill Capture](./docs/skill-capture.md) — skill discovery, dedup, and incremental upload logic for `sync-skills`
 - [Hook Capture](./docs/hook-capture.md) — `capture-turn` hook wiring for skills, recorded fields, spool and reliability
 

@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { redactSecrets } from './redact-secrets.js';
-import type { ContentBlock, RawMessage } from './blocks.js';
+import { sanitizeInput, type ContentBlock, type RawMessage } from './blocks.js';
 import { addSubagent, addUsage, emptySubagentUsage, emptyUsage, type SubagentUsage, type Usage } from './usage.js';
 import type { SessionFileMeta } from './session-filter.js';
 
@@ -182,7 +182,10 @@ function sanitizeResponseBlocks(blocks: unknown[]): unknown[] {
     if (type === 'thinking' || type === 'redacted_thinking') {
       continue;
     }
-    out.push(redactDeep(block));
+    const redacted = redactDeep(block) as Record<string, unknown>;
+    // A tool call's input needs the key-aware scrub: `redactDeep` only sees each string alone, so
+    // `{ password: 'x' }` would pass.
+    out.push(type === 'tool_use' && 'input' in redacted ? { ...redacted, input: sanitizeInput((block as { input?: unknown }).input) } : redacted);
   }
   return out;
 }

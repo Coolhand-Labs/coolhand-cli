@@ -71,7 +71,7 @@ export function cleanText(text: string, max = MAX_TURN_TEXT_CHARS): string {
 }
 
 /** Redact and cap the strings of a tool call's input, keeping its shape; bound arrays, keys and depth. */
-function sanitizeInput(value: unknown, depth = 0, secret = false, redact = true): unknown {
+export function sanitizeInput(value: unknown, depth = 0, secret = false, redact = true): unknown {
   if (typeof value === 'string') {
     return secret && redact ? REDACTED : clean(value, MAX_TOOL_STRING_CHARS, redact);
   }

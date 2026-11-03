@@ -1189,7 +1189,61 @@ describe('capture-turn --agent copilot', () => {
     await run({ ...opts(), skill: undefined }, { readInput: async () => stop('no-skill-flag') });
 
     expect(server.received).toHaveLength(0);
+    // The one case that is a misconfiguration, not a quiet chat, says so in the log.
+    expect(await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8')).toContain('--skill is required');
     expect(await listTurnFiles()).toHaveLength(0);
+  });
+
+  it('with --skill "*" captures whichever skill the chat invoked, as that skill\'s workload, and stays on it', async () => {
+    const any = () => ({ ...opts(), skill: '*' });
+    const OTHER = [events.skill('other-skill'), events.user('/other-skill'), events.assistant('other done')];
+    await write(...BEFORE, ...TURN_1);
+    await run(any(), { readInput: async () => stop() });
+    // The chat then runs a second skill: the session stays on the first.
+    await write(...BEFORE, ...TURN_1, ...OTHER);
+    await run(any(), { readInput: async () => stop() });
+    // A chat that invoked no skill is still silent.
+    await write(...BEFORE);
+    await run(any(), { readInput: async () => stop('unrelated') });
+
+    expect(server.received).toHaveLength(2);
+    const raw = JSON.stringify(server.received);
+    expect(raw).toContain('copilot-skill:qa-login');
+    expect(raw).not.toContain('copilot-skill:other-skill');
+    expect(raw).not.toContain('copilot-skill:*');
+    expect(raw).toContain('SKILL BODY');
+    for (const r of server.received) {
+      expect(r.body.llm_request_log.metadata.skill).toBe('qa-login');
+    }
+    expect(await listTurnFiles()).toHaveLength(0);
+  });
+
+  it('with --skill "qa-*" captures only skills whose name starts with qa-', async () => {
+    await write(events.skill('other-skill'), events.user('/other-skill'), events.assistant('other done'));
+    await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => stop('other') });
+    expect(server.received).toHaveLength(0);
+
+    await write(...TURN_1);
+    await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => stop('mine') });
+    expect(server.received).toHaveLength(1);
+    expect(JSON.stringify(server.received)).toContain('copilot-skill:qa-login');
+  });
+
+  it('treats a * that is not at the end as a literal name, and --no-declare declares no workload for a pattern', async () => {
+    await write(...TURN_1);
+    await run({ ...opts(), skill: '*-login' }, { readInput: async () => stop('mid') });
+    expect(server.received).toHaveLength(0);
+
+    await run({ ...opts(), skill: 'qa-*', declare: false }, { readInput: async () => stop('nodeclare') });
+    expect(server.received).toHaveLength(1);
+    expect(server.received[0].body.llm_request_log.metadata.skill).toBe('qa-login');
+    expect(JSON.stringify(server.received)).not.toContain('copilot-skill:');
+  });
+
+  it('refuses a --skill pattern for claude, with a note in hook.log', async () => {
+    await run({ agent: 'claude', skill: '*', apiKey: 'pk_test_123', baseUrl: server.url }, { readInput: async () => ({ hook_event_name: 'Stop', session_id: 'c1', transcript_path: transcriptPath }) });
+    expect(server.received).toHaveLength(0);
+    expect(await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8')).toContain('only supported for --agent copilot');
   });
 
   it('does not resend a double-fired Stop', async () => {

@@ -54,8 +54,14 @@ approval. The workflow does **not** create a GitHub release; Phase 4 does.
      `npm publish` would ship it verbatim. Also confirm each `dependencies`
      range resolves (`npm view coolhand-node@"<range>" version`).
    - PR is open, not a draft, `gh pr view <n> --json mergeStateStatus,mergeable`
-     is `CLEAN`/`MERGEABLE`, and every check in `gh pr checks <n>` passed. `main`
-     has no branch protection, so "required" means all of them.
+     is `MERGEABLE`, and every check in `gh pr checks <n>` passed (none failing,
+     pending or cancelled; "required" means all of them). `mergeStateStatus` is
+     `CLEAN` or `BLOCKED`: `main` has no review requirement, but the "only
+     maintainers can merge" ruleset (restricts updates to `main` to maintainers)
+     reports every PR as `BLOCKED` until the merge uses `--admin`. Any other
+     state (`DIRTY`, `BEHIND`, `UNSTABLE`, `HAS_HOOKS`, …) is a stop. The PR
+     head must also be the commit CI ran on: if a push is newer than the
+     checks, wait for them.
    - The tag does not exist, locally (`git tag -l vX.Y.Z`) or on the remote
      (`git ls-remote --tags origin 'vX.Y.Z*'`), and no release exists (`gh
      release view vX.Y.Z` fails). If the tag exists but the release does not,
@@ -65,10 +71,16 @@ approval. The workflow does **not** create a GitHub release; Phase 4 does.
 
 1. Save the PR body verbatim: `gh pr view <n> --json body --jq .body >
    /tmp/release-pr-body-vX.Y.Z.md`.
-2. `gh pr merge <n> --squash --delete-branch --subject "release vX.Y.Z
+2. `gh pr merge <n> --squash --delete-branch --admin --subject "release vX.Y.Z
    (#<n>)" --body-file /tmp/release-pr-body-vX.Y.Z.md`. The user-chosen squash
-   title has no `chore:` prefix; `--subject` is used verbatim, so keep the `(#<n>)`. No AI attribution. Never `--admin` or bypass checks; if
-   the merge is refused, stop and report.
+   title has no `chore:` prefix; `--subject` is used verbatim, so keep the `(#<n>)`. No AI attribution. Add `--admin`: the "only maintainers can
+   merge" ruleset on `main` refuses a plain merge ("the base branch policy
+   prohibits the merge") even though no review is required, and `--admin` is how
+   a maintainer merges. Invoking this skill authorizes that, **provided every CI
+   check passed** in Phase 1; re-run `gh pr checks <n>` immediately before
+   merging and stop if any check is failing, pending or cancelled. `--admin`
+   never substitutes for green CI. If the merge is refused for any other
+   reason, stop and report.
 3. `git fetch origin main --tags`; the merge commit is `gh pr view <n> --json
    mergeCommit --jq .mergeCommit.oid`. Confirm `git show <sha>:package.json` still
    has version `X.Y.Z`. That commit is the tag target, **not** `origin/main` HEAD:

@@ -6,9 +6,10 @@ import * as path from 'path';
  * what the spike showed Copilot accepts, and nothing that makes a hook run twice.
  */
 
-const FILE = path.join(__dirname, '..', '..', 'examples', 'hook-capture', 'copilot', 'coolhand-capture.json');
+const DIR = path.join(__dirname, '..', '..', 'examples', 'hook-capture', 'copilot');
 
-describe('examples/hook-capture/copilot/coolhand-capture.json', () => {
+describe.each(['coolhand-capture-example.json', path.join('workspace', 'coolhand-capture-example.json')])('examples/hook-capture/copilot/%s', (name) => {
+  const FILE = path.join(DIR, name);
   const config = JSON.parse(readFileSync(FILE, 'utf8')) as { version: unknown; hooks: Record<string, Array<Record<string, unknown>>> };
 
   it('is a version 1 hook file', () => {
@@ -27,7 +28,8 @@ describe('examples/hook-capture/copilot/coolhand-capture.json', () => {
     expect(hook.type).toBe('command');
     expect(hook.timeoutSec).toBeGreaterThanOrEqual(10);
     expect(typeof hook.bash).toBe('string');
-    expect(hook.bash).toContain('capture-turn --agent copilot --skill qa-example');
+    // One hook serves every skill: the skill is a quoted pattern the CLI resolves, never a name baked into the file.
+    expect(hook.bash).toContain("capture-turn --agent copilot --skill 'YOUR_SKILL_PATTERN'");
     expect(hook.bash).toContain('coolhand help capture-turn');
     expect(hook.bash).toContain('npx -y coolhand-cli');
   });

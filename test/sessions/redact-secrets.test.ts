@@ -285,4 +285,32 @@ describe('redactSecrets: JSON-stringified text and pathological input', () => {
 
     expect(Date.now() - started).toBeLessThan(2_000);
   });
+
+  test.each([
+    ['ghs_' + 'a'.repeat(36)],
+    ['ghu_' + 'a'.repeat(36)],
+    ['ghr_' + 'a'.repeat(36)],
+    ['ASIA' + 'A1B2C3D4E5F6G7H8'],
+    ['xapp-1-A0123456789-0123456789-abcdef'],
+    ['SG.' + 'a'.repeat(22) + '.' + 'b'.repeat(43)],
+    ['rk_live_' + 'a'.repeat(24)],
+    ['whsec_' + 'a'.repeat(32)],
+    ['redis://:hunter2hunter2@cache.internal:6379'],
+    ['postgres://user:p@ss:word@db.internal/app'],
+  ])('redacts %s', (secret) => {
+    const out = redactSecrets(`value ${secret} end`);
+
+    expect(out).toContain('[REDACTED]');
+    expect(out).not.toContain(secret.slice(secret.length > 12 ? 6 : 0, secret.length - 2));
+    expect(out).not.toContain('p@ss');
+    expect(out).not.toContain('hunter2');
+  });
+
+  test('redacts a private key whose END marker is missing, and stays fast on unterminated headers', () => {
+    expect(redactSecrets('head:\n-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\nAAAABG5vbmU')).not.toContain('b3BlbnNz');
+
+    const started = Date.now();
+    redactSecrets('-----BEGIN PRIVATE KEY-----\n'.repeat(40_000));
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
 });

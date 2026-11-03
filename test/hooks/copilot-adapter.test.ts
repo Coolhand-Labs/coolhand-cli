@@ -17,8 +17,8 @@ describe('parseCopilotExchanges (recorded skill session)', () => {
       'Summarise turns 1 and 2 in one sentence.',
     ]);
     const first = parsed.exchanges[0];
-    expect(first.skillName).toBe('qa-spike');
-    expect(first.skill?.dir).toBe('/Users/tester/project/.github/skills/qa-spike');
+    expect(first.skills?.map((x) => x.name)).toEqual(['qa-spike']);
+    expect(first.skills?.[0].dir).toBe('/Users/tester/project/.github/skills/qa-spike');
     expect(first.assistantText).toBe('wite');
     expect(first.messages?.map((m) => m.role)).toEqual(['assistant', 'user', 'assistant']);
     expect(first.messages?.[0].blocks).toEqual([
@@ -38,7 +38,7 @@ describe('parseCopilotExchanges (recorded skill session)', () => {
     const parsed = parseCopilotExchanges(await fs.readFile(path.join(FIXTURES, 'unrelated-session.events.jsonl'), 'utf8'));
     expect(parsed.exchanges).toHaveLength(1);
     expect(parsed.exchanges[0]).toMatchObject({ userText: 'what is 2+2?', assistantText: '4' });
-    expect(parsed.exchanges.some((e) => e.skillName)).toBe(false);
+    expect(parsed.exchanges.some((e) => e.skills)).toBe(false);
   });
 
   it('skips garbage lines and never throws', () => {
@@ -112,6 +112,8 @@ describe('copilotTurn (recorded payloads)', () => {
       expect(await copilotTurn(await recordedHook(name, transcript), { skill: 'qa-spike' })).toBeNull();
     }
     expect(await copilotTurn({ ...stop, transcript_path: path.join(home.dir, 'missing.jsonl') }, { skill: 'qa-spike' })).toBeNull();
+    // An unreadable transcript is a fault, not a quiet chat, so it is logged.
+    expect(await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8')).toContain('could not read the transcript: ENOENT');
     expect(await copilotTurn({ ...stop, session_id: undefined }, { skill: 'qa-spike' })).toBeNull();
   });
 
@@ -119,6 +121,26 @@ describe('copilotTurn (recorded payloads)', () => {
     await fs.writeFile(transcript, [events.skill('Pretty Name', '/w/.github/skills/qa-dir'), events.user('/go'), events.assistant('done')].join('\n'));
     expect(await copilotTurn({ session_id: 's', transcript_path: transcript }, { skill: 'qa-dir' })).toMatchObject({ assistantText: 'done' });
     expect(await copilotTurn({ session_id: 's', transcript_path: transcript }, { skill: 'Pretty Name' })).not.toBeNull();
+  });
+
+  it('resolves a --skill pattern to the first matching skill invoked, and ignores skills outside it', async () => {
+    await fs.writeFile(
+      transcript,
+      [events.skill('acme-first'), events.user('/acme-first'), events.assistant('one'), events.skill('acme-second'), events.user('/acme-second'), events.assistant('two')].join('\n')
+    );
+    const stop = { session_id: 's', transcript_path: transcript };
+    expect(await copilotTurn(stop, { skill: '*' })).toMatchObject({ skill: 'acme-first', assistantText: 'two' });
+    expect(await copilotTurn(stop, { skill: 'acme-*' })).toMatchObject({ skill: 'acme-first' });
+    expect(await copilotTurn(stop, { skill: 'acme-s*' })).toMatchObject({ skill: 'acme-second' });
+    expect(await copilotTurn(stop, { skill: 'other-*' })).toBeNull();
+    // A plain name is still exact, and resolves to itself.
+    expect(await copilotTurn(stop, { skill: 'acme-second' })).toMatchObject({ skill: 'acme-second' });
+    expect(await copilotTurn(stop, { skill: 'acme' })).toBeNull();
+  });
+
+  it('sends nothing under a --skill pattern for a chat that invoked no skill', async () => {
+    await fs.writeFile(transcript, [events.user('hello'), events.assistant('hi')].join('\n'));
+    expect(await copilotTurn({ session_id: 's', transcript_path: transcript }, { skill: '*' })).toBeNull();
   });
 
   it('waits for a reply the transcript has not caught up with yet', async () => {
@@ -136,5 +158,71 @@ describe('copilotTurn (recorded payloads)', () => {
     const started = Date.now();
     expect(await copilotTurn({ session_id: 's', transcript_path: transcript }, { skill: 'qa' })).toBeNull();
     expect(Date.now() - started).toBeLessThan(200);
+  });
+});
+
+describe('skills loaded by the model, tool failures and usage kinds', () => {
+  let home: TmpHome;
+  let transcript: string;
+
+  beforeEach(async () => {
+    home = await createTmpHome();
+    transcript = path.join(home.dir, 'events.jsonl');
+  });
+  afterEach(() => home.cleanup());
+
+  const skillEvent = (trigger: string) =>
+    JSON.stringify({ type: 'skill.invoked', timestamp: '2026-11-02T12:00:05.000Z', data: { name: 'qa', path: '/w/.github/skills/qa/SKILL.md', content: '# qa', trigger } });
+
+  it('attaches a skill the model loaded mid-turn to that turn, not to the next prompt', () => {
+    const parsed = parseCopilotExchanges(
+      [events.user('please run the qa checklist'), skillEvent('model-invoked'), events.assistant('running it'), events.user('and now?')].join('\n')
+    );
+    expect(parsed.exchanges[0].skills?.map((x) => x.name)).toEqual(['qa']);
+    expect(parsed.exchanges[1].skills).toBeUndefined();
+  });
+
+  it('still attaches a skill the user typed to the prompt that follows it', () => {
+    const parsed = parseCopilotExchanges([events.user('earlier'), skillEvent('user-invoked'), events.user('/qa')].join('\n'));
+    expect(parsed.exchanges.map((e) => e.skills?.map((x) => x.name))).toEqual([undefined, ['qa']]);
+  });
+
+  it('sends the turn in which the model loaded the skill', async () => {
+    await fs.writeFile(transcript, [events.user('please run the qa checklist'), skillEvent('model-invoked'), events.assistant('checklist started')].join('\n'));
+    expect(await copilotTurn({ session_id: 's', transcript_path: transcript }, { skill: 'qa' })).toMatchObject({ assistantText: 'checklist started' });
+  });
+
+  it('reports the declared name beside the directory so the skill text can be found by either', async () => {
+    await fs.writeFile(transcript, [events.skill('Pretty Name', '/w/.github/skills/qa-dir'), events.user('/go'), events.assistant('done')].join('\n'));
+    const turn = await copilotTurn({ session_id: 's', transcript_path: transcript }, { skill: 'Pretty Name' });
+    expect(turn?.skillBodies?.[0]).toMatchObject({ name: 'Pretty Name', dir: '/w/.github/skills/qa-dir' });
+  });
+
+  it('keeps the error text of a failed tool call, also when the content field is empty', () => {
+    const failed = JSON.stringify({ type: 'tool.execution_complete', timestamp: '2026-11-02T12:00:06.000Z', data: { toolCallId: 'c', success: false, result: { content: '', error: { message: 'permission denied' } } } });
+    const parsed = parseCopilotExchanges([events.user('go'), events.assistant('', [{ toolCallId: 'c', name: 'run', arguments: {} }]), failed].join('\n'));
+    expect(parsed.exchanges[0].messages?.[1].blocks[0]).toMatchObject({ type: 'tool_result', content: 'permission denied', is_error: true });
+  });
+
+  it("counts only the conversation's own model calls toward a turn's usage", () => {
+    const usage = (interactionType: string, inputTokens: number) =>
+      JSON.stringify({ type: 'session.usage_record', timestamp: '2026-11-02T12:00:07.000Z', data: { usage: { interactionType, inputTokens, outputTokens: 1 } } });
+    const parsed = parseCopilotExchanges([events.user('go'), usage('conversation-agent', 10), usage('title-generation', 1000), events.assistant('ok')].join('\n'));
+    expect(parsed.exchanges[0].usage).toMatchObject({ input_tokens: 10, output_tokens: 1 });
+  });
+
+  it('recognises the skill when another one was typed first and the model then loaded this one', async () => {
+    const typed = JSON.stringify({ type: 'skill.invoked', timestamp: '2026-11-02T12:00:00.000Z', data: { name: 'other', path: '/w/.github/skills/other/SKILL.md', content: '# other', trigger: 'user-invoked' } });
+    await fs.writeFile(transcript, [typed, events.user('/other'), skillEvent('model-invoked'), events.assistant('both loaded')].join('\n'));
+
+    const turn = await copilotTurn({ session_id: 's', transcript_path: transcript }, { skill: 'qa' });
+    expect(turn).toMatchObject({ assistantText: 'both loaded' });
+    expect(turn?.skillBodies?.map((b) => b.name)).toEqual(['other', 'qa']);
+  });
+
+  it('keeps two skills typed before one prompt', () => {
+    const typed = (name: string) => JSON.stringify({ type: 'skill.invoked', timestamp: '2026-11-02T12:00:00.000Z', data: { name, path: `/w/.github/skills/${name}/SKILL.md`, content: name, trigger: 'user-invoked' } });
+    const parsed = parseCopilotExchanges([typed('a'), typed('b'), events.user('/a /b')].join('\n'));
+    expect(parsed.exchanges[0].skills?.map((x) => x.name)).toEqual(['a', 'b']);
   });
 });
