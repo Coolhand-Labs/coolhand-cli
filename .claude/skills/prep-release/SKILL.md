@@ -72,13 +72,13 @@ Process the user's chosen PRs one at a time, not as a batch:
    rebase," and continue with the rest. Don't resolve conflicts on someone
    else's branch unilaterally.
 2. `gh pr merge <n> --squash --delete-branch --admin` for each surviving PR.
-   `main` has a ruleset requiring an approving review, which the PR author
-   (the user) can't supply, so a plain merge is refused with "the base branch
-   policy prohibits the merge". The user has standing approval to use
-   `--admin` here for the PRs they chose in Phase 1; don't stop to ask.
-   `--admin` is for that ruleset only: never use it to get past failing
-   checks or a conflicting `mergeStateStatus` (skip those PRs instead), and
-   never apply it to the Phase 5 release-prep PR.
+   `main` has an "only maintainers can merge" ruleset (no review is required),
+   so a plain merge is refused with "the base branch policy prohibits the
+   merge"; `--admin` is how a maintainer merges. The user has standing approval
+   to use `--admin` here for the PRs they chose in Phase 1; don't stop to ask.
+   It is for that ruleset only: never use it to get past failing checks or a
+   conflicting `mergeStateStatus` (skip those PRs instead). This skill never
+   merges the Phase 5 release-prep PR; `/finish-release` does.
 3. After each merge, sync local `main` before evaluating the next PR. First
    check `git status --porcelain` — if it's not empty, stop and surface it
    to the user rather than discarding unknown local state; otherwise
