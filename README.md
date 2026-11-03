@@ -184,6 +184,7 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
 - [Auto-update](./docs/auto-update.md) — background upgrades with a 48-hour bake period, opt-out, and install-method rules
 - [Skill Capture](./docs/skill-capture.md) — skill discovery, dedup, and incremental upload logic for `sync-skills`
 - [Hook Capture](./docs/hook-capture.md) — `capture-turn` hook wiring for skills, recorded fields, spool and reliability
+- [Hook Capture for a Skills Library](./docs/hook-capture-skills-library.md) — one hook for every skill, with the Step 0 text to paste into each skill
 
 ## About Coolhand Labs
 

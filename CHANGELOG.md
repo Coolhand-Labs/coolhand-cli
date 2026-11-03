@@ -2,7 +2,24 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
-## [Unreleased]
+## [0.13.1] - 2026-11-03
+
+### Added
+- `capture-turn --agent copilot --skill` accepts a pattern ending in `*`: `--skill '*'` captures any
+  skill and `--skill 'acme-*'` any skill whose declared name starts with `acme-`. The first matching
+  skill invoked in a session is recorded under its own name and workload, and chats that invoked no
+  matching skill send nothing, so one user-level hook file serves a whole skills library. Patterns
+  are refused (logged, nothing sent) with `--agent claude`. New
+  [docs/hook-capture-skills-library.md](./docs/hook-capture-skills-library.md) covers Claude Code and
+  VS Code / Copilot setup and the Step 0 text to paste at the top of each skill. (#220)
+
+### Changed
+- `metadata.skill` on captured turns is capped at 200 characters. (#220)
+- The Copilot example skill's Step 0 now writes one generic hook file,
+  `~/.copilot/hooks/coolhand-capture.json`, itself (never overwriting an existing one), and its
+  consent text names which skills are covered. The example hook files are renamed
+  `coolhand-capture-example.json` and take `--skill 'YOUR_SKILL_PATTERN'`; the per-skill hook files
+  and the download fallback are removed. The examples are not part of the npm package. (#220)
 
 ## [0.13.0] - 2026-11-03
 
