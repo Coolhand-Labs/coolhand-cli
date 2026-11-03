@@ -958,21 +958,21 @@ When an agent is blocked — because a capability does not exist in its environm
 ### capture-turn
 
 ```bash
-coolhand capture-turn --agent claude|copilot [--skill NAME] [--api-key KEY] [--base-url URL] [--skill-version V] [--anonymous] [--no-declare]
+coolhand capture-turn --agent claude|copilot [--skill NAME|PATTERN] [--api-key KEY] [--base-url URL] [--skill-version V] [--anonymous] [--no-declare]
 ```
 
 Agent hook entrypoint. An AI agent runs it after every turn and pipes the hook's JSON payload to stdin; `capture-turn` sends that turn to Coolhand as one LLM request log: `request_body.messages` is the conversation since the skill was invoked (prompts, thinking, tool calls, tool results and replies, redacted and capped), ending before this turn's reply, and `response_body` is this turn's final reply (see [The conversation so far](./hook-capture.md#the-conversation-so-far)). It authenticates with a **public** API key given on the command line or in `COOLHAND_API_KEY`, so the person using the agent never logs in. It does not read the stored config, ignores `--client-id`, and never prompts.
 
 A hook must not disturb its agent, so `capture-turn` always exits 0 and writes nothing to stdout or stderr. Failures are appended to `~/.coolhand/capture-turns/hook.log`, and turns that could not be delivered are saved to `~/.coolhand/pending/` and replayed after the next successful send. With no key it sends nothing. A mistyped flag is logged there as well rather than printed, unless a person runs the command in a terminal. Each turn is attributed (`metadata.tester`) to `COOLHAND_CAPTURE_USER` if set, otherwise the git email, otherwise an anonymous machine id; see [Who ran it](./hook-capture.md#who-ran-it). Set `COOLHAND_CAPTURE_DISABLED=1` to make the command do nothing at all.
 
-Supported agents are `claude` (Claude Code's `Stop` hook) and `copilot` (VS Code GitHub Copilot's `Stop` hook; reads the turn from the `transcript_path` in the payload, and **needs `--skill`**: a Copilot hook runs for every chat in the workspace, so it sends only when the transcript shows that skill was invoked). See [docs/hook-capture.md](./hook-capture.md) for how to wire it into a skill.
+Supported agents are `claude` (Claude Code's `Stop` hook) and `copilot` (VS Code GitHub Copilot's `Stop` hook; reads the turn from the `transcript_path` in the payload, and **needs `--skill`**: a Copilot hook runs for every chat in the workspace, so it sends only when the transcript shows that skill was invoked; `--skill '*'` or `--skill 'acme-*'` makes one hook serve every skill, or every skill whose name starts with `acme-`). See [docs/hook-capture.md](./hook-capture.md) for how to wire it into a skill.
 
 | Flag | Description |
 |------|-------------|
 | `--agent claude\|copilot` | Required. Which agent's hook payload to expect |
-| `--skill NAME` | Optional for `claude`, **required for `copilot`** (which sends only chats that invoked this skill, and nothing without it). Skill that enabled the hook. Sent as `metadata.skill`, and it declares the skill's workload, selects the skill text sent as `request_body.system`, and (with `--no-declare`) can be kept as a label only |
+| `--skill NAME` | Optional for `claude`, **required for `copilot`** (which sends only chats that invoked this skill, and nothing without it). Skill that enabled the hook. For `copilot` only, a value ending in `*` is a pattern: `'*'` matches any skill and `'acme-*'` any skill whose declared name starts with `acme-` (quote it so the shell doesn't expand it). The first matching skill invoked in a session is the one recorded for it, and the session stays on it. Sent as `metadata.skill`, and it declares the skill's workload, selects the skill text sent as `request_body.system`, and (with `--no-declare`) can be kept as a label only |
 | `--api-key KEY` | Public API key only, never a private key. Falls back to `COOLHAND_API_KEY`. Prefer the environment variable where you can: command-line arguments are visible in `ps` |
 | `--base-url URL` | Coolhand base URL (default `https://coolhandlabs.com`) |
 | `--skill-version V` | Optional. The skill's version; sent as `metadata.skill_version` (never in the declaration). Keep it equal to the skill's frontmatter `version:` |
-| `--no-declare` | With `--skill`, don't declare a workload for the skill. By default `--skill NAME` declares one workload per skill (`<agent>-skill:NAME`, for example `claude-skill:NAME`) and the log is attached to it; see [the skill's workload, its text and token usage](./hook-capture.md#the-skills-workload-its-text-and-token-usage) |
+| `--no-declare` | With `--skill`, don't declare a workload for the skill. By default `--skill NAME` (or the skill a `--skill` pattern matched) declares one workload per skill (`<agent>-skill:NAME`, for example `claude-skill:NAME`) and the log is attached to it; see [the skill's workload, its text and token usage](./hook-capture.md#the-skills-workload-its-text-and-token-usage) |
 | `--anonymous` | Attribute turns to the anonymous machine id instead of the git email, and leave out the working directory. Overrides `COOLHAND_CAPTURE_USER` |

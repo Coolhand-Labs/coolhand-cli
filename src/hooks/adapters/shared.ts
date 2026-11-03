@@ -42,3 +42,13 @@ export function earlierStampsFrom(exchanges: Exchange[]): string[] {
 export function skillMatches(skill: string, candidate: { name?: string; dir: string }): boolean {
   return candidate.name === skill || candidate.dir.split(/[\\/]/).filter(Boolean).pop() === skill;
 }
+
+/** A `--skill` value that ends in `*` is a pattern: `*` is any skill, `acme-*` any skill whose declared name starts with `acme-`. */
+export function isSkillPattern(skill: string): boolean {
+  return skill.endsWith('*');
+}
+
+/** Does a skill answer to a `--skill` value: by name or directory, or, for a pattern, by the prefix of its declared name. */
+export function skillMatchesPattern(skill: string, candidate: { name?: string; dir: string }): boolean {
+  return isSkillPattern(skill) ? (candidate.name ?? '').startsWith(skill.slice(0, -1)) : skillMatches(skill, candidate);
+}

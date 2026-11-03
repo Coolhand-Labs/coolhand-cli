@@ -9,6 +9,8 @@ export type HookAgent = (typeof HOOK_AGENTS)[number];
 export interface HookTurn {
   /** The agent's own session/conversation id. Stable across every turn of a session. */
   sessionId: string;
+  /** The skill this turn belongs to, when the adapter resolved it from a `--skill` pattern. */
+  skill?: string;
   /** What the user typed. Missing when the agent's payload and transcript don't expose it. */
   userText?: string;
   /** The assistant's final reply for the turn. Always non-empty. */

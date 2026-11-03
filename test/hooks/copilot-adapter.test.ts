@@ -123,6 +123,26 @@ describe('copilotTurn (recorded payloads)', () => {
     expect(await copilotTurn({ session_id: 's', transcript_path: transcript }, { skill: 'Pretty Name' })).not.toBeNull();
   });
 
+  it('resolves a --skill pattern to the first matching skill invoked, and ignores skills outside it', async () => {
+    await fs.writeFile(
+      transcript,
+      [events.skill('acme-first'), events.user('/acme-first'), events.assistant('one'), events.skill('acme-second'), events.user('/acme-second'), events.assistant('two')].join('\n')
+    );
+    const stop = { session_id: 's', transcript_path: transcript };
+    expect(await copilotTurn(stop, { skill: '*' })).toMatchObject({ skill: 'acme-first', assistantText: 'two' });
+    expect(await copilotTurn(stop, { skill: 'acme-*' })).toMatchObject({ skill: 'acme-first' });
+    expect(await copilotTurn(stop, { skill: 'acme-s*' })).toMatchObject({ skill: 'acme-second' });
+    expect(await copilotTurn(stop, { skill: 'other-*' })).toBeNull();
+    // A plain name is still exact, and resolves to itself.
+    expect(await copilotTurn(stop, { skill: 'acme-second' })).toMatchObject({ skill: 'acme-second' });
+    expect(await copilotTurn(stop, { skill: 'acme' })).toBeNull();
+  });
+
+  it('sends nothing under a --skill pattern for a chat that invoked no skill', async () => {
+    await fs.writeFile(transcript, [events.user('hello'), events.assistant('hi')].join('\n'));
+    expect(await copilotTurn({ session_id: 's', transcript_path: transcript }, { skill: '*' })).toBeNull();
+  });
+
   it('waits for a reply the transcript has not caught up with yet', async () => {
     await fs.writeFile(transcript, [events.skill('qa'), events.user('/qa')].join('\n') + '\n');
     setTimeout(() => void fs.appendFile(transcript, events.assistant('late reply') + '\n'), 120);
