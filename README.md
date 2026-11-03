@@ -108,6 +108,7 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand update-client-file` | Change a client file's status to draft, published, or archived |
 | `coolhand sync-skills` | Upload locally-built Claude skills (SKILL.md files) to Coolhand as client files |
 | `coolhand wildcard` | Record an agent blocker and exit cleanly |
+| `coolhand capture-turn` | Agent hook: send each finished user and assistant turn to Coolhand with a public API key (see [docs/hook-capture.md](./docs/hook-capture.md)) |
 
 See [docs/commands.md](./docs/commands.md) for full flag reference and usage notes.
 
@@ -180,6 +181,7 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
 - [Configuration File](./docs/config-file.md) — full config schema, multi-client model, `COOLHAND_CONFIG_DIR` override
 - [Session Capture](./docs/session-capture.md) — session scanning, envelope format, deduplication, scope and limitations
 - [Skill Capture](./docs/skill-capture.md) — skill discovery, dedup, and incremental upload logic for `sync-skills`
+- [Hook Capture](./docs/hook-capture.md) — `capture-turn` hook wiring for skills, recorded fields, spool and reliability
 
 ## About Coolhand Labs
 

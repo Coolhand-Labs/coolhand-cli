@@ -1,3 +1,5 @@
+import type { HookAgent } from './hooks/types.js';
+
 export interface ClientEntry {
   client_id: string;
   client_name: string;
@@ -381,6 +383,21 @@ export interface ComplaintBoxOptions {
   logId?: number;
   json?: boolean;
   clientId?: string;
+}
+
+export interface CaptureTurnOptions {
+  agent: HookAgent;
+  /** Name of the skill that enabled the hook; sent as metadata. */
+  skill?: string;
+  /** Public ingest key. Falls back to COOLHAND_API_KEY. */
+  apiKey?: string;
+  baseUrl?: string;
+  /** Attribute turns to the anonymous machine id instead of the git email. */
+  anonymous?: boolean;
+  /** The skill's version; sent as `metadata.skill_version` (never in the declaration). */
+  skillVersion?: string;
+  /** `false` (from `--no-declare`) stops the skill's workload being declared; default is to declare it when `skill` is set. */
+  declare?: boolean;
 }
 
 export interface ClaudeOptions {

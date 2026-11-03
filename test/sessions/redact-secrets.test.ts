@@ -183,3 +183,106 @@ describe('redactSecrets', () => {
     expect(redactSecrets('see https://example.com/a/b for details')).toBe('see https://example.com/a/b for details');
   });
 });
+
+describe('redactSecrets: command lines, env files and cookies', () => {
+  test.each([
+    ['curl -u admin:hunter2 https://x', 'hunter2'],
+    ['cd x && curl -v --user admin:hunter2 https://x', 'hunter2'],
+    ['mysql --password hunter2 db', 'hunter2'],
+    ['tool --client-secret abc123 --github-token ghx1234', 'abc123'],
+    ['tool --secret-key abc123', 'abc123'],
+    ['DB_PASS=abc123', 'abc123'],
+    ['MYSQL_PWD=abc123', 'abc123'],
+    ['credentials: abc123', 'abc123'],
+    ['AUTH_HEADER=abc123', 'abc123'],
+    ['CLIENT_SECRET_VALUE=abc123', 'abc123'],
+    ['Cookie: session=abc123; other=ok123', 'other=ok123'],
+    ['Set-Cookie: sid=abc123', 'abc123'],
+    ['auth_header: Bearer abcdefghijklmnop1234', 'abcdefghijklmnop1234'],
+    ['token: Bearer abcdefghijklmnop1234', 'abcdefghijklmnop1234'],
+    ['tool --authorization Bearer abcdefghijklmnop1234', 'abcdefghijklmnop1234'],
+    ['auth_header: Basic dXNlcjpwYXNz', 'dXNlcjpwYXNz'],
+    ['Authorization: Token abcdefghijklmnop1234', 'abcdefghijklmnop1234'],
+    ['Proxy-Authorization: Negotiate abcdefghijklmnop1234', 'abcdefghijklmnop1234'],
+  ])('redacts %s', (input, secret) => {
+    const out = redactSecrets(input);
+    expect(out).not.toContain(secret);
+    expect(out).toContain('[REDACTED]');
+  });
+
+  test.each([['bypass: true'], ['Tests pass: 12'], ['PWD=/Users/x/proj'], ['mkdir -p build/out'], ['git commit --pass-through x'], ['git commit --author "A B"'], ['tool --auth-url http://x --token-count 5 --secret-name n'], ['max_tokens: 100'], ['the passenger said hi']])('leaves %s alone', (input) => {
+    expect(redactSecrets(input)).toBe(input);
+  });
+});
+
+describe('redactSecrets: JSON-stringified secrets', () => {
+  test.each([
+    ['export TOKEN="abc123" && run', 'abc123'],
+    ['echo password="hunter 2" x', 'hunter 2'],
+    ['tool --password="hunter2"', 'hunter2'],
+    ['mysql --password "hunter2" db', 'hunter2'],
+    ['curl -u "admin:s3cr3t" https://x', 's3cr3t'],
+    ["curl -u 'admin:s3cr3t' https://x", 's3cr3t'],
+    ['curl -su admin:s3cr3t https://x', 's3cr3t'],
+    ['curl https://x \\\n  -u admin:s3cr3t', 's3cr3t'],
+    ['echo password=abc\\', 'abc'],
+    ['set password=C:\\dir\\', 'C:'],
+  ])('redacts and keeps %j parseable', (command, secret) => {
+    const out = redactSecrets(JSON.stringify({ command }));
+
+    expect(out).not.toContain(secret);
+    expect(() => JSON.parse(out)).not.toThrow();
+  });
+
+  test.each([
+    [{ Cookie: 'sid=abc123' }, 'abc123'],
+    [{ Authorization: 'Bearer abc123' }, 'abc123'],
+    [{ Authorization: 'ApiKey zzzsecret' }, 'zzzsecret'],
+    [{ 'Set-Cookie': 'sid=abc123; Path=/' }, 'abc123'],
+  ])('redacts the JSON-keyed header %j', (headers, secret) => {
+    const out = redactSecrets(JSON.stringify(headers));
+
+    expect(out).not.toContain(secret);
+    expect(() => JSON.parse(out)).not.toThrow();
+  });
+
+  test.each([
+    ['const cookie: string = getCookie();'],
+    ['The Authorization: header carries the token.'],
+    ['Set the Cookie: header on the request, then retry.'],
+    ['headers: { authorization: `Bearer ${token}` }'],
+    ['unauthorization: nothing here at all'],
+    ['fetch(url, { credentials: "include" })'],
+    ['credentials: true'],
+  ])('leaves the prose or code %j alone', (input) => {
+    expect(redactSecrets(input)).not.toContain('[REDACTED]');
+  });
+});
+
+test('a scheme word after a keyword does not run on to the next line', () => {
+  expect(redactSecrets('token: basic\nnext_key: value')).toContain('next_key: value');
+});
+
+test.each([[{ credentials: null, stream: true }], [{ credentials: { a: 1 }, x: 2 }], [{ token: [1, 2], secret_value: { a: 1 } }]])('leaves a non-scalar value after a keyword parseable: %j', (body) => {
+  expect(() => JSON.parse(redactSecrets(JSON.stringify(body)))).not.toThrow();
+});
+
+describe('redactSecrets: JSON-stringified text and pathological input', () => {
+  test.each([
+    ['How do I read the cookie: header in express?'],
+    ['curl -u admin:pw'],
+    ['run: tool --password hunter2'],
+    ['authorization: Token abcdefghijklmnop1234'],
+  ])('keeps JSON parseable after redacting %s', (content) => {
+    const body = JSON.stringify({ model: 'm', messages: [{ role: 'user', content }], max_tokens: 100 });
+
+    expect(() => JSON.parse(redactSecrets(body))).not.toThrow();
+  });
+
+  test.each([['curl -u "' + 'a'.repeat(100_000)], ['--password "'.repeat(10_000)], ['curl -u ' + '='.repeat(100_000)], ['curl --user=' + '='.repeat(100_000)], ['cookie:'.repeat(20_000)], ['--a-'.repeat(25_000)]])('stays fast on a long run of %#', (input) => {
+    const started = Date.now();
+    redactSecrets(input);
+
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+});
