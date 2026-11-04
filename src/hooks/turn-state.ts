@@ -37,6 +37,8 @@ export interface TurnState {
    * later turn can send it without the invocation still being inside the transcript window.
    */
   skillText?: string;
+  /** The skill a `--skill` pattern resolved to on the session's first captured turn; later turns stay on it. */
+  skill?: string;
 }
 
 const MAX_CAPTURED_STAMPS = 1000;
@@ -73,6 +75,7 @@ export async function loadTurnState(agent: string, sessionId: string): Promise<T
       captured: Array.isArray(parsed.captured) ? parsed.captured.filter((x): x is string => typeof x === 'string').slice(-MAX_CAPTURED_STAMPS) : undefined,
       anchorLate: parsed.anchorLate === true ? true : undefined,
       skillText: typeof parsed.skillText === 'string' && parsed.skillText ? parsed.skillText : undefined,
+      skill: typeof parsed.skill === 'string' && parsed.skill ? parsed.skill.slice(0, 200) : undefined,
       tester:
         parsed.tester &&
         typeof parsed.tester.id === 'string' &&

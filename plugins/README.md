@@ -12,7 +12,7 @@ plugins/claude/.claude/hooks/hooks.json    the Claude hook (Stop)
 plugins/*/skills/qa-spike/SKILL.md         the skill (same in both)
 ```
 
-The two plugins are separate directories so that neither agent can pick up the other's hook.
+The two plugins are separate directories so that neither agent can pick up the other's hook. Both marketplaces carry the same names (`coolhand-qa-marketplace`, `coolhand-qa`). Copilot reads `.github/plugin/marketplace.json` before `.claude-plugin/marketplace.json`, so it should only ever see the Copilot one; if VS Code lists a second `coolhand-qa`, that is the Claude one and is the wrong one to install.
 
 ## QA-only shortcuts (not what a real plugin would ship)
 
@@ -32,4 +32,4 @@ claude plugin marketplace add /Users/woodchip/conductor/workspaces/coolhand-cli/
 claude plugin install coolhand-qa@coolhand-qa-marketplace
 ```
 
-then run `/coolhand-qa:qa-spike`. (Adding from GitHub with `claude plugin marketplace add Coolhand-Labs/coolhand-cli` reads the default branch, so use the local path for this branch.) Check `~/.coolhand/capture-turns/` for a `copilot-*` or `claude-*` state file and `hook.log` for errors. A chat that never ran a `qa-*` skill must create neither. Remove with `claude plugin marketplace remove coolhand-qa-marketplace`.
+then run `/coolhand-qa:qa-spike`. (Adding from GitHub with `claude plugin marketplace add Coolhand-Labs/coolhand-cli` reads the default branch, so use the local path for this branch.) Check `~/.coolhand/capture-turns/` for a `copilot-*` or `claude-*` state file and `hook.log` for errors. A chat that never ran a `qa-*` skill must create neither (the hook logs nothing for a session it skips, so the absence of a state file is the check, not `hook.log`). For Claude Code the skill must be run with its slash command: a skill the model loads itself is deliberately not captured. Remove with `claude plugin marketplace remove coolhand-qa-marketplace`.

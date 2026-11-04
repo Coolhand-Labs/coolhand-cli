@@ -463,7 +463,7 @@ function rawText(content: unknown): string {
   return '';
 }
 
-const SKILL_BODY_PREFIX = 'Base directory for this skill:';
+export const SKILL_BODY_PREFIX = 'Base directory for this skill:';
 
 /**
  * Claude Code injects an invoked skill as a meta user line: `Base directory for this skill: <dir>`,

@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
-import { lastTurnFrom, parseExchanges, type Exchange } from '../../sessions/claude-scanner.js';
+import { lastTurnFrom, parseExchanges, SKILL_BODY_PREFIX, type Exchange } from '../../sessions/claude-scanner.js';
 import type { AdapterContext, EarlierExchange, HookInput, HookTurn } from '../types.js';
-import { earlierFrom, earlierStampsFrom, isSkillPattern, resolveSkill, sameText, splitCurrent, str } from './shared.js';
+import { earlierFrom, earlierStampsFrom, isSkillPattern, resolveSkill, sameText, skillLabel, splitCurrent, str } from './shared.js';
 
 /**
  * How much of the transcript's tail to read. A turn full of tool output can run to megabytes, and the
@@ -10,17 +10,34 @@ import { earlierFrom, earlierStampsFrom, isSkillPattern, resolveSkill, sameText,
  */
 const TRANSCRIPT_TAIL_BYTES = 8 * 1024 * 1024;
 
-async function readTail(filePath: string, maxBytes: number): Promise<string> {
+async function readTail(filePath: string, maxBytes: number): Promise<Buffer> {
   const handle = await fs.open(filePath, 'r');
   try {
     const { size } = await handle.stat();
     const length = Math.min(size, maxBytes);
     const buffer = Buffer.alloc(length);
     const { bytesRead } = await handle.read(buffer, 0, length, size - length);
-    return buffer.subarray(0, bytesRead).toString('utf8');
+    return buffer.subarray(0, bytesRead);
   } finally {
     await handle.close();
   }
+}
+
+/** The command a typed `/name args` (or `/plugin:name args`) prompt names, without the plugin namespace. */
+function slashCommandName(userText: string | undefined): string | undefined {
+  const match = /^\/([^\s/]+)/.exec(userText ?? '');
+  return match?.[1].split(':').pop();
+}
+
+/**
+ * The skills the USER invoked in this session, oldest first: an exchange counts only when its prompt is the slash command
+ * that names the skill whose body was injected. A skill the model loaded by itself (a `Skill` tool call) writes the same
+ * body line but follows no matching command, so a session-wide hook never sends a session on its account.
+ */
+function slashInvokedSkills(exchanges: Exchange[]): Array<{ dir: string; text: string; timestamp?: string }> {
+  return exchanges.flatMap((e) =>
+    e.skill && slashCommandName(e.userText) === skillLabel(e.skill) ? [{ ...e.skill, timestamp: e.timestamp }] : []
+  );
 }
 
 /**
@@ -44,7 +61,9 @@ function transcriptShowsThisTurn(tail: { userText?: string; assistantText?: stri
  *
  * A skill's own hook runs only while that skill is active, so `--skill NAME` filters nothing. A hook that runs for EVERY
  * session (one a plugin ships) passes a `--skill` pattern (`*`, `acme-*`): then a turn is sent only when the transcript
- * shows a matching skill was invoked (a slash command that injected its body), and that skill is returned as `skill`.
+ * shows the user invoked a matching skill with a slash command, and that skill (its folder name) is returned as `skill`.
+ * `ctx.pinnedSkill` is the skill an earlier turn of this session resolved to: it is kept even after the invocation has
+ * scrolled out of the transcript window, so a long session keeps being captured under one skill.
  *
  * Returns `null` for any other event, for a session that invoked no skill the pattern matches, or when there is nothing to send.
  */
@@ -63,11 +82,20 @@ export async function claudeTurn(input: HookInput, ctx: AdapterContext = {}): Pr
   let exchangeTimestamp: string | undefined;
   let current: Exchange | undefined;
   let skillBodies: HookTurn['skillBodies'];
+  let slashSkills: ReturnType<typeof slashInvokedSkills> = [];
   let earlierStamps: string[] = [];
+  const pattern = ctx.skill && isSkillPattern(ctx.skill) ? ctx.skill : undefined;
   const transcriptPath = str(input.transcript_path);
   if (transcriptPath) {
     try {
-      const parsed = parseExchanges(await readTail(transcriptPath, TRANSCRIPT_TAIL_BYTES));
+      const bytes = await readTail(transcriptPath, TRANSCRIPT_TAIL_BYTES);
+      // A session-wide hook runs after every turn of every session: skip decoding and parsing when no skill (whether the user
+      // or the model loaded it) ever injected its body in this window. A skill body is injected as `SKILL_BODY_PREFIX <dir>`.
+      if (pattern && !ctx.pinnedSkill && !bytes.includes(SKILL_BODY_PREFIX)) {
+        return null;
+      }
+      const parsed = parseExchanges(bytes.toString('utf8'));
+      slashSkills = slashInvokedSkills(parsed.exchanges);
       tail = lastTurnFrom(parsed);
       // Everything before the latest exchange that has a prompt of its own, oldest first.
       exchangeTimestamp = parsed.exchanges[parsed.exchanges.length - 1]?.timestamp;
@@ -84,8 +112,8 @@ export async function claudeTurn(input: HookInput, ctx: AdapterContext = {}): Pr
   if (!assistantText) {
     return null;
   }
-  const skill = ctx.skill && isSkillPattern(ctx.skill) ? resolveSkill(ctx.skill, skillBodies ?? []) : undefined;
-  if (ctx.skill && isSkillPattern(ctx.skill) && !skill) {
+  const skill = pattern ? ctx.pinnedSkill ?? resolveSkill(pattern, slashSkills) : undefined;
+  if (pattern && !skill) {
     return null;
   }
 

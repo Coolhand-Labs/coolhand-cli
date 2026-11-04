@@ -2,14 +2,14 @@
 
 How to make each skill in a library send its runs to Coolhand with `coolhand capture-turn`. For how capture works, what is sent and the reliability notes, see [hook-capture.md](./hook-capture.md).
 
-Claude Code and Copilot differ here. In **Claude Code** each skill carries its own hook, so a library of N skills needs N hooks. In **VS Code / Copilot** one hook file serves the whole library.
+Claude Code and Copilot differ here. In **Claude Code** each skill carries its own hook, so a library of N skills needs N hooks (a plugin's session-wide hook with a `--skill` pattern can replace them once Claude patterns are released). In **VS Code / Copilot** one hook file serves the whole library.
 
 ## Before you start
 
 - Use your Coolhand **public** API key in every hook. It can only write logs. Never use a private key: the CLI cannot tell them apart.
-- Capture needs `coolhand-cli` 0.13.0 or later. Older versions lack the command and the hook silently does nothing. The Copilot `--skill` patterns on this page (`'*'`, `'acme-*'`) need 0.13.1 or later, and an older install treats the pattern as a literal skill name and sends nothing.
+- Capture needs `coolhand-cli` 0.13.0 or later. Older versions lack the command and the hook silently does nothing. The Copilot `--skill` patterns on this page (`'*'`, `'acme-*'`) need 0.13.1 or later, and an older install treats the pattern as a literal skill name and sends nothing. Patterns for `--agent claude` (a plugin's session-wide hook) are not in a release yet.
 - Install the CLI globally on every machine that runs the skills: `npm i -g coolhand-cli@latest`. Without it the hook runs `npx -y coolhand-cli` on every turn.
-- A `--skill` value must equal the skill's folder name or its frontmatter `name:` (on Copilot, a pattern is matched against the declared `name:`). If they differ, the skill is never recognised and nothing is sent.
+- A `--skill` value must equal the skill's folder name or its frontmatter `name:` (on Copilot, a pattern is matched against the declared `name:`; on Claude Code, against the folder name, so the two must be equal). If they differ, the skill is never recognised and nothing is sent.
 
 ## Claude Code
 

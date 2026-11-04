@@ -1,7 +1,7 @@
 import { ExitCode } from '../errors.js';
 import { PACKAGE_IDENTIFIER } from '../version.js';
 import { ADAPTERS } from '../hooks/adapters/index.js';
-import { isSkillPattern, skillMatches } from '../hooks/adapters/shared.js';
+import { isSkillPattern, skillMatches, skillMatchesPattern } from '../hooks/adapters/shared.js';
 import { isCaptureDisabled } from '../hooks/disabled.js';
 import { logHookEvent } from '../hooks/hook-log.js';
 import { resolveTesterIdentity } from '../hooks/identity.js';
@@ -89,7 +89,16 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
     await logHookEvent('capture-turn (copilot): --skill is required (a Copilot hook runs for every chat and sends only the skill\'s); nothing sent.');
     return;
   }
-  const parsed: HookTurn | null = await ADAPTERS[opts.agent](input, { skill: opts.skill });
+  // Claude only: a pattern resolves to one skill on the session's first captured turn and the session stays on it, so a long session
+  // is not lost (or moved to another skill) when the invocation scrolls out of the transcript window. A pin left by
+  // another hook entry on this session only counts if it matches this entry's pattern.
+  const sessionId = typeof input.session_id === 'string' ? input.session_id : undefined; // the Claude adapter reads only this spelling too
+  let pinnedSkill: string | undefined;
+  if (opts.agent === 'claude' && opts.skill && isSkillPattern(opts.skill) && sessionId) {
+    const pinned = (await loadTurnState(opts.agent, sessionId)).skill;
+    pinnedSkill = pinned && skillMatchesPattern(opts.skill, { name: pinned, dir: pinned }) ? pinned : undefined;
+  }
+  const parsed: HookTurn | null = await ADAPTERS[opts.agent](input, { skill: opts.skill, pinnedSkill });
   if (!parsed) {
     return;
   }
@@ -102,10 +111,10 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
     return;
   }
   const turnIndex = state.turnIndex + 1;
-  // A pattern is resolved by the adapter to the first matching skill invoked in the session (the transcript is cumulative,
-  // so every turn resolves it the same way); it is never recorded as the skill's name.
+  // A pattern is resolved by the adapter (to the pinned skill, else the first matching one invoked); it is never recorded as the skill's name.
   const skill = opts.skill && isSkillPattern(opts.skill) ? turn.skill : opts.skill;
   if (opts.skill && isSkillPattern(opts.skill) && !skill) {
+    // Defensive: both adapters already return null for a pattern that matches nothing.
     await logHookEvent(`capture-turn (${opts.agent}): --skill ${opts.skill} matched no skill in ${turn.sessionId}; nothing sent.`);
     return;
   }
@@ -160,6 +169,7 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
       ...(anchorToSave ? { anchor: anchorToSave } : {}),
       captured: withCaptured(state.captured, turn.exchangeTimestamp),
       ...(skillText ? { skillText } : {}),
+      ...(opts.agent === 'claude' && skill && opts.skill && isSkillPattern(opts.skill) ? { skill } : {}),
       ...(seededLate || state.anchorLate ? { anchorLate: true } : {}),
       ...(opts.anonymous ? {} : { tester }),
     });
