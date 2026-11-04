@@ -70,6 +70,14 @@ describe('download-client-file command', () => {
     expect(await fs.readFile(path.join(dir, 'deck.bin'))).toEqual(Buffer.from([0x73, 0x6c, 0x00, 0xff]));
   });
 
+  test('creates the downloaded file readable only by its owner', async () => {
+    if (process.platform === 'win32') {
+      return;
+    }
+    expect(await run({ id: 'f1' })).toBe(0);
+    expect((await fs.stat(path.join(dir, 'deck.bin'))).mode & 0o777).toBe(0o600);
+  });
+
   test('writes to --output when given', async () => {
     const out = path.join(dir, 'custom.bin');
     expect(await run({ id: 'f1', output: out })).toBe(0);
