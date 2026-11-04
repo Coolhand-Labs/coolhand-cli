@@ -2,18 +2,53 @@
 
 How to make each skill in a library send its runs to Coolhand with `coolhand capture-turn`. For how capture works, what is sent and the reliability notes, see [hook-capture.md](./hook-capture.md).
 
-Claude Code and Copilot differ here. In **Claude Code** each skill carries its own hook, so a library of N skills needs N hooks (a plugin's session-wide hook with a `--skill` pattern can replace them once Claude patterns are released). In **VS Code / Copilot** one hook file serves the whole library.
+Claude Code and Copilot differ here. In **Claude Code** a skill can carry its own hook, so a library of N skills needs N hooks, or you can ship the library as a **plugin** whose single session-wide hook uses a `--skill` pattern. In **VS Code / Copilot** one hook file serves the whole library.
 
 ## Before you start
 
 - Use your Coolhand **public** API key in every hook. It can only write logs. Never use a private key: the CLI cannot tell them apart.
-- Capture needs `coolhand-cli` 0.13.0 or later. Older versions lack the command and the hook silently does nothing. The Copilot `--skill` patterns on this page (`'*'`, `'acme-*'`) need 0.13.1 or later, and an older install treats the pattern as a literal skill name and sends nothing. Patterns for `--agent claude` (a plugin's session-wide hook) are not in a release yet.
+- Capture needs `coolhand-cli` 0.13.0 or later. Older versions lack the command and the hook silently does nothing. The `--skill` patterns on this page (`'*'`, `'acme-*'`) need 0.13.1 or later for `--agent copilot` and 0.13.2 or later for `--agent claude`. An older install treats the pattern as a literal skill name and sends nothing.
 - Install the CLI globally on every machine that runs the skills: `npm i -g coolhand-cli@latest`. Without it the hook runs `npx -y coolhand-cli` on every turn.
 - A `--skill` value must equal the skill's folder name or its frontmatter `name:` (on Copilot, a pattern is matched against the declared `name:`; on Claude Code, against the folder name, so the two must be equal). If they differ, the skill is never recognised and nothing is sent.
 
 ## Claude Code
 
-Each skill carries its own `Stop` hook in its `SKILL.md` frontmatter. Add this to each skill:
+Two ways to wire a library: one plugin hook with a pattern (recommended for a library), or a hook in each skill.
+
+### One plugin hook for the whole library
+
+Ship the skills as a Claude Code plugin and give the plugin a single `Stop` hook. The hook runs after every turn of every Claude Code session on a machine where the plugin is installed. `capture-turn --agent claude --skill 'acme-*'` then sends a session only when the **user** invoked a matching skill with a slash command (`/skill` or `/plugin:skill`); a skill the model loads by itself does not count, and a session that invoked no matching skill sends nothing. The skill is recorded under its own folder name and workload, and the first matching skill in a session is the one it stays on.
+
+1. Put the skills in the plugin's `skills/` folder and name each skill's folder after its `name:` (they must be equal), with a shared prefix such as `acme-`.
+2. Add a hooks file, for example `.claude/hooks/hooks.json` (or the default `hooks/hooks.json`), and point the plugin manifest at it with `"hooks": "./.claude/hooks/hooks.json"` in `.claude-plugin/plugin.json`:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 30,
+            "command": "export COOLHAND_API_KEY=YOUR_PUBLIC_API_KEY; if command -v coolhand >/dev/null 2>&1 && coolhand help capture-turn >/dev/null 2>&1; then coolhand capture-turn --agent claude --skill 'acme-*'; else npx -y coolhand-cli capture-turn --agent claude --skill 'acme-*'; fi >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+3. Replace `YOUR_PUBLIC_API_KEY` with your Coolhand **public** key and `'acme-*'` with your pattern (see the table under VS Code / Copilot for what `'*'` captures: it covers every skill a person runs, not just yours). Keep the pattern quoted.
+4. Publish the plugin in a marketplace. People install it with `claude plugin marketplace add <owner/repo>` and `claude plugin install <plugin>@<marketplace>`, then run a skill with its slash command, for example `/acme:acme-review`.
+5. Check that `~/.coolhand/capture-turns/claude-<session>-*.json` appears after running a skill, and that a session that ran no matching skill creates none. The hook logs nothing for a session it skips, so the absent state file is the check.
+
+The resolved skill is kept in the session's state file, so a long session keeps being captured after the skill invocation scrolls out of the 8 MB transcript window. A resumed session (`claude --resume`) captures nothing until a matching skill is invoked again in it. The repository's throwaway QA plugin, [plugins/README.md](../plugins/README.md), is a working layout; it runs a local build and reads its key from `COOLHAND_CAPTURE_API_KEY`, so do not copy those two parts. Its two plugin manifests have been checked with `claude plugin validate` but not yet run live in Claude Code.
+
+### A hook in each skill
+
+Each skill can instead carry its own `Stop` hook in its `SKILL.md` frontmatter. Use this when the skills are not in a plugin. Add this to each skill:
 
 ```yaml
 hooks:
