@@ -55,6 +55,11 @@ describe('sanitizeHeaders', () => {
     expect(result['x-api-key']).toBe('[REDACTED]');
   });
 
+  test('redacts anthropic-api-key header', () => {
+    const result = sanitizeHeaders({ 'Anthropic-Api-Key': 'sk-ant-secret' });
+    expect(result['Anthropic-Api-Key']).toBe('[REDACTED]');
+  });
+
   test('redacts cf-aig-authorization header', () => {
     const result = sanitizeHeaders({ 'cf-aig-authorization': 'secret-token' });
     expect(result['cf-aig-authorization']).toBe('[REDACTED]');
