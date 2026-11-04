@@ -16,19 +16,19 @@ The two plugins are separate directories so that neither agent can pick up the o
 
 ## QA-only shortcuts (not what a real plugin would ship)
 
-- The hook runs the **local build** at `/Users/woodchip/conductor/workspaces/coolhand-cli/plugin-qa/dist/bin.js` (run `npm install && npm run build` there first), because `--skill` patterns are not in a published release. A real plugin would call `coolhand`, with an `npx -y coolhand-cli` fallback, as in `examples/hook-capture/copilot/coolhand-capture-example.json`.
+- The hook runs the **local build** at `/Users/woodchip/conductor/workspaces/coolhand-cli/dhaka-v3/dist/bin.js` (run `npm install && npm run build` there first), because `--skill` patterns are not in a published release. A real plugin would call `coolhand`, with an `npx -y coolhand-cli` fallback, as in `examples/hook-capture/copilot/coolhand-capture-example.json`.
 - The key comes from `COOLHAND_CAPTURE_API_KEY` in the environment of VS Code / Claude Code, so no key is committed. With it unset the hook does nothing. A real plugin would embed the **public** key.
 
 ## Try it
 
 Both agents can add this checkout as a local marketplace, which is the quickest way to test (and picks up edits without a push):
 
-VS Code / Copilot: add `/Users/woodchip/conductor/workspaces/coolhand-cli/plugin-qa` (or `Coolhand-Labs/coolhand-cli#qa-plugin-marketplace` once pushed) to the `chat.plugins.marketplaces` setting, install `coolhand-qa` from the Plugins view, start a new chat, run `/qa-spike`.
+VS Code / Copilot: add `/Users/woodchip/conductor/workspaces/coolhand-cli/dhaka-v3` (or `Coolhand-Labs/coolhand-cli#qa-plugin-marketplace` once pushed) to the `chat.plugins.marketplaces` setting, install `coolhand-qa` from the Plugins view, start a new chat, run `/qa-spike`.
 
 Claude Code:
 
 ```
-claude plugin marketplace add /Users/woodchip/conductor/workspaces/coolhand-cli/plugin-qa
+claude plugin marketplace add /Users/woodchip/conductor/workspaces/coolhand-cli/dhaka-v3
 claude plugin install coolhand-qa@coolhand-qa-marketplace
 ```
 
