@@ -386,7 +386,16 @@ function slashCommandPrompt(text: string): string {
   if (!head.startsWith('<command-name>') && !head.startsWith('<command-message>')) {
     return text;
   }
-  const tag = (name: string): string | undefined => new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(text)?.[1]?.trim();
+  // indexOf, not a lazy regex: a pasted log full of unclosed `<command-name>` is quadratic as a regex.
+  const tag = (name: string): string | undefined => {
+    const open = `<${name}>`;
+    const start = text.indexOf(open);
+    if (start === -1) {
+      return undefined;
+    }
+    const end = text.indexOf(`</${name}>`, start + open.length);
+    return end === -1 ? undefined : text.slice(start + open.length, end).trim();
+  };
   const command = tag('command-name') ?? (tag('command-message') ? `/${tag('command-message')}` : undefined);
   if (!command) {
     return text;

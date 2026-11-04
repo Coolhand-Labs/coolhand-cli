@@ -24,6 +24,11 @@ All notable changes to `coolhand-cli` will be documented in this file.
   `.github/plugin/` manifests plus `plugins/`). It is a test fixture and is not part of the published
   package. (#222)
 
+### Fixed
+- Parsing a Claude Code prompt that starts with `<command-name>` no longer takes quadratic time when
+  the text holds many unclosed `<command-name>` tags (for example a pasted transcript). Found in the
+  v0.13.2 release red-team.
+
 ## [0.13.1] - 2026-11-03
 
 ### Added
