@@ -112,18 +112,34 @@ approval. The workflow does **not** create a GitHub release; Phase 4 does.
    and "no new commands or flags" when true), then only the sections that have
    content from `### New commands`, `### Changed`, `### Security`, `### Fixed`,
    and always a closing `### Breaking changes` (`None.` plus why, or the
-   migration). There is no Known Follow-ups section in this repo.
+   migration). There is no Known Follow-ups section in this repo. Credit for
+   outside contributors (step 2) goes in a `### Thanks` section just before
+   `### Breaking changes`, so that stays the closing section.
 2. Source the content from the `## [X.Y.Z]` CHANGELOG section and the merged
    PRs since the previous tag (`git log v<previous>..vX.Y.Z --oneline`), reading
    the PRs and diff for anything the changelog compresses. Write for users: a
    short `bash` example per new command, migration notes for behavior changes,
-   full `https://github.com/...` URLs.
+   full `https://github.com/...` URLs. Carry over the CHANGELOG's credit:
+   `thanks @login` next to the PR link on each outside contributor's entry
+   (`([#222](https://github.com/...), thanks @login)`), and the `### Thanks`
+   section with its first-time welcome.
 3. **Verify every claim before publishing.** Don't describe a behavior you
    haven't read in the code or the PR; check flags against `docs/commands.md`
    and `src/cli.ts`; check `gh issue view <n>` / `gh pr view <n>` on anything
    you link. A note that misstates scope is worse than a short one.
 4. Write the notes to `/tmp/release-notes-vX.Y.Z.md` (outside the repo).
-5. `gh release create vX.Y.Z --verify-tag --title "vX.Y.Z" --notes-file
+5. **Check contributor credit.** For every `(#N)` in the CHANGELOG section,
+   `gh pr view N --json author`; for each author that is neither a bot nor a
+   team member (`gh api repos/{owner}/{repo}/pulls/N --jq .author_association`
+   is not `MEMBER`, `OWNER` or `COLLABORATOR`), the notes file must carry `thanks
+   @login` on the entry and a `### Thanks` section naming them. If that author
+   had no commit on `main` before this release (`gh api
+   "repos/{owner}/{repo}/commits?author=<login>&until=<previous-tag-date>"` is
+   `[]`), the thanks must also say it is their first contribution. If any of it
+   is missing from the notes, or from the CHANGELOG section `/prep-release`
+   wrote, stop and tell the user before publishing, since the release notes are
+   what the contributor sees; don't edit the tagged CHANGELOG silently.
+6. `gh release create vX.Y.Z --verify-tag --title "vX.Y.Z" --notes-file
    /tmp/release-notes-vX.Y.Z.md --latest`. Not a draft and not a prerelease,
    same as the previous releases. Confirm with
    `gh release view vX.Y.Z --json name,tagName,isDraft,url`.
@@ -133,6 +149,8 @@ approval. The workflow does **not** create a GitHub release; Phase 4 does.
 State, in the final message:
 - The merged PR number and its merge commit, and the tag (it points at that commit).
 - The release URL.
+- Outside and first-time contributors credited in the release notes, by
+  `@login` and PR (or that there were none).
 - The Publish run (`gh run list --workflow publish.yml --limit 1`) and whether
   `publish` is waiting on `npm-publish` approval. Never approve it or publish
   another way. A red run means the package was **not** published. If asked
