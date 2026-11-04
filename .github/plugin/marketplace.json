@@ -1,0 +1,18 @@
+{
+  "name": "coolhand-qa-marketplace",
+  "owner": {
+    "name": "Coolhand Labs"
+  },
+  "metadata": {
+    "description": "QA plugin that tests Coolhand skill capture out of the box (issue #213)",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "coolhand-qa",
+      "description": "qa-spike skill plus a Coolhand capture hook for VS Code Copilot",
+      "version": "0.1.0",
+      "source": "./plugins/copilot"
+    }
+  ]
+}

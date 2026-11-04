@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import { lastTurnFrom, parseExchanges, type Exchange } from '../../sessions/claude-scanner.js';
-import type { EarlierExchange, HookInput, HookTurn } from '../types.js';
-import { earlierFrom, earlierStampsFrom, sameText, splitCurrent, str } from './shared.js';
+import type { AdapterContext, EarlierExchange, HookInput, HookTurn } from '../types.js';
+import { earlierFrom, earlierStampsFrom, isSkillPattern, resolveSkill, sameText, splitCurrent, str } from './shared.js';
 
 /**
  * How much of the transcript's tail to read. A turn full of tool output can run to megabytes, and the
@@ -42,9 +42,13 @@ function transcriptShowsThisTurn(tail: { userText?: string; assistantText?: stri
  * whose prompt was submitted before the skill's hooks registered. If the transcript can't be read
  * the turn is still captured, just without the user half.
  *
- * Returns `null` for any other event or when there is nothing to send.
+ * A skill's own hook runs only while that skill is active, so `--skill NAME` filters nothing. A hook that runs for EVERY
+ * session (one a plugin ships) passes a `--skill` pattern (`*`, `acme-*`): then a turn is sent only when the transcript
+ * shows a matching skill was invoked (a slash command that injected its body), and that skill is returned as `skill`.
+ *
+ * Returns `null` for any other event, for a session that invoked no skill the pattern matches, or when there is nothing to send.
  */
-export async function claudeTurn(input: HookInput): Promise<HookTurn | null> {
+export async function claudeTurn(input: HookInput, ctx: AdapterContext = {}): Promise<HookTurn | null> {
   const event = str(input.hook_event_name);
   if (event !== undefined && event !== 'Stop') {
     return null;
@@ -80,9 +84,14 @@ export async function claudeTurn(input: HookInput): Promise<HookTurn | null> {
   if (!assistantText) {
     return null;
   }
+  const skill = ctx.skill && isSkillPattern(ctx.skill) ? resolveSkill(ctx.skill, skillBodies ?? []) : undefined;
+  if (ctx.skill && isSkillPattern(ctx.skill) && !skill) {
+    return null;
+  }
 
   return {
     sessionId,
+    ...(skill ? { skill } : {}),
     userText: tail.userText,
     assistantText,
     model: tail.model,

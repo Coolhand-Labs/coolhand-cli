@@ -936,6 +936,28 @@ describe('capture-turn', () => {
       expect(log(0).declared.template).toBeUndefined();
     });
 
+    it('with a --skill pattern, a session-wide hook sends only sessions that invoked a matching skill, under that skill', async () => {
+      const mine = await write('mine', [{ u: '/qa-login', a: 'started', skill: 'qa-login' }]);
+      const other = await write('other', [{ u: '/deploy', a: 'deployed', skill: 'deploy' }]);
+      const plain = await write('plain', [{ u: 'what is 2+2?', a: '4' }]);
+      const hook = (name: string, transcript: string) => stop({ session_id: name, transcript_path: transcript, last_assistant_message: undefined });
+
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => hook('s-other', other) });
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => hook('s-plain', plain) });
+      expect(server.received).toHaveLength(0);
+
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => hook('s-mine', mine) });
+      expect(server.received).toHaveLength(1);
+      expect(log(0).metadata.skill).toBe('qa-login');
+      expect(log(0).declared.workload.key).toBe('claude-skill:qa-login');
+      expect(JSON.stringify(server.received)).toContain('Walk through the login checklist.');
+
+      // `*` takes any skill, and still never records the pattern as the skill's name.
+      await run({ ...opts(), skill: '*' }, { readInput: async () => hook('s-other', other) });
+      expect(log(1).metadata.skill).toBe('deploy');
+      expect(JSON.stringify(server.received)).not.toContain('claude-skill:*');
+    });
+
     it('uses the same workload key on every turn and session of a skill, a different one for another skill, and never sends a template', async () => {
       await run(opts(), { readInput: async () => stop({ session_id: 'session-a' }) });
       await run(opts(), { readInput: async () => stop({ session_id: 'session-a', last_assistant_message: 'a later turn' }) });
@@ -1238,12 +1260,6 @@ describe('capture-turn --agent copilot', () => {
     expect(server.received).toHaveLength(1);
     expect(server.received[0].body.llm_request_log.metadata.skill).toBe('qa-login');
     expect(JSON.stringify(server.received)).not.toContain('copilot-skill:');
-  });
-
-  it('refuses a --skill pattern for claude, with a note in hook.log', async () => {
-    await run({ agent: 'claude', skill: '*', apiKey: 'pk_test_123', baseUrl: server.url }, { readInput: async () => ({ hook_event_name: 'Stop', session_id: 'c1', transcript_path: transcriptPath }) });
-    expect(server.received).toHaveLength(0);
-    expect(await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8')).toContain('only supported for --agent copilot');
   });
 
   it('does not resend a double-fired Stop', async () => {

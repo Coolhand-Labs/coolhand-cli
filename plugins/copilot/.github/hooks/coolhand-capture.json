@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "bash": "[ -n \"$COOLHAND_CAPTURE_API_KEY\" ] || exit 0; export COOLHAND_API_KEY=\"$COOLHAND_CAPTURE_API_KEY\"; node \"/Users/woodchip/conductor/workspaces/coolhand-cli/plugin-qa/dist/bin.js\" capture-turn --agent copilot --skill 'qa-*' >/dev/null 2>&1 || true",
+        "timeoutSec": 30
+      }
+    ]
+  }
+}

@@ -89,10 +89,6 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
     await logHookEvent('capture-turn (copilot): --skill is required (a Copilot hook runs for every chat and sends only the skill\'s); nothing sent.');
     return;
   }
-  if (opts.skill && isSkillPattern(opts.skill) && opts.agent !== 'copilot') {
-    await logHookEvent(`capture-turn (${opts.agent}): --skill patterns (${opts.skill}) are only supported for --agent copilot; nothing sent.`);
-    return;
-  }
   const parsed: HookTurn | null = await ADAPTERS[opts.agent](input, { skill: opts.skill });
   if (!parsed) {
     return;
