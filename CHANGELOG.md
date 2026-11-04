@@ -2,6 +2,33 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.13.2] - 2026-11-04
+
+### Added
+- `capture-turn --agent claude --skill` accepts a pattern ending in `*`, like Copilot: `--skill 'qa-*'`
+  or `--skill '*'` lets a hook that runs in every Claude Code session (such as a plugin's
+  `hooks/hooks.json`) capture only the sessions where the **user** invoked a matching skill with a
+  slash command (`/skill` or `/plugin:skill`). A skill the model loads itself does not count. The
+  skill is recorded under its folder name and workload, and a Claude skill's `name:` must equal its
+  folder name. The resolved skill is kept in the session's state file, so a long session keeps being
+  captured after the invocation leaves the 8 MB transcript window. Existing `--skill NAME` hooks are
+  unchanged. (#222)
+
+### Changed
+- The skill pattern matcher moved into `src/hooks/adapters/shared.ts` and is shared by the Claude
+  and Copilot adapters, and a cheap byte check skips parsing a transcript that never loaded a skill.
+  Patterns with `--agent claude` are no longer refused. (#222)
+- `docs/commands.md`, `docs/hook-capture.md` and `docs/hook-capture-skills-library.md` describe the
+  Claude pattern behavior. (#222)
+- The repository carries a throwaway QA plugin marketplace for #213 (`.claude-plugin/` and
+  `.github/plugin/` manifests plus `plugins/`). It is a test fixture and is not part of the published
+  package. (#222)
+
+### Fixed
+- Parsing a Claude Code prompt that starts with `<command-name>` no longer takes quadratic time when
+  the text holds many unclosed `<command-name>` tags (for example a pasted transcript). Found in the
+  v0.13.2 release red-team.
+
 ## [0.13.1] - 2026-11-03
 
 ### Added
