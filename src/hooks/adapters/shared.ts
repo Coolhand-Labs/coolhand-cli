@@ -43,12 +43,26 @@ export function skillMatches(skill: string, candidate: { name?: string; dir: str
   return candidate.name === skill || candidate.dir.split(/[\\/]/).filter(Boolean).pop() === skill;
 }
 
-/** A `--skill` value that ends in `*` is a pattern: `*` is any skill, `acme-*` any skill whose declared name starts with `acme-`. */
+/** The name a skill goes by: its declared `name`, else the name of the directory it was loaded from (Claude Code records only that). */
+export function skillLabel(candidate: { name?: string; dir: string }): string {
+  return candidate.name || candidate.dir.split(/[\\/]/).filter(Boolean).pop() || '';
+}
+
+/** A `--skill` value that ends in `*` is a pattern: `*` is any skill, `acme-*` any skill whose name starts with `acme-`. */
 export function isSkillPattern(skill: string): boolean {
   return skill.endsWith('*');
 }
 
-/** Does a skill answer to a `--skill` value: by name or directory, or, for a pattern, by the prefix of its declared name. */
+/** Does a skill answer to a `--skill` value: by name or directory, or, for a pattern, by the prefix of its name. */
 export function skillMatchesPattern(skill: string, candidate: { name?: string; dir: string }): boolean {
-  return isSkillPattern(skill) ? (candidate.name ?? '').startsWith(skill.slice(0, -1)) : skillMatches(skill, candidate);
+  return isSkillPattern(skill) ? skillLabel(candidate).startsWith(skill.slice(0, -1)) : skillMatches(skill, candidate);
+}
+
+/** The skill a `--skill` value matched among the skills a session invoked (oldest first): a pattern resolves to the first match, never to itself. */
+export function resolveSkill(skill: string, invoked: Array<{ name?: string; dir: string }>): string | undefined {
+  if (!isSkillPattern(skill)) {
+    return skill;
+  }
+  const hit = invoked.find((s) => skillMatchesPattern(skill, s));
+  return hit ? skillLabel(hit) : undefined;
 }

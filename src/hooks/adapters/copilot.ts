@@ -3,7 +3,7 @@ import { logHookEvent } from '../hook-log.js';
 import { createInterface } from 'readline';
 import { isWantedLine, parseCopilotExchanges } from '../../sessions/copilot-scanner.js';
 import type { AdapterContext, HookInput, HookTurn } from '../types.js';
-import { earlierFrom, earlierStampsFrom, isSkillPattern, skillMatchesPattern, splitCurrent, str } from './shared.js';
+import { earlierFrom, earlierStampsFrom, resolveSkill, skillMatchesPattern, splitCurrent, str } from './shared.js';
 
 /**
  * The transcript is written asynchronously and Claude's can lag its `Stop` by the reply. Copilot's was in the file
@@ -35,20 +35,6 @@ function wait(ms: number): Promise<void> {
 /** Does this exchange's skill invocation name `skill`: by its declared name or by its directory's name, or a `--skill` pattern. */
 function invokes(e: { skills?: Array<{ name: string; dir: string }> }, skill: string): boolean {
   return (e.skills ?? []).some((s) => skillMatchesPattern(skill, s));
-}
-
-/** The skill a `--skill` value matched in this session: for a pattern the first one invoked (never the pattern itself), for a plain name that name. */
-function resolveSkill(exchanges: Array<{ skills?: Array<{ name: string; dir: string }> }>, skill: string): string | undefined {
-  if (!isSkillPattern(skill)) {
-    return skill;
-  }
-  for (const e of exchanges) {
-    const hit = (e.skills ?? []).find((s) => skillMatchesPattern(skill, s));
-    if (hit) {
-      return hit.name;
-    }
-  }
-  return undefined;
 }
 
 /**
@@ -101,7 +87,7 @@ export async function copilotTurn(input: HookInput, ctx: AdapterContext = {}): P
     return null;
   }
 
-  const resolved = resolveSkill(exchanges, skill);
+  const resolved = resolveSkill(skill, exchanges.flatMap((e) => e.skills ?? []));
   if (!resolved) {
     return null;
   }

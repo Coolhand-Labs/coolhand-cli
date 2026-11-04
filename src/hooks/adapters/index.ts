@@ -6,6 +6,6 @@ export type HookAdapter = (input: HookInput, ctx?: AdapterContext) => Promise<Ho
 
 /** One adapter per agent: turns that agent's hook payload (and transcript) into a `HookTurn`. */
 export const ADAPTERS: Record<HookAgent, HookAdapter> = {
-  claude: (input) => claudeTurn(input),
+  claude: claudeTurn,
   copilot: copilotTurn,
 };

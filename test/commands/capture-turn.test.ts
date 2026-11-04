@@ -936,6 +936,93 @@ describe('capture-turn', () => {
       expect(log(0).declared.template).toBeUndefined();
     });
 
+    it('with a --skill pattern, a session-wide hook sends only sessions that invoked a matching skill, under that skill', async () => {
+      const mine = await write('mine', [{ u: '/qa-login', a: 'started', skill: 'qa-login' }]);
+      const other = await write('other', [{ u: '/deploy', a: 'deployed', skill: 'deploy' }]);
+      const plain = await write('plain', [{ u: 'what is 2+2?', a: '4' }]);
+      const hook = (name: string, transcript: string) => stop({ session_id: name, transcript_path: transcript, last_assistant_message: undefined });
+
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => hook('s-other', other) });
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => hook('s-plain', plain) });
+      expect(server.received).toHaveLength(0);
+
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => hook('s-mine', mine) });
+      expect(server.received).toHaveLength(1);
+      expect(log(0).metadata.skill).toBe('qa-login');
+      expect(log(0).declared.workload.key).toBe('claude-skill:qa-login');
+      expect(JSON.stringify(server.received)).toContain('Walk through the login checklist.');
+
+      // `*` takes any skill, and still never records the pattern as the skill's name.
+      await run({ ...opts(), skill: '*' }, { readInput: async () => hook('s-other', other) });
+      expect(log(1).metadata.skill).toBe('deploy');
+      expect(JSON.stringify(server.received)).not.toContain('claude-skill:*');
+    });
+
+    it('with a --skill pattern, a skill the MODEL loaded (no slash command) never makes a session count', async () => {
+      const model = await write('model', [{ u: 'please run the login checks', a: 'ok', skill: 'qa-login' }]);
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => stop({ session_id: 's-model', transcript_path: model, last_assistant_message: undefined }) });
+      await run({ ...opts(), skill: '*' }, { readInput: async () => stop({ session_id: 's-model', transcript_path: model, last_assistant_message: undefined }) });
+      expect(server.received).toHaveLength(0);
+    });
+
+    it("with a --skill pattern, a plugin skill's namespaced command (/plugin:skill) counts, under the skill's folder name", async () => {
+      const plugin = await write('plugin', [{ u: '/coolhand-qa:qa-spike go', a: 'started', skill: 'qa-spike' }]);
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => stop({ session_id: 's-plugin', transcript_path: plugin, last_assistant_message: undefined }) });
+      expect(server.received).toHaveLength(1);
+      expect(log(0).metadata.skill).toBe('qa-spike');
+    });
+
+    it('with a --skill pattern, a session stays on its skill after the invocation has left the transcript window', async () => {
+      const first = await write('first', [{ u: '/qa-login', a: 'started', skill: 'qa-login' }]);
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => stop({ session_id: 's-long', transcript_path: first, last_assistant_message: undefined }) });
+      // Later: the transcript window no longer shows the invocation (or any skill).
+      const later = await write('later', [{ u: 'and the next step?', a: 'next step done' }]);
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => stop({ session_id: 's-long', transcript_path: later, last_assistant_message: undefined }) });
+
+      expect(server.received).toHaveLength(2);
+      expect(log(1).metadata).toMatchObject({ skill: 'qa-login', turn_index: 2 });
+      expect(log(1).declared.workload.key).toBe('claude-skill:qa-login');
+      // A pin from another entry whose pattern does not match is ignored.
+      await run({ ...opts(), skill: 'other-*' }, { readInput: async () => stop({ session_id: 's-long', transcript_path: later, last_assistant_message: undefined }) });
+      expect(server.received).toHaveLength(2);
+    });
+
+    it('with a --skill pattern and an unreadable transcript, sends nothing', async () => {
+      await run({ ...opts(), skill: '*' }, { readInput: async () => stop({ session_id: 's-gone', transcript_path: path.join(home.dir, 'missing.jsonl') }) });
+      expect(server.received).toHaveLength(0);
+    });
+
+    it('with a --skill pattern, a Claude session stays on the first skill it resolved to when a later command invokes another', async () => {
+      const both = await write('both', [
+        { u: '/qa-login', a: 'started', skill: 'qa-login' },
+        { u: '/qa-checkout', a: 'second skill', skill: 'qa-checkout' },
+      ]);
+      const hook = () => stop({ session_id: 's-two', transcript_path: both, last_assistant_message: undefined });
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => hook() });
+      expect(log(0).metadata.skill).toBe('qa-login');
+      expect(log(0).declared.workload.key).toBe('claude-skill:qa-login');
+    });
+
+    it('with a --skill pattern, a pinned session is still captured when its transcript cannot be read', async () => {
+      const first = await write('pin-first', [{ u: '/qa-login', a: 'started', skill: 'qa-login' }]);
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => stop({ session_id: 's-pin', transcript_path: first, last_assistant_message: undefined }) });
+      await run(
+        { ...opts(), skill: 'qa-*' },
+        { readInput: async () => stop({ session_id: 's-pin', transcript_path: path.join(home.dir, 'gone.jsonl'), last_assistant_message: 'a later reply' }) }
+      );
+      expect(server.received).toHaveLength(2);
+      expect(log(1).metadata).toMatchObject({ skill: 'qa-login', turn_index: 2 });
+    });
+
+    it("keeps the pinned skill in the session's state file, capped at 200 characters and ignored when not a string", async () => {
+      await saveTurnState('claude', 'pin-state', { turnIndex: 1, skill: 'x'.repeat(300) });
+      expect((await loadTurnState('claude', 'pin-state')).skill).toBe('x'.repeat(200));
+      await saveTurnState('claude', 'pin-state-2', { turnIndex: 1, skill: 'qa-login' });
+      expect((await loadTurnState('claude', 'pin-state-2')).skill).toBe('qa-login');
+      await saveTurnState('claude', 'pin-state-3', { turnIndex: 1 });
+      expect((await loadTurnState('claude', 'pin-state-3')).skill).toBeUndefined();
+    });
+
     it('uses the same workload key on every turn and session of a skill, a different one for another skill, and never sends a template', async () => {
       await run(opts(), { readInput: async () => stop({ session_id: 'session-a' }) });
       await run(opts(), { readInput: async () => stop({ session_id: 'session-a', last_assistant_message: 'a later turn' }) });
@@ -1240,10 +1327,13 @@ describe('capture-turn --agent copilot', () => {
     expect(JSON.stringify(server.received)).not.toContain('copilot-skill:');
   });
 
-  it('refuses a --skill pattern for claude, with a note in hook.log', async () => {
-    await run({ agent: 'claude', skill: '*', apiKey: 'pk_test_123', baseUrl: server.url }, { readInput: async () => ({ hook_event_name: 'Stop', session_id: 'c1', transcript_path: transcriptPath }) });
-    expect(server.received).toHaveLength(0);
-    expect(await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8')).toContain('only supported for --agent copilot');
+  it('ignores a pin saved in a Copilot session state, and does not write one: the transcript there is cumulative', async () => {
+    await saveTurnState('copilot', 'cop-pin', { turnIndex: 0, skill: 'zzz-other' });
+    await write(...TURN_1);
+    await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => stop('cop-pin') });
+    expect(server.received).toHaveLength(1);
+    expect(server.received[0].body.llm_request_log.metadata.skill).toBe('qa-login');
+    expect((await loadTurnState('copilot', 'cop-pin')).skill).toBeUndefined();
   });
 
   it('does not resend a double-fired Stop', async () => {

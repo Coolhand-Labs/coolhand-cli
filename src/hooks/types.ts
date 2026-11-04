@@ -73,4 +73,6 @@ export type HookInput = Record<string, unknown>;
 export interface AdapterContext {
   /** The `--skill` the hook was installed for. */
   skill?: string;
+  /** The skill a `--skill` pattern resolved to on an earlier turn of this session, kept so a long session stays on it. Claude only: Copilot's transcript is cumulative, so its adapter ignores this. */
+  pinnedSkill?: string;
 }
