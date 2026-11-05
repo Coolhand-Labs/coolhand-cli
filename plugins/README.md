@@ -16,7 +16,7 @@ The two plugins are separate directories so that neither agent can pick up the o
 
 ## QA-only shortcuts (not what a real plugin would ship)
 
-- The hook runs the **local build** at `/Users/woodchip/conductor/workspaces/coolhand-cli/dhaka-v3/dist/bin.js` (run `npm install && npm run build` there first), because `--skill` patterns are not in a published release. A real plugin would call `coolhand`, with an `npx -y coolhand-cli` fallback, as in `examples/hook-capture/copilot/coolhand-capture-example.json`.
+- The hook uses an installed `coolhand` when it knows `capture-turn`, and otherwise runs `npx -y coolhand-cli`, so nothing needs installing first (the first turn pays for the download). The `--skill 'qa-*'` pattern needs 0.13.1 or later.
 - The key comes from `COOLHAND_CAPTURE_API_KEY` in the environment of VS Code / Claude Code, so no key is committed. With it unset the hook does nothing. A real plugin would embed the **public** key.
 
 ## Try it
