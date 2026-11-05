@@ -421,5 +421,29 @@ export interface MonitorOptions {
   clientId?: string;
 }
 
+export interface ScheduleOptions {
+  /** add | list | remove | run */
+  action?: string;
+  name?: string;
+  agent?: string;
+  prompt?: string;
+  skill?: string;
+  weekly?: string;
+  daily?: string;
+  mode?: string;
+  open?: string;
+  backend?: string;
+  cwd?: string;
+  allow: string[];
+  maxBudgetUsd?: string;
+  maxAiCredits?: string;
+  envFile?: string;
+  yes?: boolean;
+  dryRun?: boolean;
+  force?: boolean;
+  launch?: boolean;
+  json?: boolean;
+}
+
 export const DEFAULT_BASE_URL = 'https://coolhandlabs.com';
 export const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;

@@ -31,7 +31,8 @@ export type ErrorCode =
   | 'UPLOAD_ERROR'
   | 'CLIENT_FILE_ERROR'
   | 'OUTPUT_EXISTS'
-  | 'UPDATE_ERROR';
+  | 'UPDATE_ERROR'
+  | 'SCHEDULE_ERROR';
 
 export class CliError extends Error {
   public readonly code: ErrorCode;

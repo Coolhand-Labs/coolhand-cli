@@ -78,6 +78,7 @@ coolhand close-optimization opt-123 "Added the suggested index; verified query l
 | `coolhand status` | Check whether a token is configured |
 | `coolhand whoami` | Show the currently configured client |
 | `coolhand update` | Upgrade to the newest stable release that is at least 48 hours old |
+| `coolhand schedule` | Run a skill or prompt weekly in Claude Code or Copilot, and open the session |
 | `coolhand clients` | List or switch the default client |
 | `coolhand claude` | Run Claude CLI through the Coolhand proxy |
 | `coolhand monitor` | Run an arbitrary CLI through the Coolhand proxy |

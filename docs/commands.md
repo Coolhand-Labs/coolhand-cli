@@ -93,6 +93,44 @@ Exits `0` when up to date or after a successful install or report; `1` with `UPD
 
 The same logic runs automatically in the background at most once a day; see [auto-update.md](./auto-update.md) for how it works and how to turn it off.
 
+### schedule
+
+```bash
+coolhand schedule add NAME --agent claude|copilot (--skill NAME | --prompt TEXT) (--weekly DAY@HH:MM | --daily HH:MM) [options]
+coolhand schedule list [--json]
+coolhand schedule remove NAME
+coolhand schedule run NAME
+```
+
+Runs a skill or prompt on a schedule in Claude Code or GitHub Copilot, and can open the session afterwards in the tool you prefer. `schedule add` installs a macOS launchd job (a `~/Library/LaunchAgents/ai.coolhand.schedule.NAME.plist`); the job calls `coolhand schedule run NAME`, which starts the agent. A skill run this way is captured to Coolhand by the same hook as an interactive run. See [scheduled-skill-prompts.md](./scheduled-skill-prompts.md) for what was tested and why the unattended settings matter.
+
+`schedule` works on local files only and does not call the Coolhand API, so it takes no `--client-id`.
+
+`schedule add` shows what it will install and asks before writing anything. Pass `--yes` to skip the question (required when there is no terminal), or `--dry-run` to print the job without installing it. It refuses to replace an existing schedule without `--force`, and `schedule remove` unloads the job and deletes the plist.
+
+| Flag | Applies to | Description |
+|------|------------|-------------|
+| `--agent claude\|copilot` | add | Required. The agent to run |
+| `--skill NAME` | add | Run `/NAME`; use `plugin:skill` for a plugin skill. One of `--skill` or `--prompt` is required |
+| `--prompt TEXT` | add | The prompt to run. Must not start with `-` and is at most 4000 characters |
+| `--weekly DAY@HH:MM` | add | For example `mon@09:00` (24-hour time). One of `--weekly` or `--daily` is required |
+| `--daily HH:MM` | add | Every day at that time |
+| `--backend launchd\|cloud` | add | `launchd` (default) installs the macOS job. `cloud` installs nothing: it prints the `/schedule` message to give Claude Code, whose scheduled runs happen on Anthropic's side (no local files, no local capture hook); `--agent claude` only |
+| `--mode headless\|interactive` | add | `headless` (default) runs unattended with `claude -p` / `copilot -p`. `interactive` opens a session with the prompt already typed at the scheduled time, so you need to be at the machine |
+| `--open TARGET` | add | After a headless run: `claude` or `copilot` (the same agent) reopen the finished session in a Terminal window, `vscode` opens its transcript file in VS Code. In interactive mode: `claude`, `copilot` or `codex` start a session in Terminal. Codex cannot continue another agent's session, and VS Code cannot start an interactive one yet. Default `none` |
+| `--allow RULE` | add | A tool the unattended run may use, in the agent's own syntax: `Read` or `Bash(ls:*)` for Claude, `shell(git:*)` or `write(path)` for Copilot. Repeatable. With none, any tool the prompt needs is denied |
+| `--max-budget-usd N` | add | Spending ceiling for a Claude run |
+| `--max-ai-credits N` | add | Credit ceiling for a Copilot run (minimum 30) |
+| `--cwd PATH` | add | Directory the run starts in (default: the current directory) |
+| `--env-file PATH` | add | A `KEY=VALUE` file read each time the job runs, for credentials such as `CLAUDE_CODE_OAUTH_TOKEN` or `COPILOT_GITHUB_TOKEN`. It must not be readable by other users (`chmod 600`); the values are never copied into the launchd job or `schedules.json` |
+| `--yes` | add | Install without the confirmation question |
+| `--dry-run` | add | Print the schedule and the plist, and install nothing |
+| `--force` | add | Replace an existing schedule with the same name |
+| `--launch` | add | With `--backend cloud`: open a Claude Code session in Terminal with the message |
+| `--json` | add, list, remove | Emit JSON instead of text |
+
+Schedules are stored in `~/.coolhand/schedules.json` (mode `0600`) and each run's output goes to `~/.coolhand/schedule-logs/NAME.log`. The job runs with a fixed `PATH` (the agent's and node's directories plus the system ones) saved when you added it, and `schedule add` shows which agent executable that is. `launchd` runs a job that was missed while the Mac slept when it wakes. `schedule run NAME` runs a schedule immediately, which is the way to test one. It exits `1` if the agent exits non-zero, and records the time, exit code and session id of the last run, shown by `schedule list`.
+
 ### whoami
 
 ```bash

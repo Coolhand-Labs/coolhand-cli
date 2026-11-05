@@ -10,6 +10,7 @@ import { run as runSearchOptimizations } from './commands/search-optimizations.j
 import { run as runGetOptimization } from './commands/get-optimization.js';
 import { run as runCloseOptimization } from './commands/close-optimization.js';
 import { run as runUpdate } from './commands/update.js';
+import { run as runSchedule } from './commands/schedule.js';
 import { run as runAutoUpdate, maybeAutoUpdate } from './auto-update/index.js';
 import { run as runUpdateOptimization } from './commands/update-optimization.js';
 import { run as runWildcard } from './commands/wildcard.js';
@@ -51,6 +52,7 @@ import type {
   LogoutOptions,
   StatusOptions,
   UpdateOptions,
+  ScheduleOptions,
   WhoamiOptions,
   SearchOptimizationsOptions,
   GetOptimizationOptions,
@@ -98,10 +100,10 @@ interface CommandMeta {
   options: Array<{ flag: string; description: string }>;
 }
 
-const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-total', 'include-metrics', 'no-metrics', 'include-deprecated', 'force', 'check', 'anonymous', 'no-declare']);
+const BOOLEAN_FLAGS = new Set(['all', 'help', 'h', 'json', 'version', 'v', 'dry-run', 'include-archived', 'include-system', 'include-templates', 'full', 'matched', 'unmatched', 'include-thinking', 'unmatched-only', 'include-prompts', 'include-total', 'include-metrics', 'no-metrics', 'include-deprecated', 'force', 'check', 'anonymous', 'no-declare', 'yes', 'launch']);
 
 /** Flags whose repeated occurrences accumulate into an array instead of overwriting. */
-const REPEATABLE_FLAGS = new Set(['project', 'exclude-project', 'skill', 'exclude-skill', 'source']);
+const REPEATABLE_FLAGS = new Set(['project', 'exclude-project', 'skill', 'exclude-skill', 'source', 'allow']);
 
 const COMMANDS: CommandMeta[] = [
   {
@@ -142,6 +144,30 @@ const COMMANDS: CommandMeta[] = [
     usage: 'coolhand update [options]',
     options: [
       { flag: '--check', description: 'Report the available version without installing it' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'schedule',
+    oneLiner: 'Run a prompt or skill on a schedule in Claude Code or Copilot, and open the session',
+    usage: 'coolhand schedule <add|list|remove|run> [NAME] [options]',
+    options: [
+      { flag: '--agent claude|copilot', description: 'add: the agent to run (required)' },
+      { flag: '--skill NAME', description: 'add: run /NAME (use plugin:skill for a plugin skill); or --prompt TEXT' },
+      { flag: '--prompt TEXT', description: 'add: the prompt to run; or --skill NAME' },
+      { flag: '--weekly DAY@HH:MM', description: 'add: for example mon@09:00; or --daily HH:MM' },
+      { flag: '--backend launchd|cloud', description: 'add: launchd installs a macOS job (default); cloud prints the message that sets up a Claude Code scheduled run' },
+      { flag: '--mode headless|interactive', description: 'add: run unattended (default), or open an interactive session at the scheduled time' },
+      { flag: '--open claude|copilot|codex|vscode', description: 'add: after a headless run, reopen it (claude/copilot resume it, vscode opens the transcript); in interactive mode, the tool to start' },
+      { flag: '--allow RULE', description: 'add: a tool rule the unattended run may use, in the agent\'s syntax (repeatable)' },
+      { flag: '--max-budget-usd N', description: 'add: spending ceiling for a claude run' },
+      { flag: '--max-ai-credits N', description: 'add: credit ceiling for a copilot run (minimum 30)' },
+      { flag: '--cwd PATH', description: 'add: directory the run starts in (default: the current directory)' },
+      { flag: '--env-file PATH', description: 'add: a mode-600 KEY=VALUE file read at run time, for tokens' },
+      { flag: '--yes', description: 'add: install without the confirmation prompt' },
+      { flag: '--dry-run', description: 'add: print what would be installed and stop' },
+      { flag: '--force', description: 'add: replace an existing schedule with the same name' },
+      { flag: '--launch', description: 'add --backend cloud: open a Claude Code session with the message' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
   },
@@ -808,6 +834,36 @@ function updateOptions(parsed: ParsedArgs): UpdateOptions {
     opts.json = true;
   }
   return opts;
+}
+
+function scheduleOptions(parsed: ParsedArgs): ScheduleOptions {
+  const str = (flag: string): string | undefined => {
+    const v = parsed.flags[flag];
+    return typeof v === 'string' ? v : undefined;
+  };
+  const allow = parsed.flags.allow;
+  return {
+    action: parsed.positional[0],
+    name: parsed.positional[1],
+    agent: str('agent'),
+    prompt: str('prompt'),
+    skill: str('skill'),
+    weekly: str('weekly'),
+    daily: str('daily'),
+    mode: str('mode'),
+    open: str('open'),
+    backend: str('backend'),
+    cwd: str('cwd'),
+    allow: Array.isArray(allow) ? allow : typeof allow === 'string' ? [allow] : [],
+    maxBudgetUsd: str('max-budget-usd'),
+    maxAiCredits: str('max-ai-credits'),
+    envFile: str('env-file'),
+    yes: parsed.flags.yes === true,
+    dryRun: parsed.flags['dry-run'] === true,
+    force: parsed.flags.force === true,
+    launch: parsed.flags.launch === true,
+    json: parsed.flags.json === true,
+  };
 }
 
 function statusOptions(parsed: ParsedArgs): StatusOptions {
@@ -1862,7 +1918,7 @@ function captureTurnOptions(parsed: ParsedArgs): CaptureTurnOptions {
 
 // Commands that must never trigger the failed-flush reminder: the flush itself, and
 // login (which runs its own pending-flush prompt).
-const NO_FLUSH_REMINDER = new Set(['__flush-pending', '__auto-update', 'login', 'help', 'version', 'capture-turn']);
+const NO_FLUSH_REMINDER = new Set(['__flush-pending', '__auto-update', 'login', 'help', 'version', 'capture-turn', 'schedule']);
 
 /**
  * Option B retry: if a previous background flush failed, remind the user on their next
@@ -1984,6 +2040,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runAutoUpdate();
       case 'update':
         return await runUpdate(updateOptions(parsed));
+      case 'schedule':
+        return await runSchedule(scheduleOptions(parsed));
       case 'login':
         return await runLogin(loginOptions(parsed));
       case 'logout':

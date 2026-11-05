@@ -4,6 +4,19 @@ How to run a skill from a skills library once a week with Claude Code or GitHub 
 
 Neither agent can schedule itself from inside a skill or a plugin. The schedule lives outside the agent, in cron, launchd, a Windows scheduled task or a CI `schedule:` job, and it starts a headless agent run that invokes the skill. The capture hook then runs exactly as it does in an interactive session.
 
+## The short way: `coolhand schedule`
+
+`coolhand schedule add` does everything below for you on macOS: it installs a launchd job that runs the agent headless with the settings this page found necessary, optionally reopens the finished session in Terminal or VS Code, and removes cleanly. The flags are in [the command reference](./commands.md#schedule). For example:
+
+```bash
+coolhand schedule add weekly-review --agent claude --skill acme:acme-weekly-review \
+  --weekly mon@09:00 --allow Read --max-budget-usd 2 --open claude
+coolhand schedule run weekly-review     # try it now
+coolhand schedule remove weekly-review
+```
+
+The rest of this page is what it is built on, and what to do by hand on another system.
+
 ## What was tested
 
 Run on macOS with Claude Code 2.1.318, GitHub Copilot CLI 1.0.83 and `coolhand-cli` 0.13.2. Each test used a throwaway plugin with one skill that replies `PONG`, and `capture-turn --base-url` pointed at a local server so nothing reached Coolhand.
