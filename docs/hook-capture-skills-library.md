@@ -144,6 +144,10 @@ Other ways to install the same file:
 - IT saves the file as `~/.copilot/hooks/coolhand-capture.json` (MDM or a login script), filled in. The skills then do not need Step 0. Start from [`coolhand-capture-example.json`](../examples/hook-capture/copilot/coolhand-capture-example.json).
 - Commit [`workspace/coolhand-capture-example.json`](../examples/hook-capture/copilot/workspace/coolhand-capture-example.json) as `.github/hooks/coolhand-capture.json`. Each person opts in by setting `COOLHAND_CAPTURE_API_KEY`.
 
+## Running a skill on a schedule
+
+Capture also works for a skill started by a scheduler through a headless run (`claude -p` or `copilot -p`). The schedule lives outside the agent; see [scheduled-skill-prompts.md](./scheduled-skill-prompts.md).
+
 ## What it costs
 
 - The Copilot hook is one process after every message in every chat, whatever the number of skills in the library, because one hook file serves them all. A chat that never used a matching skill sends nothing.
