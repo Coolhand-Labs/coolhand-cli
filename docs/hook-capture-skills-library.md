@@ -9,12 +9,12 @@ The goal is to **add the hook to every skill in your skills library**. It is one
 | Claude Code | `coolhand capture-turn --agent claude --skill 'acme-*'` | One `Stop` hook in the plugin that ships the library ([details](#add-the-hook-to-every-skill-in-a-claude-code-plugin)), or a `Stop` hook in each skill's `SKILL.md` |
 | VS Code / GitHub Copilot | `coolhand capture-turn --agent copilot --skill 'acme-*'` | One hook file, `~/.copilot/hooks/coolhand-capture.json`, written by the "Step 0" text at the top of each skill ([details](#add-the-hook-to-every-skill-in-vs-code--github-copilot)) |
 
-Replace `'acme-*'` with your pattern: a shared name prefix for a library, `'*'` for every skill a person runs, or a single skill name. Always quote it so the shell does not expand the `*`.
+Replace `'acme-*'` with your pattern: a shared name prefix for a library, several alternatives joined with `|` (`'qa-*|skill-for-qas'`), `'*'` for every skill a person runs, or a single skill name. Always quote it: the shell would expand an unquoted `*`, and an unquoted `|` starts a pipeline.
 
 ## Before you start
 
 - Use your Coolhand **public** API key in every hook. It can only write logs. Never use a private key: the CLI cannot tell them apart.
-- Capture needs `coolhand-cli` 0.13.0 or later. Older versions lack the command and the hook silently does nothing. The `--skill` patterns on this page (`'*'`, `'acme-*'`) need 0.13.1 or later for `--agent copilot` and 0.13.2 or later for `--agent claude`. An older install treats the pattern as a literal skill name and sends nothing.
+- Capture needs `coolhand-cli` 0.13.0 or later. Older versions lack the command and the hook silently does nothing. The `--skill` patterns on this page (`'*'`, `'acme-*'`) need 0.13.1 or later for `--agent copilot` and 0.13.2 or later for `--agent claude`. Joining alternatives with `|` needs a later release than 0.13.2. An older install treats the pattern as a literal skill name and sends nothing.
 - Install the CLI globally on every machine that runs the skills: `npm i -g coolhand-cli@latest`. Without it the hook runs `npx -y coolhand-cli` on every turn.
 - A `--skill` value must equal the skill's folder name or its frontmatter `name:` (on Copilot, a pattern is matched against the declared `name:`; on Claude Code, against the folder name, so the two must be equal). If they differ, the skill is never recognised and nothing is sent.
 
@@ -83,9 +83,10 @@ The pattern is the `--skill` value:
 |---|---|
 | `'acme-*'` | Every skill whose name starts with `acme-`. Use this for a library, with a shared name prefix. |
 | `'*'` | Every skill invoked on the machine, including people's own skills that are not in your library, and each one gets a workload on your Coolhand account. Only use it if the people running your skills have agreed to that. |
+| `'qa-*\|skill-for-qas'` | Several alternatives joined with `\|`, each a prefix pattern or an exact name: every skill starting with `qa-`, plus the skill `skill-for-qas`. Use this when a library's skills do not share one prefix. |
 | `'qa-login'` | Just that one skill. |
 
-Always quote it, so the shell does not expand the `*`.
+Always quote it: the shell would expand an unquoted `*`, and an unquoted `|` starts a pipeline.
 
 ### Copy this at the beginning of each skill
 
@@ -94,7 +95,7 @@ Paste the block below as the first section of every skill you want to track. It 
 - `YOUR_PUBLIC_API_KEY`: your Coolhand **public** API key (never a private key).
 - `YOUR_SKILL_PATTERN`: from the table above, for example `acme-*`.
 - `YOUR_TEAM`: who reviews the results, as the user will read it (for example `the Acme QA team`).
-- `YOUR_SKILL_SCOPE`: which skills the hook covers, as the user will read it, so the consent text is true: for example `skills whose names start with acme-` for `'acme-*'`, or `any skill you run` for `'*'`.
+- `YOUR_SKILL_SCOPE`: which skills the hook covers, as the user will read it, so the consent text is true: for example `skills whose names start with acme-` for `'acme-*'`, `skills whose names start with qa-, plus skill-for-qas` for `'qa-*|skill-for-qas'`, or `any skill you run` for `'*'`.
 
 The first time someone runs any of your skills, the agent explains what is being installed, VS Code asks them to approve one terminal command, and the hook file lands in `~/.copilot/hooks/`. They then start a new chat, and every later run of any of your skills is captured. The file is written once per machine; the other skills find it and say nothing. It has one fixed name, so a machine holds one capture file: a second library's Step 0 finds the first library's file and installs nothing, and Step 0 never overwrites an existing file. Two libraries that need different keys or patterns need IT-managed files or a combined pattern. The chat that installed it is not recorded, because Copilot reads hooks only when a chat starts.
 
@@ -147,7 +148,7 @@ Other ways to install the same file:
 ## What it costs
 
 - The Copilot hook is one process after every message in every chat, whatever the number of skills in the library, because one hook file serves them all. A chat that never used a matching skill sends nothing.
-- Pin the package in the command (`npx -y coolhand-cli@<version>`, a release that supports `--skill` patterns) if you want to control which version runs with the key in its environment. A global install that predates patterns passes the hook's `capture-turn` check, reads `'acme-*'` as a literal skill name and sends nothing, so upgrade it (`npm i -g coolhand-cli@latest`).
+- Pin the package in the command (`npx -y coolhand-cli@<version>`, a release that supports the `--skill` form you use; see Before you start) if you want to control which version runs with the key in its environment. A global install that predates patterns passes the hook's `capture-turn` check, reads `'acme-*'` as a literal skill name and sends nothing, so upgrade it (`npm i -g coolhand-cli@latest`).
 
 ## Not yet verified
 

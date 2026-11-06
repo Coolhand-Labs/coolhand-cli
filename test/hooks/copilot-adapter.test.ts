@@ -138,6 +138,17 @@ describe('copilotTurn (recorded payloads)', () => {
     expect(await copilotTurn(stop, { skill: 'acme' })).toBeNull();
   });
 
+  it('resolves a --skill list of alternatives: a prefix pattern and an exact name', async () => {
+    await fs.writeFile(
+      transcript,
+      [events.skill('acme-first'), events.user('/acme-first'), events.assistant('one'), events.skill('skill-for-qas'), events.user('/skill-for-qas'), events.assistant('two')].join('\n')
+    );
+    const stop = { session_id: 's', transcript_path: transcript };
+    expect(await copilotTurn(stop, { skill: 'nope-*|skill-for-qas' })).toMatchObject({ skill: 'skill-for-qas', assistantText: 'two' });
+    expect(await copilotTurn(stop, { skill: 'acme-*|skill-for-qas' })).toMatchObject({ skill: 'acme-first' });
+    expect(await copilotTurn(stop, { skill: 'nope-*|other' })).toBeNull();
+  });
+
   it('sends nothing under a --skill pattern for a chat that invoked no skill', async () => {
     await fs.writeFile(transcript, [events.user('hello'), events.assistant('hi')].join('\n'));
     expect(await copilotTurn({ session_id: 's', transcript_path: transcript }, { skill: '*' })).toBeNull();

@@ -958,6 +958,24 @@ describe('capture-turn', () => {
       expect(JSON.stringify(server.received)).not.toContain('claude-skill:*');
     });
 
+    it('with a --skill list of alternatives, a prefix pattern and an exact name both count, under the skill that matched', async () => {
+      const prefixed = await write('prefixed', [{ u: '/qa-login', a: 'started', skill: 'qa-login' }]);
+      const exact = await write('exact', [{ u: '/skill-for-qas', a: 'started', skill: 'skill-for-qas' }]);
+      const other = await write('other2', [{ u: '/deploy', a: 'deployed', skill: 'deploy' }]);
+      const hook = (name: string, transcript: string) => stop({ session_id: name, transcript_path: transcript, last_assistant_message: undefined });
+      const skill = 'qa-*|skill-for-qas';
+
+      await run({ ...opts(), skill }, { readInput: async () => hook('s-other2', other) });
+      expect(server.received).toHaveLength(0);
+
+      await run({ ...opts(), skill }, { readInput: async () => hook('s-prefixed', prefixed) });
+      await run({ ...opts(), skill }, { readInput: async () => hook('s-exact', exact) });
+      expect(server.received).toHaveLength(2);
+      expect(log(0).metadata.skill).toBe('qa-login');
+      expect(log(1).metadata.skill).toBe('skill-for-qas');
+      expect(JSON.stringify(server.received)).not.toContain('qa-*|skill-for-qas');
+    });
+
     it('with a --skill pattern, a skill the MODEL loaded (no slash command) never makes a session count', async () => {
       const model = await write('model', [{ u: 'please run the login checks', a: 'ok', skill: 'qa-login' }]);
       await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => stop({ session_id: 's-model', transcript_path: model, last_assistant_message: undefined }) });
@@ -985,6 +1003,25 @@ describe('capture-turn', () => {
       // A pin from another entry whose pattern does not match is ignored.
       await run({ ...opts(), skill: 'other-*' }, { readInput: async () => stop({ session_id: 's-long', transcript_path: later, last_assistant_message: undefined }) });
       expect(server.received).toHaveLength(2);
+    });
+
+    it('with a --skill list of alternatives, a pin from an earlier entry counts only if the list still matches it', async () => {
+      const first = await write('list-first', [{ u: '/qa-login', a: 'started', skill: 'qa-login' }]);
+      // The later window shows a different skill, so only the pin check decides whether the session stays on qa-login.
+      const later = await write('list-later', [{ u: '/deploy', a: 'deployed', skill: 'deploy' }]);
+      const hook = (transcript: string) => stop({ session_id: 's-list', transcript_path: transcript, last_assistant_message: undefined });
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => hook(first) });
+      // A list whose exact name is the pinned skill still captures the later turn.
+      await run({ ...opts(), skill: 'other-*|qa-login' }, { readInput: async () => hook(later) });
+      expect(server.received).toHaveLength(2);
+      expect(log(1).metadata).toMatchObject({ skill: 'qa-login', turn_index: 2 });
+      // A list that no longer matches the pin ignores it. The window has new text, so a wrongly honoured pin would send
+      // a fresh turn rather than being dropped as a duplicate of the one already sent.
+      const newer = await write('list-newer', [{ u: '/deploy', a: 'deployed again', skill: 'deploy' }]);
+      await run({ ...opts(), skill: 'other-*|nope' }, { readInput: async () => hook(newer) });
+      expect(server.received).toHaveLength(2);
+      await run({ ...opts(), skill: 'other-*|qa-login' }, { readInput: async () => hook(newer) });
+      expect(server.received).toHaveLength(3);
     });
 
     it('with a --skill pattern and an unreadable transcript, sends nothing', async () => {

@@ -14,9 +14,10 @@ describe('skillLabel', () => {
 describe('skillMatchesPattern and resolveSkill', () => {
   const invoked = [{ name: 'acme-first', dir: '/s/acme-first' }, { dir: '/s/acme-second' }, { name: 'other', dir: '/s/other' }];
 
-  it('treats only a trailing * as a pattern', () => {
+  it('treats a trailing * or a | list as a pattern', () => {
     expect(isSkillPattern('*')).toBe(true);
     expect(isSkillPattern('acme-*')).toBe(true);
+    expect(isSkillPattern('acme-first|other')).toBe(true);
     expect(isSkillPattern('*-qa')).toBe(false);
     expect(isSkillPattern('acme')).toBe(false);
   });
@@ -27,6 +28,39 @@ describe('skillMatchesPattern and resolveSkill', () => {
     expect(skillMatchesPattern('*', invoked[2])).toBe(true);
     expect(skillMatchesPattern('acme-second', invoked[1])).toBe(true);
     expect(skillMatchesPattern('acme', invoked[0])).toBe(false);
+  });
+
+  it('matches any alternative of a | list: a prefix pattern or an exact name, by name or directory', () => {
+    expect(skillMatchesPattern('nope-*|other', invoked[2])).toBe(true);
+    expect(skillMatchesPattern('nope-*|other', invoked[0])).toBe(false);
+    expect(skillMatchesPattern('other|acme-*', invoked[1])).toBe(true);
+    expect(skillMatchesPattern('x|acme-second', invoked[1])).toBe(true);
+    expect(skillMatchesPattern(' acme-* | other ', invoked[2])).toBe(true);
+    expect(skillMatchesPattern('acme|other-*', invoked[0])).toBe(false);
+  });
+
+  it('treats an empty alternative as absent, a lone * alternative as any skill, and a mid-string * as literal text', () => {
+    expect(skillMatchesPattern('nope||other', invoked[2])).toBe(true);
+    expect(skillMatchesPattern('nope||other', invoked[0])).toBe(false);
+    expect(skillMatchesPattern('nope|*', invoked[0])).toBe(true);
+    expect(skillMatchesPattern('acme*first|x', invoked[0])).toBe(false);
+  });
+
+  it('ignores whitespace around a trailing * the same way inside and outside a list', () => {
+    expect(isSkillPattern('acme-* ')).toBe(true);
+    expect(skillMatchesPattern('acme-* ', invoked[1])).toBe(true);
+    expect(skillMatchesPattern(' acme-* |nope', invoked[1])).toBe(true);
+  });
+
+  it('matches nothing for a | list with no usable alternative', () => {
+    expect(skillMatchesPattern('|', invoked[0])).toBe(false);
+    expect(skillMatchesPattern(' | ', invoked[2])).toBe(false);
+  });
+
+  it('resolves a | list to the first invoked skill that matches any alternative', () => {
+    expect(resolveSkill('nope-*|other', invoked)).toBe('other');
+    expect(resolveSkill('other|acme-*', invoked)).toBe('acme-first');
+    expect(resolveSkill('nope-*|missing', invoked)).toBeUndefined();
   });
 
   it('resolves a pattern to the first match, never to the pattern, and a plain name to itself', () => {
