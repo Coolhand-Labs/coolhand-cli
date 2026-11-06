@@ -48,14 +48,27 @@ export function skillLabel(candidate: { name?: string; dir: string }): string {
   return candidate.name || candidate.dir.split(/[\\/]/).filter(Boolean).pop() || '';
 }
 
-/** A `--skill` value that ends in `*` is a pattern: `*` is any skill, `acme-*` any skill whose name starts with `acme-`. */
-export function isSkillPattern(skill: string): boolean {
-  return skill.endsWith('*');
+/** The alternatives of a `--skill` value: `qa-*|some-qa-skill` is a prefix pattern or an exact name, whichever matches. */
+function alternatives(skill: string): string[] {
+  return skill.split('|').map((part) => part.trim()).filter(Boolean);
 }
 
-/** Does a skill answer to a `--skill` value: by name or directory, or, for a pattern, by the prefix of its name. */
+/**
+ * A `--skill` value is a pattern when it ends in `*` (`*` is any skill, `acme-*` any skill whose name starts with `acme-`)
+ * or lists several alternatives separated by `|` (`acme-*|other-skill`), each a prefix pattern or an exact name.
+ */
+export function isSkillPattern(skill: string): boolean {
+  return skill.endsWith('*') || skill.includes('|');
+}
+
+/** Does a skill answer to a `--skill` value: by name or directory, or, for a pattern, by the prefix of its name or any alternative. */
 export function skillMatchesPattern(skill: string, candidate: { name?: string; dir: string }): boolean {
-  return isSkillPattern(skill) ? skillLabel(candidate).startsWith(skill.slice(0, -1)) : skillMatches(skill, candidate);
+  if (!isSkillPattern(skill)) {
+    return skillMatches(skill, candidate);
+  }
+  return alternatives(skill).some((alt) =>
+    alt.endsWith('*') ? skillLabel(candidate).startsWith(alt.slice(0, -1)) : skillMatches(alt, candidate)
+  );
 }
 
 /** The skill a `--skill` value matched among the skills a session invoked (oldest first): a pattern resolves to the first match, never to itself. */

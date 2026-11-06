@@ -958,6 +958,24 @@ describe('capture-turn', () => {
       expect(JSON.stringify(server.received)).not.toContain('claude-skill:*');
     });
 
+    it('with a --skill list of alternatives, a prefix pattern and an exact name both count, under the skill that matched', async () => {
+      const prefixed = await write('prefixed', [{ u: '/qa-login', a: 'started', skill: 'qa-login' }]);
+      const exact = await write('exact', [{ u: '/skill-for-qas', a: 'started', skill: 'skill-for-qas' }]);
+      const other = await write('other2', [{ u: '/deploy', a: 'deployed', skill: 'deploy' }]);
+      const hook = (name: string, transcript: string) => stop({ session_id: name, transcript_path: transcript, last_assistant_message: undefined });
+      const skill = 'qa-*|skill-for-qas';
+
+      await run({ ...opts(), skill }, { readInput: async () => hook('s-other2', other) });
+      expect(server.received).toHaveLength(0);
+
+      await run({ ...opts(), skill }, { readInput: async () => hook('s-prefixed', prefixed) });
+      await run({ ...opts(), skill }, { readInput: async () => hook('s-exact', exact) });
+      expect(server.received).toHaveLength(2);
+      expect(log(0).metadata.skill).toBe('qa-login');
+      expect(log(1).metadata.skill).toBe('skill-for-qas');
+      expect(JSON.stringify(server.received)).not.toContain('qa-*|skill-for-qas');
+    });
+
     it('with a --skill pattern, a skill the MODEL loaded (no slash command) never makes a session count', async () => {
       const model = await write('model', [{ u: 'please run the login checks', a: 'ok', skill: 'qa-login' }]);
       await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => stop({ session_id: 's-model', transcript_path: model, last_assistant_message: undefined }) });
