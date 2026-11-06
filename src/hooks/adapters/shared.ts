@@ -58,7 +58,7 @@ function alternatives(skill: string): string[] {
  * or lists several alternatives separated by `|` (`acme-*|other-skill`), each a prefix pattern or an exact name.
  */
 export function isSkillPattern(skill: string): boolean {
-  return skill.endsWith('*') || skill.includes('|');
+  return skill.trim().endsWith('*') || skill.includes('|');
 }
 
 /** Does a skill answer to a `--skill` value: by name or directory, or, for a pattern, by the prefix of its name or any alternative. */

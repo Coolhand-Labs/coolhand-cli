@@ -39,6 +39,19 @@ describe('skillMatchesPattern and resolveSkill', () => {
     expect(skillMatchesPattern('acme|other-*', invoked[0])).toBe(false);
   });
 
+  it('treats an empty alternative as absent, a lone * alternative as any skill, and a mid-string * as literal text', () => {
+    expect(skillMatchesPattern('nope||other', invoked[2])).toBe(true);
+    expect(skillMatchesPattern('nope||other', invoked[0])).toBe(false);
+    expect(skillMatchesPattern('nope|*', invoked[0])).toBe(true);
+    expect(skillMatchesPattern('acme*first|x', invoked[0])).toBe(false);
+  });
+
+  it('ignores whitespace around a trailing * the same way inside and outside a list', () => {
+    expect(isSkillPattern('acme-* ')).toBe(true);
+    expect(skillMatchesPattern('acme-* ', invoked[1])).toBe(true);
+    expect(skillMatchesPattern(' acme-* |nope', invoked[1])).toBe(true);
+  });
+
   it('matches nothing for a | list with no usable alternative', () => {
     expect(skillMatchesPattern('|', invoked[0])).toBe(false);
     expect(skillMatchesPattern(' | ', invoked[2])).toBe(false);

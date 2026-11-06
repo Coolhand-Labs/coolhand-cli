@@ -60,7 +60,7 @@ function transcriptShowsThisTurn(tail: { userText?: string; assistantText?: stri
  * the turn is still captured, just without the user half.
  *
  * A skill's own hook runs only while that skill is active, so `--skill NAME` filters nothing. A hook that runs for EVERY
- * session (one a plugin ships) passes a `--skill` pattern (`*`, `acme-*`): then a turn is sent only when the transcript
+ * session (one a plugin ships) passes a `--skill` pattern (`*`, `acme-*`, or alternatives joined with `|`): then a turn is sent only when the transcript
  * shows the user invoked a matching skill with a slash command, and that skill (its folder name) is returned as `skill`.
  * `ctx.pinnedSkill` is the skill an earlier turn of this session resolved to: it is kept even after the invocation has
  * scrolled out of the transcript window, so a long session keeps being captured under one skill.

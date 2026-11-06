@@ -45,8 +45,9 @@ function invokes(e: { skills?: Array<{ name: string; dir: string }> }, skill: st
  *
  * A Copilot hook runs for EVERY chat in the workspace, so a turn is sent only when the transcript shows
  * the `--skill` skill was invoked in this session (a `skill.invoked` event), at or before this turn.
- * `--skill` may be a pattern (`*`, `acme-*`): then any matching skill counts, and the first one invoked in
- * the session is returned as `skill`. Without `--skill`, or for a chat that never invoked it, nothing is sent.
+ * `--skill` may be a pattern (`*`, `acme-*`, or alternatives joined with `|` such as `acme-*|other`): then
+ * any matching skill counts, and the first one invoked in the session is returned as `skill`. Without
+ * `--skill`, or for a chat that never invoked it, nothing is sent.
  *
  * Returns `null` for any other event, an unrelated chat, or when there is nothing to send.
  */

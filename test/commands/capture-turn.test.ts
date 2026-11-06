@@ -1005,6 +1005,25 @@ describe('capture-turn', () => {
       expect(server.received).toHaveLength(2);
     });
 
+    it('with a --skill list of alternatives, a pin from an earlier entry counts only if the list still matches it', async () => {
+      const first = await write('list-first', [{ u: '/qa-login', a: 'started', skill: 'qa-login' }]);
+      // The later window shows a different skill, so only the pin check decides whether the session stays on qa-login.
+      const later = await write('list-later', [{ u: '/deploy', a: 'deployed', skill: 'deploy' }]);
+      const hook = (transcript: string) => stop({ session_id: 's-list', transcript_path: transcript, last_assistant_message: undefined });
+      await run({ ...opts(), skill: 'qa-*' }, { readInput: async () => hook(first) });
+      // A list whose exact name is the pinned skill still captures the later turn.
+      await run({ ...opts(), skill: 'other-*|qa-login' }, { readInput: async () => hook(later) });
+      expect(server.received).toHaveLength(2);
+      expect(log(1).metadata).toMatchObject({ skill: 'qa-login', turn_index: 2 });
+      // A list that no longer matches the pin ignores it. The window has new text, so a wrongly honoured pin would send
+      // a fresh turn rather than being dropped as a duplicate of the one already sent.
+      const newer = await write('list-newer', [{ u: '/deploy', a: 'deployed again', skill: 'deploy' }]);
+      await run({ ...opts(), skill: 'other-*|nope' }, { readInput: async () => hook(newer) });
+      expect(server.received).toHaveLength(2);
+      await run({ ...opts(), skill: 'other-*|qa-login' }, { readInput: async () => hook(newer) });
+      expect(server.received).toHaveLength(3);
+    });
+
     it('with a --skill pattern and an unreadable transcript, sends nothing', async () => {
       await run({ ...opts(), skill: '*' }, { readInput: async () => stop({ session_id: 's-gone', transcript_path: path.join(home.dir, 'missing.jsonl') }) });
       expect(server.received).toHaveLength(0);
