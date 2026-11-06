@@ -286,6 +286,13 @@ describe('redactSecrets: JSON-stringified text and pathological input', () => {
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 
+  test('stays fast on a long run of repeated header labels with no closing dashes', () => {
+    const started = Date.now();
+    redactSecrets(`-----BEGIN ${'PRIVATE KEY '.repeat(12_000)}`);
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(redactSecrets('-----BEGIN ENCRYPTED PRIVATE KEY-----\nZmFrZQ==\n-----END ENCRYPTED PRIVATE KEY-----')).not.toContain('ZmFrZQ');
+  });
+
   test.each([
     ['ghs_' + 'a'.repeat(36)],
     ['ghu_' + 'a'.repeat(36)],

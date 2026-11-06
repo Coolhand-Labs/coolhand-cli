@@ -14,7 +14,7 @@ Replace `'acme-*'` with your pattern: a shared name prefix for a library, severa
 ## Before you start
 
 - Use your Coolhand **public** API key in every hook. It can only write logs. Never use a private key: the CLI cannot tell them apart.
-- Capture needs `coolhand-cli` 0.13.0 or later. Older versions lack the command and the hook silently does nothing. The `--skill` patterns on this page (`'*'`, `'acme-*'`) need 0.13.1 or later for `--agent copilot` and 0.13.2 or later for `--agent claude`. Joining alternatives with `|` needs a later release than 0.13.2. An older install treats the pattern as a literal skill name and sends nothing.
+- Capture needs `coolhand-cli` 0.13.0 or later. Older versions lack the command and the hook silently does nothing. The `--skill` patterns on this page (`'*'`, `'acme-*'`) need 0.13.1 or later for `--agent copilot` and 0.13.2 or later for `--agent claude`. Joining alternatives with `|` needs 0.13.3 or later for either agent. An older install treats the pattern as a literal skill name and sends nothing.
 - Install the CLI globally on every machine that runs the skills: `npm i -g coolhand-cli@latest`. Without it the hook runs `npx -y coolhand-cli` on every turn.
 - A `--skill` value must equal the skill's folder name or its frontmatter `name:` (on Copilot, a pattern is matched against the declared `name:`; on Claude Code, against the folder name, so the two must be equal). If they differ, the skill is never recognised and nothing is sent.
 
