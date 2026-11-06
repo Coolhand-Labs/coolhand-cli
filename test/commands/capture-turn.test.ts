@@ -1224,6 +1224,14 @@ describe('capture-turn', () => {
     expect(log).not.toContain('s3cretpass');
   });
 
+  it('keeps a password containing @ in a bad --base-url out of hook.log', async () => {
+    await run({ ...opts(), baseUrl: 'http://user:p@ssw0rdtail@example.com' }, { readInput: async () => stop() });
+
+    const log = await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8');
+    expect(log).toContain('Invalid base url');
+    expect(log).not.toContain('ssw0rdtail');
+  });
+
   it('never throws and logs to hook.log when the base url is unusable', async () => {
     const code = await run({ ...opts(), baseUrl: 'http://example.com' }, { readInput: async () => stop() });
 

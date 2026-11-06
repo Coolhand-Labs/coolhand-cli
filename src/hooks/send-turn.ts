@@ -302,7 +302,7 @@ export async function sendTurn(envelope: unknown, opts: SendTurnOptions): Promis
     coolhand = new Coolhand({ apiKey: opts.apiKey, baseUrl, silent: true, requestTimeoutMs: timeoutMs });
   } catch (err) {
     // This message goes to hook.log: never write credentials embedded in the url (https://user:pass@host).
-    const shown = baseUrl.replace(/\/\/[^/@]*@/, '//');
+    const shown = baseUrl.replace(/\/\/[^/]*@/, '//');
     throw new CliError('INVALID_BASE_URL', `Invalid base url: ${shown} (${(err as Error).message})`);
   }
 

@@ -16,7 +16,7 @@ The two plugins are separate directories so that neither agent can pick up the o
 
 ## QA-only shortcuts (not what a real plugin would ship)
 
-- The hook runs the **local build** at `/Users/woodchip/conductor/workspaces/coolhand-cli/dhaka-v3/dist/bin.js` (run `npm install && npm run build` there first), so it stays testable against unreleased changes (`--skill` prefix patterns like `'qa-*'` are published in 0.13.1 for Copilot and 0.13.2 for Claude Code; only `|` alternatives are not). A real plugin would call `coolhand`, with an `npx -y coolhand-cli` fallback, as in `examples/hook-capture/copilot/coolhand-capture-example.json`.
+- The hook runs the **local build** at `/Users/woodchip/conductor/workspaces/coolhand-cli/dhaka-v3/dist/bin.js` (run `npm install && npm run build` there first), so it stays testable against unreleased changes (`--skill` prefix patterns like `'qa-*'` are published in 0.13.1 for Copilot and 0.13.2 for Claude Code; `|` alternatives are published in 0.13.3 for both). A real plugin would call `coolhand`, with an `npx -y coolhand-cli` fallback, as in `examples/hook-capture/copilot/coolhand-capture-example.json`.
 - The key comes from `COOLHAND_CAPTURE_API_KEY` in the environment of VS Code / Claude Code, so no key is committed. With it unset the hook does nothing. A real plugin would embed the **public** key.
 
 ## Try it

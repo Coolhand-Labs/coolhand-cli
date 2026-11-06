@@ -2,6 +2,29 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.13.3] - 2026-11-06
+
+### Added
+- `capture-turn --skill` accepts several alternatives joined with `|`, for example
+  `--skill 'qa-*|skill-for-qas'`. Each alternative is a prefix ending in `*` or an exact skill name,
+  so one hook can cover skills that do not share a name prefix. It works for both `--agent claude`
+  and `--agent copilot`. A `*` anywhere but the end of an alternative is part of a literal name, and
+  empty alternatives are ignored. Quote the whole value, since the shell expands an unquoted `*` and
+  an unquoted `|` starts a pipeline. Installs older than 0.13.3 read the value as one literal skill
+  name and send nothing. (#233)
+
+### Changed
+- `docs/hook-capture-skills-library.md` covers the Claude Code plugin hook that uses a skill pattern.
+  (#227)
+- `docs/commands.md`, `docs/hook-capture.md`, `docs/hook-capture-skills-library.md` and
+  `examples/hook-capture/README.md` document the `|` form and the release each form shipped in.
+  (#233)
+- The `prep-release` and `finish-release` maintainer skills credit outside and first-time
+  contributors in the changelog and the GitHub release notes. These are repository tooling and are
+  not part of the published package. (#226)
+- Development dependency updates: `globals` 17.14.0 (#231), `@typescript-eslint/parser` and
+  `@typescript-eslint/eslint-plugin` 8.72.1 (#230, #228) and `@types/node` 26.6.6 (#229).
+
 ## [0.13.2] - 2026-11-04
 
 ### Added

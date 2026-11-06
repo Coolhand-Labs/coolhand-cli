@@ -43,7 +43,8 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
   // in a tool output or a deploy key embedded in a config file would otherwise sail through whole.
   // The body is bounded and may end at the next BEGIN header or the end of the text, so a truncated key
   // (`head -5 id_rsa`) is still redacted and a long run of unterminated headers cannot go quadratic.
-  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY[A-Z0-9 ]*-----[\s\S]{0,16384}?(?:-----END [A-Z0-9 ]*PRIVATE KEY[A-Z0-9 ]*-----|(?=-----BEGIN )|$)/g,
+  // The header label runs are bounded too: unbounded runs made `-----BEGIN PRIVATE KEY PRIVATE KEY …` quadratic.
+  /-----BEGIN [A-Z0-9 ]{0,40}PRIVATE KEY[A-Z0-9 ]{0,40}-----[\s\S]{0,16384}?(?:-----END [A-Z0-9 ]{0,40}PRIVATE KEY[A-Z0-9 ]{0,40}-----|(?=-----BEGIN )|$)/g,
 ];
 
 // Two variants: a QUOTED value may contain spaces ("my secret value"); a BARE value stops at
