@@ -109,4 +109,72 @@ describe('fetch-log command', () => {
     expect(output).toContain('Cost: n/a');
     spy.mockRestore();
   });
+
+  test('passes includeTurnMetrics through on both the content and search paths', async () => {
+    await run({ logId: 'log-1', includeTurnMetrics: true });
+    expect(mockGetLogContent).toHaveBeenLastCalledWith('log-1', expect.objectContaining({ includeTurnMetrics: true }));
+    await run({ logId: 'log-1', searchQuery: 'error', includeTurnMetrics: true });
+    expect(mockGetLogContent).toHaveBeenLastCalledWith('log-1', {
+      searchQuery: 'error',
+      includeThinking: undefined,
+      includeTurnMetrics: true,
+    });
+  });
+
+  test('prints a turn_metrics summary when requested and present, tolerating null token fields', async () => {
+    mockGetLogContent.mockResolvedValue({
+      ...fullContent,
+      turn_metrics: [
+        {
+          index: 0,
+          human: true,
+          started_at: null,
+          ended_at: null,
+          assistant_requests: 3,
+          tool_calls: 2,
+          input_tokens: 100,
+          output_tokens: null,
+          cache_read_tokens: null,
+          cache_creation_tokens: 7,
+        },
+      ],
+    });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ logId: 'log-1', includeTurnMetrics: true });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('Turn metrics:');
+    expect(output).toContain('#0 human: 3 requests, 2 tool calls, tokens 100 in / n/a out (cache n/a read / 7 created)');
+    spy.mockRestore();
+  });
+
+  test('says turn metrics are n/a when requested but null (not an agent session)', async () => {
+    mockGetLogContent.mockResolvedValue({ ...fullContent, turn_metrics: null });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ logId: 'log-1', includeTurnMetrics: true });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('Turn metrics: n/a');
+    spy.mockRestore();
+  });
+
+  test('says turn metrics were not returned when requested but the key is absent', async () => {
+    mockGetLogContent.mockResolvedValue({ ...fullContent });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ logId: 'log-1', includeTurnMetrics: true });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).toContain('Turn metrics: not returned by the server');
+    spy.mockRestore();
+  });
+
+  test('prints no turn metrics section when not requested', async () => {
+    mockGetLogContent.mockResolvedValue({ ...fullContent, turn_metrics: null });
+    const { logger } = await import('../../src/logger.js');
+    const spy = jest.spyOn(logger, 'info');
+    await run({ logId: 'log-1' });
+    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
+    expect(output).not.toContain('Turn metrics');
+    spy.mockRestore();
+  });
 });

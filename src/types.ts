@@ -100,6 +100,7 @@ export interface FetchLogOptions {
   maxChars?: number;
   searchQuery?: string;
   includeThinking?: boolean;
+  includeTurnMetrics?: boolean;
   json?: boolean;
   clientId?: string;
 }
@@ -177,6 +178,24 @@ export interface GetTemplateOptions {
   daysBack?: number;
   since?: string;
   until?: string;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface ListStepTemplatesOptions {
+  search?: string;
+  stepType?: 'prompt_step' | 'tool_step';
+  includeMetrics?: boolean;
+  page?: number;
+  perPage?: number;
+  json?: boolean;
+  clientId?: string;
+}
+
+export interface GetStepTemplateOptions {
+  id: number;
+  /** `--no-metrics`: send `includeMetrics: false` (the server includes metrics by default). */
+  noMetrics?: boolean;
   json?: boolean;
   clientId?: string;
 }
