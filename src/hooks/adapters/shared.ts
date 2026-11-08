@@ -1,10 +1,44 @@
+import { promises as fs } from 'fs';
 import { rawMessageText, type RawMessage } from '../../sessions/blocks.js';
 import type { Exchange } from '../../sessions/claude-scanner.js';
 import type { EarlierExchange } from '../types.js';
 
+/**
+ * How much of the transcript's tail to read. A turn full of tool output can run to megabytes, and the
+ * earlier exchanges are rebuilt from the same window, so anything older than this is simply not seen
+ * (the turn's `history_truncated` flag says when that cost the conversation some of its history).
+ */
+export const TRANSCRIPT_TAIL_BYTES = 8 * 1024 * 1024;
+
+/** The last `maxBytes` of a file (all of it if smaller). */
+export async function readTail(filePath: string, maxBytes: number): Promise<Buffer> {
+  const handle = await fs.open(filePath, 'r');
+  try {
+    const { size } = await handle.stat();
+    const length = Math.min(size, maxBytes);
+    const buffer = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, size - length);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
 /** Equal once whitespace is collapsed: the payload and the transcript may join a reply's text blocks differently. */
 export function sameText(a: string | undefined, b: string): boolean {
   return a !== undefined && a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Is the transcript's latest exchange this turn? Yes when its reply is the one the hook was given, or
+ * when it has a prompt but no reply yet (the transcript is written asynchronously and can lag the hook
+ * by exactly the reply). No when it shows some other reply: that is an earlier turn.
+ */
+export function transcriptShowsThisTurn(tail: { userText?: string; assistantText?: string }, assistantText: string): boolean {
+  if (tail.assistantText === undefined) {
+    return tail.userText !== undefined;
+  }
+  return sameText(tail.assistantText, assistantText);
 }
 
 /**

@@ -42,7 +42,7 @@ const shDescribe = HAS_SH ? describe : describe.skip;
 
 shDescribe('skills that carry the capture hook', () => {
   it('finds the skills it is supposed to check', () => {
-    expect(SKILLS).toEqual(expect.arrayContaining(['examples/hook-capture/claude/SKILL.md', '.claude/skills/loop-review/SKILL.md']));
+    expect(SKILLS).toEqual(expect.arrayContaining(['examples/hook-capture/claude/SKILL.md', 'examples/hook-capture/cursor/SKILL.md', '.claude/skills/loop-review/SKILL.md']));
   });
 
   it.each(SKILLS)('%s has strictly valid frontmatter with a parseable Stop hook', (file) => {

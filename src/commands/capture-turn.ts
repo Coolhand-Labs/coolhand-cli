@@ -89,6 +89,10 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
     await logHookEvent('capture-turn (copilot): --skill is required (a Copilot hook runs for every chat and sends only the skill\'s); nothing sent.');
     return;
   }
+  if (opts.agent === 'cursor' && opts.skill && isSkillPattern(opts.skill)) {
+    await logHookEvent('capture-turn (cursor): --skill patterns are not supported (a Cursor payload does not say which skill ran); use a plain skill name. Nothing sent.');
+    return;
+  }
   // Claude only: a pattern resolves to one skill on the session's first captured turn and the session stays on it, so a long session
   // is not lost (or moved to another skill) when the invocation scrolls out of the transcript window. A pin left by
   // another hook entry on this session only counts if it matches this entry's pattern.
@@ -106,7 +110,14 @@ async function capture(opts: CaptureTurnOptions, deps: CaptureTurnDeps): Promise
   const turn: HookTurn = opts.anonymous ? { ...parsed, cwd: undefined } : parsed;
 
   const state = await loadTurnState(opts.agent, turn.sessionId);
-  const digest = digestTurn(turn.userText, turn.assistantText, turn.turnKey);
+  // Cursor only: the turn is identified by its generation id, and the prompt text can differ between two events reporting the same
+  // turn (one may not have it yet), so it must not make them look distinct. Whitespace is collapsed because an event's text and the
+  // transcript's copy of the same reply may join blocks differently. Claude and Copilot keep their original identity.
+  const collapse = (text: string): string => text.replace(/\s+/g, ' ').trim();
+  const digest =
+    opts.agent === 'cursor'
+      ? digestTurn(turn.turnKey ? undefined : turn.userText && collapse(turn.userText), collapse(turn.assistantText), turn.turnKey)
+      : digestTurn(turn.userText, turn.assistantText, turn.turnKey);
   if (state.lastDigest === digest) {
     return;
   }

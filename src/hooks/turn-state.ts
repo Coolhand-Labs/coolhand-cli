@@ -39,6 +39,13 @@ export interface TurnState {
   skillText?: string;
   /** The skill a `--skill` pattern resolved to on the session's first captured turn; later turns stay on it. */
   skill?: string;
+  /**
+   * The prompt an agent reported before its reply (Cursor's `beforeSubmitPrompt`), waiting to be
+   * paired with that reply. A missing one just means no user half.
+   */
+  pendingPrompt?: string;
+  /** Cursor's id for the user message `pendingPrompt` belongs to, so only that message's reply consumes it. */
+  pendingGeneration?: string;
 }
 
 const MAX_CAPTURED_STAMPS = 1000;
@@ -75,6 +82,8 @@ export async function loadTurnState(agent: string, sessionId: string): Promise<T
       captured: Array.isArray(parsed.captured) ? parsed.captured.filter((x): x is string => typeof x === 'string').slice(-MAX_CAPTURED_STAMPS) : undefined,
       anchorLate: parsed.anchorLate === true ? true : undefined,
       skillText: typeof parsed.skillText === 'string' && parsed.skillText ? parsed.skillText : undefined,
+      pendingPrompt: typeof parsed.pendingPrompt === 'string' && parsed.pendingPrompt ? parsed.pendingPrompt : undefined,
+      pendingGeneration: typeof parsed.pendingGeneration === 'string' && parsed.pendingGeneration ? parsed.pendingGeneration : undefined,
       skill: typeof parsed.skill === 'string' && parsed.skill ? parsed.skill.slice(0, 200) : undefined,
       tester:
         parsed.tester &&

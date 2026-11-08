@@ -29,7 +29,7 @@ const shDescribe = spawnSync('sh', ['-c', 'true']).status === 0 ? describe : des
 shDescribe('documented hook commands', () => {
   const cases: Array<[string, string[]]> = [
     ['claude/SKILL.md', commandsIn(path.join(EXAMPLES, 'claude', 'SKILL.md'), ['command'])],
-    ['cursor/hooks.json', commandsIn(path.join(EXAMPLES, 'cursor', 'hooks.json'), ['command'])],
+    ['cursor/SKILL.md', commandsIn(path.join(EXAMPLES, 'cursor', 'SKILL.md'), ['command'])],
     ['copilot/coolhand-capture-example.json', commandsIn(path.join(EXAMPLES, 'copilot', 'coolhand-capture-example.json'), ['bash'])],
     ['copilot/workspace/coolhand-capture-example.json', commandsIn(path.join(EXAMPLES, 'copilot', 'workspace', 'coolhand-capture-example.json'), ['bash'])],
     ['docs/hook-capture.md', commandsIn(DOC, ['command'])],
@@ -47,9 +47,10 @@ shDescribe('documented hook commands', () => {
 
 shDescribe('the hook command picks a CLI that knows capture-turn', () => {
   const claudeCommand = commandsIn(path.join(EXAMPLES, 'claude', 'SKILL.md'), ['command'])[0];
+  const cursorCommand = commandsIn(path.join(EXAMPLES, 'cursor', 'SKILL.md'), ['command'])[0];
   const skillCommand = commandsIn(path.join(__dirname, '..', '..', '.claude', 'skills', 'loop-review', 'SKILL.md'), ['command'])[0];
   const copilotCommand = commandsIn(path.join(EXAMPLES, 'copilot', 'coolhand-capture-example.json'), ['bash'])[0];
-  const CASES: Array<[string, string]> = [['claude example', claudeCommand], ['loop-review skill', skillCommand], ['copilot user-level hook', copilotCommand]];
+  const CASES: Array<[string, string]> = [['claude example', claudeCommand], ['cursor example', cursorCommand], ['loop-review skill', skillCommand], ['copilot user-level hook', copilotCommand]];
 
   /** Runs `command` with fake `coolhand` and `npx` binaries first on PATH; reports which one got the hook JSON. */
   function runHook(command: string, fakes: { coolhand?: 'old' | 'new' }): { coolhand?: string; npx?: string; status: number | null } {
