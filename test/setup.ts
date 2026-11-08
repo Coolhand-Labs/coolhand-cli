@@ -4,6 +4,9 @@
 // Extend Jest matchers if needed
 // import '@testing-library/jest-dom';
 
+// Keep the first-run skill note out of every test's stderr (and out of the real config dir).
+process.env.COOLHAND_NO_NOTICE = '1';
+
 // Set up any global test utilities or mocks here
 
 // Keep the background auto-updater from spawning processes or writing state during tests.

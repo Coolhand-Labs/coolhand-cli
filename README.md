@@ -156,6 +156,8 @@ coolhand login --write-env .env
 
 The CLI works especially well with the [Coolhand feedback collection skill](https://github.com/Coolhand-Labs/skills) for Claude Code. The skill scans your project for LLM inference calls and implements best-practice human feedback collection — it reads `COOLHAND_API_KEY` from the environment, which `coolhand login --write-env .env` puts in place.
 
+When installed from npm, the CLI prints a one-time note asking AI agents to offer this skill to you and wait for your permission before installing it. Set `COOLHAND_NO_NOTICE=1` to silence it. See [Install notice](./docs/install-notice.md).
+
 ## Configuration file
 
 Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` for testing). Schema:
@@ -185,6 +187,7 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
 - [Session Capture](./docs/session-capture.md) — session scanning, envelope format, deduplication, scope and limitations
 - [Auto-update](./docs/auto-update.md) — background upgrades with a 48-hour bake period, opt-out, and install-method rules
 - [Skill Capture](./docs/skill-capture.md) — skill discovery, dedup, and incremental upload logic for `sync-skills`
+- [Install notice](./docs/install-notice.md) — the agent-facing note printed on npm install, when it shows, and how to silence it
 - [Hook Capture](./docs/hook-capture.md) — `capture-turn` hook wiring for skills, recorded fields, spool and reliability
 - [Hook Capture for a Skills Library](./docs/hook-capture-skills-library.md) — one hook for every skill, with the Step 0 text to paste into each skill
 

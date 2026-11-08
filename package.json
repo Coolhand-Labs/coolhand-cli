@@ -40,10 +40,12 @@
   },
   "files": [
     "dist/",
+    "scripts/postinstall.mjs",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
+    "postinstall": "node scripts/postinstall.mjs",
     "sync-version": "node scripts/sync-version.mjs",
     "prepare": "npm run build",
     "build": "npm run sync-version && tsc && chmod +x dist/bin.js",
