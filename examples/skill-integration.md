@@ -1,6 +1,6 @@
 # Skill Integration
 
-The `feedback-collection` skill (and any future Coolhand skill that needs a token) shells out to `coolhand-cli` via `npx`. This file documents the contract so the skill author can rely on stable behavior.
+The `feedback-collection` skill from [`Coolhand-Labs/skills`](https://github.com/Coolhand-Labs/skills) (and any future Coolhand skill that needs a token) shells out to `coolhand-cli` via `npx`. This file documents the contract so the skill author can rely on stable behavior.
 
 ## Detect whether the user already has a token
 

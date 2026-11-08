@@ -1,0 +1,9 @@
+{
+  "name": "coolhand-qa",
+  "version": "0.1.0",
+  "description": "qa-spike skill plus a Coolhand capture hook for VS Code Copilot",
+  "author": {
+    "name": "Coolhand Labs"
+  },
+  "hooks": "./.github/hooks/coolhand-capture.json"
+}

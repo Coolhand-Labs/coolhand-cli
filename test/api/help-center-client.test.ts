@@ -17,6 +17,8 @@ jest.mock('coolhand-node', () => ({
 }));
 jest.mock('../../src/config.js', () => ({
   loadConfig: jest.fn(),
+  findClient: (cfg: { clients: Record<string, unknown> }, id: string) =>
+    Object.prototype.hasOwnProperty.call(cfg.clients, id) ? cfg.clients[id] : undefined,
 }));
 
 import { getHelpCenterClient, mapHelpCenterHttpError } from '../../src/api/help-center-client.js';

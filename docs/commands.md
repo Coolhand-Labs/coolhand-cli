@@ -4,7 +4,7 @@ Full flag reference and usage notes for all coolhand-cli commands.
 
 ## Global Flags and Client Selection
 
-All commands that make API calls accept `--client-id ID` to choose which stored account to use. The flag can appear **before or after** the subcommand name (except `claude`, where it must come before — see the [`claude`](#claude) section below):
+All commands that make API calls accept `--client-id ID` to choose which stored account to use. The exception is `capture-turn`, which runs unattended inside an agent hook and authenticates with a public API key instead (see [`capture-turn`](#capture-turn)). The flag can appear **before or after** the subcommand name (except `claude`, where it must come before — see the [`claude`](#claude) section below):
 
 ```bash
 coolhand --client-id acme list-workloads   # global position
@@ -75,6 +75,23 @@ Exit code `0` if a token is configured for the default (or requested) client, `1
 ```
 
 `masked_token` is `"(no public key)"` when only a private key was granted. Likewise `masked_private_key` is `"(no private key)"` when no private key is stored — run `coolhand login --scope private` to obtain one.
+
+### update
+
+```bash
+coolhand update [--check] [--json]
+```
+
+Checks the npm registry and upgrades to the newest **stable** release that has been published for at least 48 hours, is not deprecated, and is not above the registry's `latest` tag. For a global `npm install -g` install it runs `npm install -g coolhand-cli@<version>` (plus `--before` for dependencies; see [auto-update.md](./auto-update.md)); for any other install (project-local, `npx`, pnpm/Volta/Yarn/Bun, a source checkout) it prints the command to run instead.
+
+| Flag | Description |
+|------|-------------|
+| `--check` | Report the version it would install without installing it |
+| `--json` | Emit `{"current": "0.12.0", "target": "0.13.0" \| null, "installed": false}`; `installed` is `true` after a successful install |
+
+Exits `0` when up to date or after a successful install or report; `1` with `UPDATE_ERROR` if the registry cannot be reached or the install fails. Unlike the background updater, this command ignores `COOLHAND_NO_AUTO_UPDATE`, `CI`, and `auto_update: false`.
+
+The same logic runs automatically in the background at most once a day; see [auto-update.md](./auto-update.md) for how it works and how to turn it off.
 
 ### whoami
 
@@ -937,3 +954,25 @@ When an agent is blocked — because a capability does not exist in its environm
 | `--log-id ID` | Optional. Ties the complaint to a specific LLM request log |
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
+
+### capture-turn
+
+```bash
+coolhand capture-turn --agent claude|copilot [--skill NAME|PATTERN] [--api-key KEY] [--base-url URL] [--skill-version V] [--anonymous] [--no-declare]
+```
+
+Agent hook entrypoint. An AI agent runs it after every turn and pipes the hook's JSON payload to stdin; `capture-turn` sends that turn to Coolhand as one LLM request log: `request_body.messages` is the conversation since the skill was invoked (prompts, thinking, tool calls, tool results and replies, redacted and capped), ending before this turn's reply, and `response_body` is this turn's final reply (see [The conversation so far](./hook-capture.md#the-conversation-so-far)). It authenticates with a **public** API key given on the command line or in `COOLHAND_API_KEY`, so the person using the agent never logs in. It does not read the stored config, ignores `--client-id`, and never prompts.
+
+A hook must not disturb its agent, so `capture-turn` always exits 0 and writes nothing to stdout or stderr. Failures are appended to `~/.coolhand/capture-turns/hook.log`, and turns that could not be delivered are saved to `~/.coolhand/pending/` and replayed after the next successful send. With no key it sends nothing. A mistyped flag is logged there as well rather than printed, unless a person runs the command in a terminal. Each turn is attributed (`metadata.tester`) to `COOLHAND_CAPTURE_USER` if set, otherwise the git email, otherwise an anonymous machine id; see [Who ran it](./hook-capture.md#who-ran-it). Set `COOLHAND_CAPTURE_DISABLED=1` to make the command do nothing at all.
+
+Supported agents are `claude` (Claude Code's `Stop` hook) and `copilot` (VS Code GitHub Copilot's `Stop` hook; reads the turn from the `transcript_path` in the payload, and **needs `--skill`**: a Copilot hook runs for every chat in the workspace, so it sends only when the transcript shows that skill was invoked; `--skill '*'` or `--skill 'acme-*'` makes one hook serve every skill, or every skill whose name starts with `acme-`). See [docs/hook-capture.md](./hook-capture.md) for how to wire it into a skill.
+
+| Flag | Description |
+|------|-------------|
+| `--agent claude\|copilot` | Required. Which agent's hook payload to expect |
+| `--skill NAME` | Optional for `claude`, **required for `copilot`** (which sends only chats that invoked this skill, and nothing without it). Skill that enabled the hook. A value ending in `*`, or one that joins alternatives with `\|`, is a pattern, for a hook that runs in every session (a Copilot hook file, or a Claude Code plugin's hook): `'*'` matches any skill and `'acme-*'` any skill whose name starts with `acme-` (always quote the value: the shell would expand an unquoted `*`, and an unquoted `\|` starts a pipeline). Separate alternatives with `\|` to match several: `'qa-*\|skill-for-qas'` matches any skill starting with `qa-` and the skill named `skill-for-qas`; each alternative is a prefix pattern or an exact name. A `*` anywhere but the end of an alternative is not a wildcard: it is compared as part of a literal name, so it matches nothing in practice. The first matching skill invoked in a session is the one recorded, and the session stays on it. For `claude`, a session counts only if the user invoked a matching skill with a slash command (`/skill` or `/plugin:skill`; a skill the model loads itself does not count), and the match is on the skill's folder name, so the skill's `name:` must equal its folder name. Sent as `metadata.skill`, and it declares the skill's workload, selects the skill text sent as `request_body.system`, and (with `--no-declare`) can be kept as a label only |
+| `--api-key KEY` | Public API key only, never a private key. Falls back to `COOLHAND_API_KEY`. Prefer the environment variable where you can: command-line arguments are visible in `ps` |
+| `--base-url URL` | Coolhand base URL (default `https://coolhandlabs.com`) |
+| `--skill-version V` | Optional. The skill's version; sent as `metadata.skill_version` (never in the declaration). Keep it equal to the skill's frontmatter `version:` |
+| `--no-declare` | With `--skill`, don't declare a workload for the skill. By default `--skill NAME` (or the skill a `--skill` pattern matched) declares one workload per skill (`<agent>-skill:NAME`, for example `claude-skill:NAME`) and the log is attached to it; see [the skill's workload, its text and token usage](./hook-capture.md#the-skills-workload-its-text-and-token-usage) |
+| `--anonymous` | Attribute turns to the anonymous machine id instead of the git email, and leave out the working directory. Overrides `COOLHAND_CAPTURE_USER` |

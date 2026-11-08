@@ -40,6 +40,7 @@ On Windows, POSIX permission bits are not enforced. The file is still confined t
 | `version`            | `1`                 | Schema version. Currently always `1`.                    |
 | `default_client_id` | `string \| null`    | Which client `whoami`/`status` reports without `--client-id`. |
 | `clients`           | `Record<string, ClientEntry>` | Keyed by `client_id`.                       |
+| `auto_update`       | `boolean` (optional) | Set to `false` to turn off the background auto-updater. Absent means enabled; only a JSON boolean is honored. See [auto-update.md](./auto-update.md). |
 
 ### ClientEntry
 
@@ -56,4 +57,12 @@ On Windows, POSIX permission bits are not enforced. The file is still confined t
 
 Running `coolhand login` against a different client adds a second entry to `clients` and marks it as the new default. Use `coolhand clients use <id>` to switch back without re-authenticating, or `coolhand status --client-id <id>` to query a specific entry.
 
-`coolhand logout` without flags removes the default client. `coolhand logout --client-id <id>` removes a specific entry. `coolhand logout --all` deletes the file entirely.
+`coolhand logout` without flags removes the default client. `coolhand logout --client-id <id>` removes a specific entry. `coolhand logout --all` deletes the file entirely, unless `auto_update` is set, in which case only that setting is kept (removing the last client behaves the same).
+
+## Files written by `capture-turn`
+
+Besides `config.json`, the [`capture-turn` hook](./hook-capture.md) keeps a few files under the same directory:
+
+- `machine-id`: the anonymous machine id.
+- `capture-turns/`: one progress file per session, holding the resolved tester identity (the git email unless `--anonymous` is used), the timestamp that anchors the session's history, the timestamps of the exchanges that were captured, and the invoked skill's text (up to 100,000 characters) when `--skill` is given. It holds none of the conversation. Also `hook.log`, a separate file in the same directory.
+- `pending/capture-turn-*.json`: turns waiting to be re-sent. Each holds the public key it was sent with, the secret-scrubbed conversation so far, tool calls and their output included. They are kept until 7 days after their last replay attempt, at most 200 records and 64 MB in total.

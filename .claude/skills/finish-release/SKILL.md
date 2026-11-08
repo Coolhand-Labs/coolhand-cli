@@ -54,8 +54,14 @@ approval. The workflow does **not** create a GitHub release; Phase 4 does.
      `npm publish` would ship it verbatim. Also confirm each `dependencies`
      range resolves (`npm view coolhand-node@"<range>" version`).
    - PR is open, not a draft, `gh pr view <n> --json mergeStateStatus,mergeable`
-     is `CLEAN`/`MERGEABLE`, and every check in `gh pr checks <n>` passed. `main`
-     has no branch protection, so "required" means all of them.
+     is `MERGEABLE`, and every check in `gh pr checks <n>` passed (none failing,
+     pending or cancelled; "required" means all of them). `mergeStateStatus` is
+     `CLEAN` or `BLOCKED`: `main` has no review requirement, but the "only
+     maintainers can merge" ruleset (restricts updates to `main` to maintainers)
+     reports every PR as `BLOCKED` until the merge uses `--admin`. Any other
+     state (`DIRTY`, `BEHIND`, `UNSTABLE`, `HAS_HOOKS`, …) is a stop. The PR
+     head must also be the commit CI ran on: if a push is newer than the
+     checks, wait for them.
    - The tag does not exist, locally (`git tag -l vX.Y.Z`) or on the remote
      (`git ls-remote --tags origin 'vX.Y.Z*'`), and no release exists (`gh
      release view vX.Y.Z` fails). If the tag exists but the release does not,
@@ -65,10 +71,16 @@ approval. The workflow does **not** create a GitHub release; Phase 4 does.
 
 1. Save the PR body verbatim: `gh pr view <n> --json body --jq .body >
    /tmp/release-pr-body-vX.Y.Z.md`.
-2. `gh pr merge <n> --squash --delete-branch --subject "release vX.Y.Z
+2. `gh pr merge <n> --squash --delete-branch --admin --subject "release vX.Y.Z
    (#<n>)" --body-file /tmp/release-pr-body-vX.Y.Z.md`. The user-chosen squash
-   title has no `chore:` prefix; `--subject` is used verbatim, so keep the `(#<n>)`. No AI attribution. Never `--admin` or bypass checks; if
-   the merge is refused, stop and report.
+   title has no `chore:` prefix; `--subject` is used verbatim, so keep the `(#<n>)`. No AI attribution. Add `--admin`: the "only maintainers can
+   merge" ruleset on `main` refuses a plain merge ("the base branch policy
+   prohibits the merge") even though no review is required, and `--admin` is how
+   a maintainer merges. Invoking this skill authorizes that, **provided every CI
+   check passed** in Phase 1; re-run `gh pr checks <n>` immediately before
+   merging and stop if any check is failing, pending or cancelled. `--admin`
+   never substitutes for green CI. If the merge is refused for any other
+   reason, stop and report.
 3. `git fetch origin main --tags`; the merge commit is `gh pr view <n> --json
    mergeCommit --jq .mergeCommit.oid`. Confirm `git show <sha>:package.json` still
    has version `X.Y.Z`. That commit is the tag target, **not** `origin/main` HEAD:
@@ -100,18 +112,34 @@ approval. The workflow does **not** create a GitHub release; Phase 4 does.
    and "no new commands or flags" when true), then only the sections that have
    content from `### New commands`, `### Changed`, `### Security`, `### Fixed`,
    and always a closing `### Breaking changes` (`None.` plus why, or the
-   migration). There is no Known Follow-ups section in this repo.
+   migration). There is no Known Follow-ups section in this repo. Credit for
+   outside contributors (step 2) goes in a `### Thanks` section just before
+   `### Breaking changes`, so that stays the closing section.
 2. Source the content from the `## [X.Y.Z]` CHANGELOG section and the merged
    PRs since the previous tag (`git log v<previous>..vX.Y.Z --oneline`), reading
    the PRs and diff for anything the changelog compresses. Write for users: a
    short `bash` example per new command, migration notes for behavior changes,
-   full `https://github.com/...` URLs.
+   full `https://github.com/...` URLs. Carry over the CHANGELOG's credit:
+   `thanks @login` next to the PR link on each outside contributor's entry
+   (`([#222](https://github.com/...), thanks @login)`), and the `### Thanks`
+   section with its first-time welcome.
 3. **Verify every claim before publishing.** Don't describe a behavior you
    haven't read in the code or the PR; check flags against `docs/commands.md`
    and `src/cli.ts`; check `gh issue view <n>` / `gh pr view <n>` on anything
    you link. A note that misstates scope is worse than a short one.
 4. Write the notes to `/tmp/release-notes-vX.Y.Z.md` (outside the repo).
-5. `gh release create vX.Y.Z --verify-tag --title "vX.Y.Z" --notes-file
+5. **Check contributor credit.** For every `(#N)` in the CHANGELOG section,
+   `gh pr view N --json author`; for each author that is neither a bot nor a
+   team member (`gh api repos/{owner}/{repo}/pulls/N --jq .author_association`
+   is not `MEMBER`, `OWNER` or `COLLABORATOR`), the notes file must carry `thanks
+   @login` on the entry and a `### Thanks` section naming them. If that author
+   had no commit on `main` before this release (`gh api
+   "repos/{owner}/{repo}/commits?author=<login>&until=<previous-tag-date>"` is
+   `[]`), the thanks must also say it is their first contribution. If any of it
+   is missing from the notes, or from the CHANGELOG section `/prep-release`
+   wrote, stop and tell the user before publishing, since the release notes are
+   what the contributor sees; don't edit the tagged CHANGELOG silently.
+6. `gh release create vX.Y.Z --verify-tag --title "vX.Y.Z" --notes-file
    /tmp/release-notes-vX.Y.Z.md --latest`. Not a draft and not a prerelease,
    same as the previous releases. Confirm with
    `gh release view vX.Y.Z --json name,tagName,isDraft,url`.
@@ -121,6 +149,8 @@ approval. The workflow does **not** create a GitHub release; Phase 4 does.
 State, in the final message:
 - The merged PR number and its merge commit, and the tag (it points at that commit).
 - The release URL.
+- Outside and first-time contributors credited in the release notes, by
+  `@login` and PR (or that there were none).
 - The Publish run (`gh run list --workflow publish.yml --limit 1`) and whether
   `publish` is waiting on `npm-publish` approval. Never approve it or publish
   another way. A red run means the package was **not** published. If asked
