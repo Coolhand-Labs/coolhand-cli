@@ -1146,6 +1146,12 @@ describe('run', () => {
     });
   });
 
+  test('capture-turn accepts --agent cursor', async () => {
+    (runCaptureTurnCommand as jest.Mock).mockClear();
+    expect(await run(['capture-turn', '--agent', 'cursor', '--skill', 'qa-login'])).toBe(0);
+    expect(runCaptureTurnCommand).toHaveBeenCalledWith(expect.objectContaining({ agent: 'cursor', skill: 'qa-login' }));
+  });
+
   test('capture-turn ignores --client-id and treats an empty --base-url as unset', async () => {
     (runCaptureTurnCommand as jest.Mock).mockClear();
     await run(['--client-id', 'acme', 'capture-turn', '--agent', 'claude', '--base-url=']);

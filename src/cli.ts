@@ -238,10 +238,10 @@ const COMMANDS: CommandMeta[] = [
   {
     name: 'capture-turn',
     oneLiner: 'Agent hook: send the turn that just finished, with the conversation so far, to Coolhand',
-    usage: 'coolhand capture-turn --agent claude|copilot [--skill NAME|PATTERN] [options]   (reads the hook JSON on stdin)',
+    usage: 'coolhand capture-turn --agent claude|copilot|cursor [--skill NAME|PATTERN] [options]   (reads the hook JSON on stdin)',
     options: [
-      { flag: '--agent claude|copilot', description: 'Which agent is calling the hook (required)' },
-      { flag: '--skill NAME', description: "Skill that enabled the hook; sent as metadata (required for --agent copilot, which sends only chats that invoked it). A trailing * is a pattern, for a hook that runs in every session: '*' captures any skill, 'acme-*' any skill named acme-…. Join alternatives with | ('qa-*|other-skill'); each is a prefix pattern or an exact name. Quote the value: an unquoted * is expanded by the shell and an unquoted | starts a pipeline" },
+      { flag: '--agent claude|copilot|cursor', description: 'Which agent is calling the hook (required)' },
+      { flag: '--skill NAME', description: "Skill that enabled the hook; sent as metadata (required for --agent copilot, which sends only chats that invoked it; a plain name only for cursor). A trailing * is a pattern, for a hook that runs in every session: '*' captures any skill, 'acme-*' any skill named acme-…. Join alternatives with | ('qa-*|other-skill'); each is a prefix pattern or an exact name. Quote the value: an unquoted * is expanded by the shell and an unquoted | starts a pipeline" },
       { flag: '--api-key KEY', description: 'Public API key only, never a private key (or set COOLHAND_API_KEY). No login needed' },
       { flag: '--base-url URL', description: 'Coolhand base URL (default: https://coolhandlabs.com)' },
       { flag: '--skill-version V', description: "The skill's version; sent as metadata.skill_version" },

@@ -1,6 +1,7 @@
 import type { AdapterContext, HookAgent, HookInput, HookTurn } from '../types.js';
 import { claudeTurn } from './claude.js';
 import { copilotTurn } from './copilot.js';
+import { cursorTurn } from './cursor.js';
 
 export type HookAdapter = (input: HookInput, ctx?: AdapterContext) => Promise<HookTurn | null>;
 
@@ -8,4 +9,5 @@ export type HookAdapter = (input: HookInput, ctx?: AdapterContext) => Promise<Ho
 export const ADAPTERS: Record<HookAgent, HookAdapter> = {
   claude: claudeTurn,
   copilot: copilotTurn,
+  cursor: cursorTurn,
 };

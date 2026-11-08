@@ -1239,6 +1239,106 @@ describe('capture-turn', () => {
     const log = await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8');
     expect(log).toContain('capture-turn (claude) failed');
   });
+  // Built from Cursor's docs with synthetic transcripts; not yet confirmed against a real Cursor run.
+  describe('--agent cursor', () => {
+    const cursorOpts = () => ({ ...opts(), agent: 'cursor' as const, skill: 'qa-cursor' });
+    const ts = (i: number) => `2026-10-28T10:00:${String(i).padStart(2, '0')}.000Z`;
+    const writeTranscript = async (name: string, exchanges: Array<{ u: string; a: string }>) => {
+      const file = path.join(home.dir, `${name}.jsonl`);
+      const lines = exchanges.flatMap((e, i) => [
+        { role: 'user', timestamp: ts(i), message: { content: [{ type: 'text', text: `<user_query>\n${e.u}\n</user_query>` }] } },
+        { role: 'assistant', message: { content: [{ type: 'text', text: e.a }] } },
+      ]);
+      await fs.writeFile(file, lines.map((l) => JSON.stringify(l)).join('\n'));
+      return file;
+    };
+    const native = (event: string, extra: Record<string, unknown> = {}) => ({
+      hook_event_name: event,
+      conversation_id: 'conv-1',
+      workspace_roots: ['/tmp/proj'],
+      ...extra,
+    });
+    const sent = (i: number) => server.received[i].body.llm_request_log;
+
+    it('two turns give a cumulative second payload with nothing from before the skill, redacted, filed under the cursor workload', async () => {
+      const t1 = await writeTranscript('c1', [{ u: 'my private question', a: 'a private answer' }, { u: '/qa-cursor', a: 'starting' }]);
+      await run(cursorOpts(), { readInput: async () => native('afterAgentResponse', { generation_id: 'g1', transcript_path: t1, text: 'starting' }) });
+      const t2 = await writeTranscript('c2', [
+        { u: 'my private question', a: 'a private answer' },
+        { u: '/qa-cursor', a: 'starting' },
+        { u: `check token=${SECRET}`, a: 'checked' },
+      ]);
+      await run(cursorOpts(), { readInput: async () => native('stop', { generation_id: 'g2', transcript_path: t2, status: 'completed' }) });
+
+      expect(server.received).toHaveLength(2);
+      expect(JSON.stringify(server.received)).not.toContain('private');
+      expect(JSON.stringify(server.received)).not.toContain(SECRET);
+      expect(sent(0).raw_request.url).toBe('coolhand-hook://cursor/session/conv-1/turn/1');
+      const second = sent(1).raw_request;
+      expect(second.url).toBe('coolhand-hook://cursor/session/conv-1/turn/2');
+      expect(second.request_body.messages.map((m: { content: string }) => m.content)).toEqual(['/qa-cursor', 'starting', expect.stringContaining('check token=')]);
+      expect(second.response_body.content).toEqual([{ type: 'text', text: 'checked' }]);
+      expect(sent(1).metadata).toMatchObject({ agent: 'cursor', skill: 'qa-cursor', turn_index: 2 });
+      expect(JSON.stringify(server.received[1].body)).toContain('cursor-skill:qa-cursor');
+    });
+
+    it('sends a turn once even though afterAgentResponse and stop both report it', async () => {
+      const t = await writeTranscript('c3', [{ u: 'hello', a: 'hi there' }]);
+      await run(cursorOpts(), { readInput: async () => native('afterAgentResponse', { generation_id: 'g1', transcript_path: t, text: 'hi there' }) });
+      // The second event reports the same reply while the transcript has not caught up with the prompt.
+      await run(cursorOpts(), { readInput: async () => native('stop', { generation_id: 'g1', transcript_path: t, status: 'completed' }) });
+      await run(cursorOpts(), { readInput: async () => native('afterAgentResponse', { generation_id: 'g1', transcript_path: null, text: 'hi there' }) });
+
+      expect(server.received).toHaveLength(1);
+    });
+
+    it('pairs a stashed beforeSubmitPrompt prompt with the reply when there is no transcript', async () => {
+      await run(cursorOpts(), { readInput: async () => native('beforeSubmitPrompt', { prompt: 'what is 2+2?', transcript_path: null }) });
+      expect(server.received).toHaveLength(0);
+      await run(cursorOpts(), { readInput: async () => native('afterAgentResponse', { generation_id: 'g1', transcript_path: null, text: 'four' }) });
+
+      expect(sent(0).raw_request.request_body.messages).toEqual([{ role: 'user', content: 'what is 2+2?' }]);
+      expect((await loadTurnState('cursor', 'conv-1')).pendingPrompt).toBeUndefined(); // consumed
+    });
+
+    it('sends nothing for a --skill pattern, since a Cursor payload never says which skill ran, and says why in hook.log', async () => {
+      const t = await writeTranscript('c6', [{ u: 'hello', a: 'hi there' }]);
+      await run({ ...cursorOpts(), skill: 'qa-*' }, { readInput: async () => native('afterAgentResponse', { generation_id: 'g1', transcript_path: t, text: 'hi there' }) });
+
+      expect(server.received).toHaveLength(0);
+      expect(await fs.readFile(path.join(home.dir, 'capture-turns', 'hook.log'), 'utf8')).toContain('patterns are not supported');
+    });
+
+    it('counts the same reply with different whitespace (event text vs transcript) as one turn', async () => {
+      const t = await writeTranscript('c7', [{ u: 'hello', a: 'hi\nthere' }]);
+      await run(cursorOpts(), { readInput: async () => native('afterAgentResponse', { generation_id: 'g1', transcript_path: t, text: 'hi  there' }) });
+      await run(cursorOpts(), { readInput: async () => native('stop', { generation_id: 'g1', transcript_path: t, status: 'completed' }) });
+
+      expect(server.received).toHaveLength(1);
+    });
+
+    it('spools a turn the server refuses, and a later turn replays it', async () => {
+      await server.close();
+      server = await startFakeCoolhand(500);
+      const t = await writeTranscript('c4', [{ u: 'hello', a: 'hi there' }]);
+      await run(cursorOpts(), { readInput: async () => native('afterAgentResponse', { generation_id: 'g1', transcript_path: t, text: 'hi there' }) });
+      expect(await listTurnFiles()).toHaveLength(1);
+
+      // A different conversation, so the spooled turn is replayed rather than superseded by a newer turn of its own.
+      await server.close();
+      server = await startFakeCoolhand(200);
+      const spooledFile = (await listTurnFiles())[0];
+      await fs.writeFile(spooledFile, (await fs.readFile(spooledFile, 'utf8')).replace(/"baseUrl": ".*"/, `"baseUrl": "${server.url}"`));
+      const t2 = await writeTranscript('c5', [{ u: 'other', a: 'reply' }]);
+      await run(cursorOpts(), { readInput: async () => native('afterAgentResponse', { conversation_id: 'conv-2', generation_id: 'g9', transcript_path: t2, text: 'reply' }) });
+
+      expect(await listTurnFiles()).toHaveLength(0);
+      expect(server.received.map((r) => r.body.llm_request_log.raw_request.url).sort()).toEqual([
+        'coolhand-hook://cursor/session/conv-1/turn/1',
+        'coolhand-hook://cursor/session/conv-2/turn/1',
+      ]);
+    });
+  });
 });
 
 describe('capture-turn --agent copilot', () => {

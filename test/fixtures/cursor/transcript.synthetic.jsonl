@@ -1,0 +1,6 @@
+{"role":"user","timestamp":"2026-10-28T10:00:00.000Z","message":{"content":[{"type":"text","text":"<user_query>\nwhat is 2+2?\n</user_query>"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"four"}]}}
+{"role":"user","timestamp":"2026-10-28T10:00:01.000Z","message":{"content":[{"type":"text","text":"<user_query>\nrun ls and times three\n</user_query>"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Shell","input":{"command":"ls"}}]}}
+{"role":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"file.txt"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"twelve"}]}}
