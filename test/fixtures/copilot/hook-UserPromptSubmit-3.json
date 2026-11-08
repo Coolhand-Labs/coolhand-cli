@@ -1,0 +1,7 @@
+{
+  "hook_event_name": "UserPromptSubmit",
+  "session_id": "fdea4f81-9f13-4808-a9fa-bdedb5a926b5",
+  "timestamp": "2026-11-02T16:59:43.051Z",
+  "cwd": "/Users/tester/project",
+  "prompt": "Summarise turns 1 and 2 in one sentence."
+}

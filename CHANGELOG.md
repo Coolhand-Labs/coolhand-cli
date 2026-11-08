@@ -2,7 +2,113 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
-## [Unreleased]
+## [0.13.3] - 2026-11-06
+
+### Added
+- `capture-turn --skill` accepts several alternatives joined with `|`, for example
+  `--skill 'qa-*|skill-for-qas'`. Each alternative is a prefix ending in `*` or an exact skill name,
+  so one hook can cover skills that do not share a name prefix. It works for both `--agent claude`
+  and `--agent copilot`. A `*` anywhere but the end of an alternative is part of a literal name, and
+  empty alternatives are ignored. Quote the whole value, since the shell expands an unquoted `*` and
+  an unquoted `|` starts a pipeline. Installs older than 0.13.3 read the value as one literal skill
+  name and send nothing. (#233)
+
+### Changed
+- `docs/hook-capture-skills-library.md` covers the Claude Code plugin hook that uses a skill pattern.
+  (#227)
+- `docs/commands.md`, `docs/hook-capture.md`, `docs/hook-capture-skills-library.md` and
+  `examples/hook-capture/README.md` document the `|` form and the release each form shipped in.
+  (#233)
+- The `prep-release` and `finish-release` maintainer skills credit outside and first-time
+  contributors in the changelog and the GitHub release notes. These are repository tooling and are
+  not part of the published package. (#226)
+- Development dependency updates: `globals` 17.14.0 (#231), `@typescript-eslint/parser` and
+  `@typescript-eslint/eslint-plugin` 8.72.1 (#230, #228) and `@types/node` 26.6.6 (#229).
+
+## [0.13.2] - 2026-11-04
+
+### Added
+- `capture-turn --agent claude --skill` accepts a pattern ending in `*`, like Copilot: `--skill 'qa-*'`
+  or `--skill '*'` lets a hook that runs in every Claude Code session (such as a plugin's
+  `hooks/hooks.json`) capture only the sessions where the **user** invoked a matching skill with a
+  slash command (`/skill` or `/plugin:skill`). A skill the model loads itself does not count. The
+  skill is recorded under its folder name and workload, and a Claude skill's `name:` must equal its
+  folder name. The resolved skill is kept in the session's state file, so a long session keeps being
+  captured after the invocation leaves the 8 MB transcript window. Existing `--skill NAME` hooks are
+  unchanged. (#222)
+
+### Changed
+- The skill pattern matcher moved into `src/hooks/adapters/shared.ts` and is shared by the Claude
+  and Copilot adapters, and a cheap byte check skips parsing a transcript that never loaded a skill.
+  Patterns with `--agent claude` are no longer refused. (#222)
+- `docs/commands.md`, `docs/hook-capture.md` and `docs/hook-capture-skills-library.md` describe the
+  Claude pattern behavior. (#222)
+- The repository carries a throwaway QA plugin marketplace for #213 (`.claude-plugin/` and
+  `.github/plugin/` manifests plus `plugins/`). It is a test fixture and is not part of the published
+  package. (#222)
+
+### Fixed
+- Parsing a Claude Code prompt that starts with `<command-name>` no longer takes quadratic time when
+  the text holds many unclosed `<command-name>` tags (for example a pasted transcript). Found in the
+  v0.13.2 release red-team.
+
+## [0.13.1] - 2026-11-03
+
+### Added
+- `capture-turn --agent copilot --skill` accepts a pattern ending in `*`: `--skill '*'` captures any
+  skill and `--skill 'acme-*'` any skill whose declared name starts with `acme-`. The first matching
+  skill invoked in a session is recorded under its own name and workload, and chats that invoked no
+  matching skill send nothing, so one user-level hook file serves a whole skills library. Patterns
+  are refused (logged, nothing sent) with `--agent claude`. New
+  [docs/hook-capture-skills-library.md](./docs/hook-capture-skills-library.md) covers Claude Code and
+  VS Code / Copilot setup and the Step 0 text to paste at the top of each skill. (#220)
+
+### Changed
+- `metadata.skill` on captured turns is capped at 200 characters. (#220)
+- The Copilot example skill's Step 0 now writes one generic hook file,
+  `~/.copilot/hooks/coolhand-capture.json`, itself (never overwriting an existing one), and its
+  consent text names which skills are covered. The example hook files are renamed
+  `coolhand-capture-example.json` and take `--skill 'YOUR_SKILL_PATTERN'`; the per-skill hook files
+  and the download fallback are removed. The examples are not part of the npm package. (#220)
+
+### Security
+- The proxy now redacts the `anthropic-api-key` request header before uploading a captured request.
+- `download-client-file` creates new files readable only by their owner (`0600`).
+
+### Fixed
+- `logout --client-id` no longer reports removing a client when the id matches a built-in object
+  property name (for example `constructor`) rather than a stored client.
+
+## [0.13.0] - 2026-11-03
+
+### Added
+- `capture-turn` command: a hook entrypoint an AI agent runs after every turn. It sends the turn,
+  together with the conversation since a skill was invoked (prompts, thinking, tool calls and
+  results, redacted for secrets and size-capped), to Coolhand as one log per session, authenticated
+  with a **public** API key (`--api-key` or `COOLHAND_API_KEY`) so the person running the skill never
+  logs in. It always exits 0 and prints nothing; failures go to `~/.coolhand/capture-turns/hook.log`,
+  and undeliverable turns are spooled to `~/.coolhand/pending/` and replayed after the next
+  successful send. `COOLHAND_CAPTURE_DISABLED=1` turns it off. Supports Claude Code. See
+  [docs/hook-capture.md](./docs/hook-capture.md). (#190)
+- `capture-turn --agent copilot` captures a skill's turns from VS Code GitHub Copilot (agent mode).
+  Copilot skills cannot carry hooks, so the example skill installs its own user-level hook file under
+  `~/.copilot/hooks/`. Cursor is not supported yet. (#211)
+- `update [--check] [--json]` command, and automatic upgrades of global `npm install -g` installs:
+  at most daily, a detached background job installs the newest stable release that is at least 48
+  hours old, not deprecated, and not above npm's `latest` tag, pinned and installed with `--before`
+  so dependencies get the same bake. Other installs (npx, project-local, pnpm, Volta, Yarn, Bun) only
+  get a one-time notice. Opt out with `"auto_update": false` in `config.json` or
+  `COOLHAND_NO_AUTO_UPDATE=1`; it is also off in CI, under `--json`, and for `capture-turn`. See
+  [docs/auto-update.md](./docs/auto-update.md). (#212)
+
+### Changed
+- Upgraded `coolhand-node` from `^0.17.0` to `^0.17.1`, which fixes patching of `http`/`https` under
+  native ESM on Node 20.16+ / 22.3+. (#191)
+- Bumped dependencies: `mockttp` to 4.6.5 (#198), and dev dependencies `globals` to 17.13.0 (#199)
+  and `@typescript-eslint/eslint-plugin` to 8.72.0 (#200). The lockfile refresh in #191 also moves
+  the transitive `qs` to 6.17.1, clearing an `npm audit` advisory.
+- README and `examples/skill-integration.md` link to `Coolhand-Labs/skills`, the new name of the
+  feedback collection skill repository. (#208)
 
 ## [0.12.0] - 2026-10-21
 

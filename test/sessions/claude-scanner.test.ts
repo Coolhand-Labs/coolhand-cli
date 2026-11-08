@@ -158,6 +158,17 @@ describe('parseTranscript — tool activity & block rendering', () => {
     expect(env?.request_body.messages[0].content).toBe('[tool_use: Bash] {"command":"ls -la"}');
   });
 
+  test('secrets in the final tool_use input are scrubbed by key name, not only by string shape', () => {
+    const env = parseTranscript(
+      assistantLine([{ type: 'tool_use', id: 't1', name: 'Bash', input: { password: 'hunter2zzz', env: { DB_PASS: 'hunter2xyz' }, command: 'ls' } }]),
+      's'
+    );
+    const serialised = JSON.stringify(env?.response_body.content);
+
+    expect(serialised).not.toContain('hunter2');
+    expect(serialised).toContain('"command":"ls"');
+  });
+
   test('tool_use with no input omits the payload', () => {
     const env = parseTranscript(assistantLine([{ type: 'tool_use', name: 'Read' }]), 's');
     expect(env?.request_body.messages[0].content).toBe('[tool_use: Read]');

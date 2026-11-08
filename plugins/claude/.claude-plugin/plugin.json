@@ -1,0 +1,9 @@
+{
+  "name": "coolhand-qa",
+  "version": "0.1.0",
+  "description": "qa-spike skill plus a Coolhand capture hook for Claude Code",
+  "author": {
+    "name": "Coolhand Labs"
+  },
+  "hooks": "./.claude/hooks/hooks.json"
+}

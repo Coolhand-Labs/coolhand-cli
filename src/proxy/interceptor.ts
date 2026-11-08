@@ -54,6 +54,7 @@ export function sanitizeHeaders(
     "cookie",
     "set-cookie",
     "openai-api-key",
+    "anthropic-api-key",
     "cf-aig-authorization",
   ]);
 

@@ -23,6 +23,18 @@ describe('parseSkillFrontmatter', () => {
     expect(parseSkillFrontmatter('# Just a heading\n\nNo frontmatter here.')).toEqual({});
   });
 
+  test('an empty name does not read the next line as its value', () => {
+    const content = '---\nname:\ndescription: Does a thing\n---\n';
+    expect(parseSkillFrontmatter(content)).toEqual({ description: 'Does a thing' });
+  });
+
+  test('stays fast on a long run of spaces after the value', () => {
+    const content = `---\nname: a${' '.repeat(60_000)}b\n---\n`;
+    const started = Date.now();
+    expect(parseSkillFrontmatter(content).name).toMatch(/^a +b$/);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+
   test('returns partial result when only one field is present', () => {
     const content = '---\nname: solo-name\n---\n';
     expect(parseSkillFrontmatter(content)).toEqual({ name: 'solo-name' });

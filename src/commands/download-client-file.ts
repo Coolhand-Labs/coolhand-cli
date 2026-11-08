@@ -41,7 +41,7 @@ export async function run(opts: DownloadClientFileOptions): Promise<number> {
     const destination = await resolveDestination(opts, downloaded);
     try {
       // 'wx' fails atomically if the path exists, so a concurrent file is never clobbered without --force.
-      await fs.writeFile(destination, downloaded.content, { flag: opts.force ? 'w' : 'wx' });
+      await fs.writeFile(destination, downloaded.content, { flag: opts.force ? 'w' : 'wx', mode: 0o600 });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
         throw new CliError(

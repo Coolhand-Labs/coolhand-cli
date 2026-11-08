@@ -52,6 +52,19 @@ describe('logout command', () => {
     expect(code).toBe(0);
   });
 
+  test('does not report an inherited property name as a removed client', async () => {
+    await upsertClient(makeEntry('a'), true);
+    const out = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    try {
+      expect(await runLogout({ clientId: 'constructor', json: true })).toBe(0);
+      const written = out.mock.calls.map((c) => String(c[0])).join('');
+      expect(JSON.parse(written).removed).toBeNull();
+    } finally {
+      out.mockRestore();
+    }
+    expect((await loadConfig()).clients.a).toBeDefined();
+  });
+
   test('with no args removes the default client', async () => {
     await upsertClient(makeEntry('a'), true);
     const code = await runLogout({});

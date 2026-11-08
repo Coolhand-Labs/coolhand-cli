@@ -31,7 +31,8 @@ export type ErrorCode =
   | 'CERT_FILE_INSECURE'
   | 'UPLOAD_ERROR'
   | 'CLIENT_FILE_ERROR'
-  | 'OUTPUT_EXISTS';
+  | 'OUTPUT_EXISTS'
+  | 'UPDATE_ERROR';
 
 export class CliError extends Error {
   public readonly code: ErrorCode;

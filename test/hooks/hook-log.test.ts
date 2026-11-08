@@ -1,0 +1,78 @@
+import { promises as fs } from 'fs';
+import * as path from 'path';
+import { logHookEvent } from '../../src/hooks/hook-log.js';
+import { loadTurnState, saveTurnState, turnsDir, withCaptured } from '../../src/hooks/turn-state.js';
+import { createTmpHome, TmpHome } from '../helpers/tmp-home.js';
+
+describe('hook housekeeping', () => {
+  let home: TmpHome;
+  beforeEach(async () => {
+    home = await createTmpHome();
+  });
+  afterEach(async () => {
+    await home.cleanup();
+  });
+
+  it('cuts hook.log back to its recent tail instead of discarding it', async () => {
+    const file = path.join(turnsDir(), 'hook.log');
+    await fs.mkdir(turnsDir(), { recursive: true });
+    await fs.writeFile(file, `${'old line\n'.repeat(40000)}`);
+    await logHookEvent('newest failure');
+
+    const text = await fs.readFile(file, 'utf8');
+    expect(text.length).toBeLessThan(80 * 1024);
+    expect(text.trimEnd().endsWith('newest failure')).toBe(true);
+    expect(text.startsWith('old line\n')).toBe(true); // no partial first line
+  });
+
+  it('clears per-session state files untouched for 30 days when a new session starts', async () => {
+    await saveTurnState('claude', 'stale', { turnIndex: 5 });
+    const stale = (await fs.readdir(turnsDir())).find((n) => n.startsWith('claude-stale'))!;
+    const old = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await fs.utimes(path.join(turnsDir(), stale), old, old);
+
+    await saveTurnState('claude', 'fresh', { turnIndex: 1 });
+
+    expect((await fs.readdir(turnsDir())).some((n) => n.startsWith('claude-stale'))).toBe(false);
+    expect((await loadTurnState('claude', 'fresh')).turnIndex).toBe(1);
+  });
+
+  it('also sweeps a stale temp file left by a hook killed mid-write', async () => {
+    await saveTurnState('claude', 'x', { turnIndex: 2 });
+    const leftover = path.join(turnsDir(), '.claude-x-deadbeef.json.abc123.tmp');
+    await fs.writeFile(leftover, '{}');
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await fs.utimes(leftover, twoHoursAgo, twoHoursAgo);
+
+    await saveTurnState('claude', 'fresh', { turnIndex: 1 });
+
+    await expect(fs.access(leftover)).rejects.toThrow();
+  });
+
+  it('records captured exchanges without duplicates and keeps only the newest 1000', async () => {
+    expect(withCaptured(undefined, undefined)).toEqual([]);
+    expect(withCaptured(['a'], 'a')).toEqual(['a']);
+    expect(withCaptured(['a'], 'b')).toEqual(['a', 'b']);
+    const many = Array.from({ length: 1000 }, (_, i) => `t${i}`);
+    const next = withCaptured(many, 'new');
+    expect(next).toHaveLength(1000);
+    expect(next[0]).toBe('t1');
+    expect(next[999]).toBe('new');
+
+    await saveTurnState('claude', 'c', { turnIndex: 2, captured: ['x', 'y'], anchorLate: true, anchor: '2026-10-28T10:00:00.000Z' });
+    expect(await loadTurnState('claude', 'c')).toMatchObject({ captured: ['x', 'y'], anchorLate: true, anchor: '2026-10-28T10:00:00.000Z' });
+  });
+
+  it('round-trips the cached tester', async () => {
+    await saveTurnState('claude', 's', { turnIndex: 2, tester: { id: 'a@b.c', source: 'git' } });
+    expect((await loadTurnState('claude', 's')).tester).toEqual({ id: 'a@b.c', source: 'git' });
+  });
+
+  it('keeps a message with embedded newlines on one log line', async () => {
+    await logHookEvent('first\nforged 2026-01-01T00:00:00Z entry\r\nthird');
+
+    const lines = (await fs.readFile(path.join(turnsDir(), 'hook.log'), 'utf8')).trimEnd().split('\n');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('first forged 2026-01-01T00:00:00Z entry third');
+  });
+});

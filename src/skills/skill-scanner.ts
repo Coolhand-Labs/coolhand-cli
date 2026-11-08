@@ -69,16 +69,29 @@ export function parseSkillFrontmatter(content: string): { name?: string; descrip
     return {};
   }
   const block = match[1];
-  const nameMatch = block.match(/^name:\s*["']?(.+?)["']?\s*$/m);
-  const descriptionMatch = block.match(/^description:\s*["']?(.+?)["']?\s*$/m);
+  const name = frontmatterValue(block, 'name');
+  const description = frontmatterValue(block, 'description');
   const result: { name?: string; description?: string } = {};
-  if (nameMatch) {
-    result.name = nameMatch[1];
+  if (name) {
+    result.name = name;
   }
-  if (descriptionMatch) {
-    result.description = descriptionMatch[1];
+  if (description) {
+    result.description = description;
   }
   return result;
+}
+
+/**
+ * One flat `key: value` line of a frontmatter block, with surrounding whitespace and one quote at
+ * each end stripped. The value stays on its own line (an empty `name:` never reads the next line)
+ * and is trimmed in code, since a lazy regex over a long run of spaces goes quadratic.
+ */
+function frontmatterValue(block: string, key: string): string | undefined {
+  const match = block.match(new RegExp(`^${key}:[ \\t]*(.+)$`, 'm'));
+  if (!match) {
+    return undefined;
+  }
+  return match[1].trim().replace(/^["']/, '').replace(/["']$/, '');
 }
 
 /**

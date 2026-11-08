@@ -1,16 +1,13 @@
 import { spawn } from 'child_process';
-import { Coolhand, type LLMRequestLogFeedback } from 'coolhand-node';
 import { ExitCode } from '../errors.js';
 import { logger, redact } from '../logger.js';
-import { loadConfig, getClient } from '../config.js';
-import { DEFAULT_BASE_URL } from '../types.js';
+import { uploadRecord } from '../pending-upload.js';
 import {
   listPendingFiles,
   readPendingRecord,
   removePendingRecord,
   markFlushFailed,
   clearFlushFailed,
-  type PendingRecord,
 } from '../pending-store.js';
 
 export interface FlushResult {
@@ -20,35 +17,6 @@ export interface FlushResult {
 
 interface SpawnDeps {
   spawnFn?: typeof spawn;
-}
-
-/**
- * Send a single saved record to Coolhand. Resolves the api key/base url from the
- * stored client (or env) at flush time — by now the user is logged in. Returns true
- * only when the server confirms the write; the SDK returns null (it does not throw)
- * on a failed write, so a falsy result means "keep the file and retry later".
- */
-async function uploadRecord(record: PendingRecord): Promise<boolean> {
-  const cfg = await loadConfig();
-  const client = getClient(cfg, record.clientId);
-  const apiKey = client?.api_key ?? process.env.COOLHAND_API_KEY;
-  if (!apiKey) {
-    return false;
-  }
-  const baseUrl = client?.base_url ?? DEFAULT_BASE_URL;
-
-  let coolhand: Coolhand;
-  try {
-    coolhand = new Coolhand({ apiKey, baseUrl, silent: true });
-  } catch {
-    return false;
-  }
-
-  if (record.kind === 'feedback') {
-    const result = await coolhand.createFeedback(record.payload as LLMRequestLogFeedback);
-    return result !== null && result !== undefined;
-  }
-  return false;
 }
 
 /**

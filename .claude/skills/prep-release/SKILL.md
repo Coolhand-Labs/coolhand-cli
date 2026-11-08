@@ -48,13 +48,31 @@ authoritative regardless of what an individual PR's diff already contains.
      `src/api/*.ts`) — weight those higher regardless of size; failing CI
      checks or a non-clean `mergeable` state also push risk up; an isolated
      additive command or docs-only change is lower risk.
-3. Present one table: PR number, title, quality, risk, CI status, mergeable
-   state, and a one-line recommendation (include / exclude / needs work
-   before it can be considered). Call out anything that looks unfinished —
+3. **Classify each PR's author** and keep a running contributor list that
+   Phase 3 and Phase 5 reuse:
+   - **bot**: `author.is_bot` (Dependabot and the like). Never thanked.
+   - **team**: `gh api repos/{owner}/{repo}/pulls/<n> --jq .author_association`
+     is `MEMBER`, `OWNER` or `COLLABORATOR`.
+   - **outside contributor**: anyone else. Also flag a PR from a fork
+     (`isCrossRepository`).
+   - **first-time contributor** (a subset of outside): the login has no
+     commit on `main` at or before the last tag —
+     `gh api "repos/{owner}/{repo}/commits?author=<login>&until=<last-tag-date>"`
+     returns `[]` and `gh pr list --state merged --author <login>` is empty.
+     Decide this now, before Phase 2 merges anything: once their PR is merged
+     they stop looking new. Record the GitHub `login` (for the `@mention`) and
+     the PR number(s).
+4. Present one table: PR number, title, **author** (login plus `team`, `bot`,
+   `outside contributor` or `first-time contributor`), quality, risk, CI
+   status, mergeable state, and a one-line recommendation (include / exclude /
+   needs work before it can be considered). Below the table, list every
+   outside and first-time contributor by `@login` with the PR they sent. An
+   outside PR has no CI run until a maintainer approves its workflows; say so
+   instead of rating CI as passing. Call out anything that looks unfinished —
    draft, a WIP-sounding title, failing checks, an empty or placeholder
    description, visible `TODO`/`FIXME` in the diff — as "exclude, not ready"
    rather than rating it neutrally.
-4. Stop here and ask the user which PRs to include in this release. This is
+5. Stop here and ask the user which PRs to include in this release. This is
    the one planned decision point in the whole skill — do not merge, write
    changelog entries, or touch `package.json`'s version until the user
    answers. (Phase 2 step 3 below has its own unplanned-error stop for an
@@ -71,7 +89,14 @@ Process the user's chosen PRs one at a time, not as a batch:
    conflicts, skip it, note it in the running list as "skipped — needs
    rebase," and continue with the rest. Don't resolve conflicts on someone
    else's branch unilaterally.
-2. `gh pr merge <n> --squash --delete-branch` for each surviving PR.
+2. `gh pr merge <n> --squash --delete-branch --admin` for each surviving PR.
+   `main` has an "only maintainers can merge" ruleset (no review is required),
+   so a plain merge is refused with "the base branch policy prohibits the
+   merge"; `--admin` is how a maintainer merges. The user has standing approval
+   to use `--admin` here for the PRs they chose in Phase 1; don't stop to ask.
+   It is for that ruleset only: never use it to get past failing checks or a
+   conflicting `mergeStateStatus` (skip those PRs instead). This skill never
+   merges the Phase 5 release-prep PR; `/finish-release` does.
 3. After each merge, sync local `main` before evaluating the next PR. First
    check `git status --porcelain` — if it's not empty, stop and surface it
    to the user rather than discarding unknown local state; otherwise
@@ -112,6 +137,19 @@ freshly synced `main` and do all of the following as commits on that branch
      title) for anything not merged in this run. If a change genuinely has
      no discoverable PR (a direct commit to `main`), write the entry
      without one rather than skipping it.
+   - **Credit outside contributors.** For every change from an outside
+     contributor (the Phase 1 list; for changes not merged in this run, look
+     the author up with `gh pr view <n> --json author` and classify as in
+     Phase 1 step 3), put `thanks @login` next to the PR number on that entry,
+     e.g. `(#222, thanks @login)`. Then end the version's section with a
+     `### Thanks` heading (last, after `### Fixed`) that names each outside
+     contributor and what they sent. For a first-time contributor, add a
+     shout-out saying it is their first contribution to `coolhand-cli` and
+     welcoming them, e.g. "Welcome and thank you to @login, whose first
+     contribution, #222, ...". Contributors who have landed before get the
+     thanks without the first-time line. Skip bots and team members, and omit
+     `### Thanks` when there is nothing to put in it. `/finish-release`
+     carries this into the GitHub release notes.
    - `docs/commands.md` — the canonical flag reference. Per `AGENTS.md`'s
      "Docs" and "Client selection convention" sections, any new/changed CLI
      command or flag (including `--client-id` on commands that call the
@@ -221,6 +259,9 @@ same "hand it to a human" rule `/loop-review` uses for stuck findings.
    - Phase 1's PR table and which PRs the user chose.
    - Phase 2's outcome: which PRs merged, which were skipped for new
      conflicts (and need a rebase before the next release).
+   - Outside and first-time contributors in this release, by `@login` and PR,
+     and where their credit landed in `CHANGELOG.md` (the `thanks @login`
+     entry and the `### Thanks` section).
    - The release-prep PR link, the version bump and why.
    - Docs updated.
    - Red-team findings split into fixed vs. flagged-for-decision.
@@ -234,7 +275,8 @@ same "hand it to a human" rule `/loop-review` uses for stuck findings.
   running `npm install` for the lockfile are all in scope and don't need a
   stop-and-ask — they're mechanical, reversible, and gated on Phase 4
   already being green before the PR opens.
-- Squash-merging PRs the user explicitly chose in Phase 1, and pushing the
+- Squash-merging PRs the user explicitly chose in Phase 1 (with `--admin`, per
+  Phase 2 step 2), and pushing the
   `release/vX.Y.Z` branch to open its own PR, are both in scope.
 - Never push a commit directly to `main`. All release-branch work lands on
   `main` only via the Phase 5 PR, which the user reviews and merges
