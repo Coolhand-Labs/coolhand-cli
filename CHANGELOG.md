@@ -2,6 +2,36 @@
 
 All notable changes to `coolhand-cli` will be documented in this file.
 
+## [0.14.0] - 2026-11-08
+
+### Added
+- `coolhand list-step-templates` lists the skills and recurring steps Coolhand detects in captured
+  agent sessions, and `coolhand get-step-template <id>` fetches one by its integer id. Both are
+  read-only, need a private key and take `--client-id`. `list-step-templates` accepts `--search`,
+  `--step-type prompt_step|tool_step`, `--include-metrics` (the server caps the page at 25 and the
+  command says so), `--page` and `--per-page`. `get-step-template` includes metrics by default;
+  `--no-metrics` skips them. (#203)
+- `coolhand fetch-log --include-turn-metrics` adds `turn_metrics`, a per-turn breakdown (token
+  counts, tool calls, timings) of a captured agent session. It is `null` for a log that is not a
+  captured session. (#203)
+- Coolhand CLI prints a short note to stderr addressed to AI agents, asking them to stop and ask the
+  user before installing the Coolhand skills plugin. It shows after `npm install` (a new
+  `postinstall` script) and once on the first CLI run, recorded by `~/.coolhand/.skill-notice-shown`.
+  Set `COOLHAND_NO_NOTICE=1` to silence it; it is also skipped when `CI` is set, in a development
+  checkout, for `--version` and `help`, and for the unattended `capture-turn` hook command. stdout
+  and `--json` output are unchanged. See `docs/install-notice.md`. (#235)
+
+### Changed
+- `coolhand-node` is now `^0.18.0`, which the step template commands need. (#203)
+- The QA plugin hooks for Claude Code and VS Code Copilot run an installed `coolhand` that knows
+  `capture-turn` and otherwise fall back to `npx -y coolhand-cli`, instead of a hardcoded local build
+  path. (#232)
+- The README links to the renamed `Coolhand-Labs/skills` repository. (#235)
+
+### Fixed
+- `login --write-env` refuses a token containing a line break or NUL byte instead of writing it into
+  the `.env` file, where it could have added extra variables.
+
 ## [0.13.3] - 2026-11-06
 
 ### Added

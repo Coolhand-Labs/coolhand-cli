@@ -18,6 +18,9 @@ export async function writeEnvKey(envPath: string, key: string, value: string): 
   if (!/^[A-Z_][A-Z0-9_]*$/i.test(key)) {
     throw new CliError('WRITE_ENV_FAILED', `Invalid env key: ${key}`);
   }
+  if (/[\r\n\0]/.test(value)) {
+    throw new CliError('WRITE_ENV_FAILED', `Invalid value for ${key}: line breaks and NUL bytes are not allowed`);
+  }
   const resolved = path.resolve(envPath);
   let existing = '';
   let created = false;

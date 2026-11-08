@@ -1954,6 +1954,10 @@ function captureTurnOptions(parsed: ParsedArgs): CaptureTurnOptions {
 // login (which runs its own pending-flush prompt).
 const NO_FLUSH_REMINDER = new Set(['__flush-pending', '__auto-update', 'login', 'help', 'version', 'capture-turn']);
 
+// Commands that run unattended (agent hooks, background workers) and must stay silent, so they
+// never print the first-run skills note.
+const NO_FIRST_RUN_NOTICE = new Set(['__flush-pending', '__auto-update', 'capture-turn']);
+
 /**
  * Option B retry: if a previous background flush failed, remind the user on their next
  * command and offer to retry. Interactive-only (`confirm` returns false with no TTY), so
@@ -2065,7 +2069,9 @@ export async function run(argv: string[]): Promise<number> {
     }
 
     const resolvedCommand = findCommand(parsed.command)?.name ?? parsed.command;
-    await maybeShowFirstRunNotice();
+    if (!NO_FIRST_RUN_NOTICE.has(resolvedCommand)) {
+      await maybeShowFirstRunNotice();
+    }
     await maybeRemindFailedFlush(resolvedCommand, parsed.flags.json === true);
 
     switch (resolvedCommand) {
