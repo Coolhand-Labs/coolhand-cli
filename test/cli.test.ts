@@ -86,6 +86,8 @@ jest.mock('../src/commands/flush-pending.js', () => ({
 }));
 jest.mock('../src/prompt.js', () => ({ confirm: jest.fn().mockResolvedValue(false) }));
 
+import { promises as fs } from 'fs';
+import * as path from 'path';
 import { parseArgs, peelClientId, run } from '../src/cli.js';
 import { CliError } from '../src/errors.js';
 import { logger } from '../src/logger.js';
@@ -1148,6 +1150,32 @@ describe('run', () => {
     (runCaptureTurnCommand as jest.Mock).mockClear();
     await run(['--client-id', 'acme', 'capture-turn', '--agent', 'claude', '--base-url=']);
     expect(runCaptureTurnCommand).toHaveBeenCalledWith({ agent: 'claude' });
+  });
+
+  describe('first-run skills note', () => {
+    let stderr: jest.SpyInstance;
+    beforeEach(() => {
+      delete process.env.COOLHAND_NO_NOTICE;
+      delete process.env.CI;
+      stderr = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    });
+    afterEach(() => {
+      stderr.mockRestore();
+      process.env.COOLHAND_NO_NOTICE = '1';
+    });
+
+    const noticeWritten = () => stderr.mock.calls.some(([chunk]) => String(chunk).includes('USAGE NOTE FOR AGENTS'));
+
+    test('capture-turn stays silent and leaves no marker', async () => {
+      await run(['capture-turn', '--agent', 'claude']);
+      expect(noticeWritten()).toBe(false);
+      await expect(fs.access(path.join(home.dir, '.skill-notice-shown'))).rejects.toThrow();
+    });
+
+    test('an interactive command prints it once', async () => {
+      await run(['search-templates']);
+      expect(noticeWritten()).toBe(true);
+    });
   });
 
   test.each([['--anonymous', true], ['--anonymous=true', true], ['--anonymous=1', true], ['--anonymous=weird', true]])(

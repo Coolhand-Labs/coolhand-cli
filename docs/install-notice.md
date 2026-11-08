@@ -19,5 +19,6 @@ On a global install you may see the note twice, once from each place.
 
 - Set `COOLHAND_NO_NOTICE=1` to suppress both.
 - Both are skipped automatically when `CI` is set.
+- The first-run note is never printed by the unattended `capture-turn` hook command or the internal background workers, which must stay silent.
 - The `postinstall` script also skips itself in a development checkout of this repository.
 - Delete `~/.coolhand/.skill-notice-shown` to see the first-run note again. The marker lives in the directory named by `COOLHAND_CONFIG_DIR` when that is set.
