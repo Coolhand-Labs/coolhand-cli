@@ -67,4 +67,12 @@ describe('writeEnvKey', () => {
     const target = path.join(dir, '.env');
     await expect(writeEnvKey(target, '1BAD', 'v')).rejects.toBeInstanceOf(CliError);
   });
+
+  test('rejects a value with a line break and leaves the file untouched', async () => {
+    const target = path.join(dir, '.env');
+    await fs.writeFile(target, 'KEEP=1\n');
+    await expect(writeEnvKey(target, 'COOLHAND_API_KEY', 'abc\nNODE_OPTIONS=--require=x')).rejects.toBeInstanceOf(CliError);
+    await expect(writeEnvKey(target, 'COOLHAND_API_KEY', 'abc\r')).rejects.toBeInstanceOf(CliError);
+    expect(await fs.readFile(target, 'utf8')).toBe('KEEP=1\n');
+  });
 });

@@ -28,6 +28,10 @@ All notable changes to `coolhand-cli` will be documented in this file.
   path. (#232)
 - The README links to the renamed `Coolhand-Labs/skills` repository. (#235)
 
+### Fixed
+- `login --write-env` refuses a token containing a line break or NUL byte instead of writing it into
+  the `.env` file, where it could have added extra variables.
+
 ## [0.13.3] - 2026-11-06
 
 ### Added
