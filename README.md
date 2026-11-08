@@ -150,7 +150,9 @@ coolhand login --write-env .env
 # sets COOLHAND_API_KEY=<token> in .env, idempotent on re-run
 ```
 
-The CLI works especially well with the [Coolhand feedback collection skill](https://github.com/Coolhand-Labs/feedback-collection-skill) for Claude Code. The skill scans your project for LLM inference calls and implements best-practice human feedback collection — it reads `COOLHAND_API_KEY` from the environment, which `coolhand login --write-env .env` puts in place.
+The CLI works especially well with the [Coolhand feedback collection skill](https://github.com/Coolhand-Labs/skills) for Claude Code. The skill scans your project for LLM inference calls and implements best-practice human feedback collection — it reads `COOLHAND_API_KEY` from the environment, which `coolhand login --write-env .env` puts in place.
+
+When installed from npm, the CLI prints a one-time note asking AI agents to offer this skill to you and wait for your permission before installing it. Set `COOLHAND_NO_NOTICE=1` to silence it. See [Install notice](./docs/install-notice.md).
 
 ## Configuration file
 
@@ -180,6 +182,7 @@ Located at `$HOME/.coolhand/config.json` (override with `COOLHAND_CONFIG_DIR` fo
 - [Configuration File](./docs/config-file.md) — full config schema, multi-client model, `COOLHAND_CONFIG_DIR` override
 - [Session Capture](./docs/session-capture.md) — session scanning, envelope format, deduplication, scope and limitations
 - [Skill Capture](./docs/skill-capture.md) — skill discovery, dedup, and incremental upload logic for `sync-skills`
+- [Install notice](./docs/install-notice.md) — the agent-facing note printed on npm install, when it shows, and how to silence it
 
 ## About Coolhand Labs
 

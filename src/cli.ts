@@ -23,6 +23,7 @@ import { run as runSyncSkills } from './commands/sync-skills.js';
 import { run as runListWorkloads } from './commands/list-workloads.js';
 import { run as runGetWorkload } from './commands/get-workload.js';
 import { run as runUpdateWorkload } from './commands/update-workload.js';
+import { maybeShowFirstRunNotice } from './notices.js';
 import { run as runFetchLog } from './commands/fetch-log.js';
 import { run as runSearchLogs } from './commands/search-logs.js';
 import { run as runSearchTemplates } from './commands/search-templates.js';
@@ -1898,6 +1899,7 @@ export async function run(argv: string[]): Promise<number> {
     }
 
     const resolvedCommand = findCommand(parsed.command)?.name ?? parsed.command;
+    await maybeShowFirstRunNotice();
     await maybeRemindFailedFlush(resolvedCommand, parsed.flags.json === true);
 
     switch (resolvedCommand) {
