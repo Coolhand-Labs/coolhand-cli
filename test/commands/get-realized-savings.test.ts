@@ -66,10 +66,10 @@ describe('get-realized-savings command', () => {
 
   test('prints zeros, not an error, when there is nothing to compare', async () => {
     mockGetRealizedSavings.mockResolvedValue(zeroSavings);
-    const spy = jest.spyOn(logger, 'info');
-    const code = await run({});
-    const output = spy.mock.calls.map(([msg]) => msg).join('\n');
-    spy.mockRestore();
+    let code: number | undefined;
+    const output = await captureInfo(async () => {
+      code = await run({});
+    });
     expect(code).toBe(0);
     expect(output).toContain('Realized savings: $0.0000 (0%)');
     expect(output).toContain('Cost at previous versions: $0.0000');
@@ -121,6 +121,12 @@ describe('get-realized-savings command', () => {
       message: expect.stringContaining('could not be computed right now'),
     });
     spy.mockRestore();
+  });
+
+  test('any other HTTP status keeps the SDK message, which already carries the status', () => {
+    const err = mapSavingsHttpError(new HttpError('Savings request failed (500): boom', 500));
+    expect(err.code).toBe('SAVINGS_ERROR');
+    expect(err.message).toBe('Savings request failed (500): boom');
   });
 
   test('an unexpected failure is wrapped in a SAVINGS_ERROR', () => {
