@@ -34,6 +34,7 @@ import { run as runFetchLog } from './commands/fetch-log.js';
 import { run as runSearchLogs } from './commands/search-logs.js';
 import { run as runSearchTemplates } from './commands/search-templates.js';
 import { run as runSearchWorkloads } from './commands/search-workloads.js';
+import { run as runGetRealizedSavings } from './commands/get-realized-savings.js';
 import { run as runGetTemplate } from './commands/get-template.js';
 import { run as runListStepTemplates } from './commands/list-step-templates.js';
 import { run as runGetStepTemplate } from './commands/get-step-template.js';
@@ -79,6 +80,7 @@ import type {
   SearchLogsOptions,
   SearchTemplatesOptions,
   SearchWorkloadsOptions,
+  GetRealizedSavingsOptions,
   GetTemplateOptions,
   ListStepTemplatesOptions,
   GetStepTemplateOptions,
@@ -512,6 +514,15 @@ const COMMANDS: CommandMeta[] = [
       { flag: '--until TS', description: 'Metrics window end, ISO8601 (exclusive; defaults to now)' },
       { flag: '--page N', description: 'Page number (default: 1)' },
       { flag: '--per-page N', description: 'Results per page (default: 25, max: 100)' },
+      { flag: '--client-id ID', description: 'Use a specific stored client' },
+      { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
+    ],
+  },
+  {
+    name: 'get-realized-savings',
+    oneLiner: 'Show the savings realized by switching templates or models, with a per-workload breakdown (requires a private key)',
+    usage: 'coolhand get-realized-savings [options]',
+    options: [
       { flag: '--client-id ID', description: 'Use a specific stored client' },
       { flag: '--json', description: 'Emit JSON output instead of human-readable text' },
     ],
@@ -1414,6 +1425,17 @@ function searchTemplatesOptions(parsed: ParsedArgs): SearchTemplatesOptions {
   return opts;
 }
 
+function getRealizedSavingsOptions(parsed: ParsedArgs): GetRealizedSavingsOptions {
+  const opts: GetRealizedSavingsOptions = {};
+  if (typeof parsed.flags['client-id'] === 'string') {
+    opts.clientId = parsed.flags['client-id'];
+  }
+  if (parsed.flags.json === true) {
+    opts.json = true;
+  }
+  return opts;
+}
+
 function searchWorkloadsOptions(parsed: ParsedArgs): SearchWorkloadsOptions {
   const opts: SearchWorkloadsOptions = {};
   if (typeof parsed.flags['search'] === 'string') {
@@ -2153,6 +2175,8 @@ export async function run(argv: string[]): Promise<number> {
         return await runSearchTemplates(searchTemplatesOptions(parsed));
       case 'search-workloads':
         return await runSearchWorkloads(searchWorkloadsOptions(parsed));
+      case 'get-realized-savings':
+        return await runGetRealizedSavings(getRealizedSavingsOptions(parsed));
       case 'get-template':
         return await runGetTemplate(getTemplateOptions(parsed));
       case 'list-step-templates':

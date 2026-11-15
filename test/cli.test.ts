@@ -53,6 +53,9 @@ jest.mock('../src/commands/list-help-categories.js', () => ({
 jest.mock('../src/commands/search-workloads.js', () => ({
   run: jest.fn(),
 }));
+jest.mock('../src/commands/get-realized-savings.js', () => ({
+  run: jest.fn().mockResolvedValue(0),
+}));
 jest.mock('../src/commands/search-referenced-files.js', () => ({
   run: jest.fn().mockResolvedValue(0),
 }));
@@ -111,6 +114,7 @@ import { run as runSearchHelpArticlesCommand } from '../src/commands/search-help
 import { run as runGetHelpArticleCommand } from '../src/commands/get-help-article.js';
 import { run as runListHelpCategoriesCommand } from '../src/commands/list-help-categories.js';
 import { run as runSearchWorkloadsCommand } from '../src/commands/search-workloads.js';
+import { run as runGetRealizedSavingsCommand } from '../src/commands/get-realized-savings.js';
 import { run as runSearchReferencedFilesCommand } from '../src/commands/search-referenced-files.js';
 import { run as runListReferencedFileSessionsCommand } from '../src/commands/list-referenced-file-sessions.js';
 import { run as runUploadClientFileCommand } from '../src/commands/upload-client-file.js';
@@ -458,6 +462,17 @@ describe('run', () => {
       includeDeprecated: true,
       includeSystem: true,
     });
+  });
+
+  test('get-realized-savings forwards --client-id and --json to the command', async () => {
+    const code = await run(['get-realized-savings', '--client-id', 'acme', '--json']);
+    expect(code).toBe(0);
+    expect(runGetRealizedSavingsCommand).toHaveBeenCalledWith({ clientId: 'acme', json: true });
+  });
+
+  test('get-realized-savings passes empty options when no flags are given', async () => {
+    await run(['get-realized-savings']);
+    expect(runGetRealizedSavingsCommand).toHaveBeenCalledWith({});
   });
 
   test('search-workloads forwards its flags to the command', async () => {

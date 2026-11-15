@@ -171,6 +171,11 @@ export interface SearchWorkloadsOptions {
   clientId?: string;
 }
 
+export interface GetRealizedSavingsOptions {
+  json?: boolean;
+  clientId?: string;
+}
+
 export interface GetTemplateOptions {
   id: string;
   /** `--no-metrics`: send `includeMetrics: false` (the server includes metrics by default). */
