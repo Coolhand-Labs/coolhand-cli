@@ -238,6 +238,43 @@ escaping. An explicit `--since` overrides `--days-back`.
 | `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
 | `--json` | Emit JSON output |
 
+### get-realized-savings
+
+```bash
+coolhand get-realized-savings [--client-id ID] [--json]
+```
+
+Shows what this client has saved by switching templates or models: what the requests served by the
+current templates cost, versus what the same requests would have cost on the deprecated versions they
+replaced (deprecations in the last three months). It is the figure the dashboard shows. Requires a
+**private** key (`coolhand login --scope private`). There are no filters: the client comes from the
+stored key and the comparison window is fixed server-side. The server caches the result for an hour.
+
+Human-readable output prints the total saving and its percentage, the baseline (cost at previous
+versions), then one line per workload with a template deprecated in that period: hashid, name, saving,
+baseline and active request count. Money prints in USD with 4 decimals. A client with nothing to
+compare prints zeros; that is real zero savings, not an error. `--json` returns the SDK result
+(`{ total, cost_at_previous_versions, percent, workloads }`, wire field names) unchanged inside the
+usual `{ ok, result }` envelope.
+
+A `401` means the stored private key was rejected. A `503` means the comparison could not be computed
+right now: the command exits non-zero with a retryable error and never prints zeros, so run it again.
+
+Savings are **not windowed** by `--days-back`, while the workload `metrics` from
+`search-workloads --include-metrics --days-back N` are. A workload's `savings` can therefore exceed its
+windowed total cost; do not read the two as a ratio over the same period. To build a per-workload view,
+join the two `--json` outputs on the workload `id`:
+
+```bash
+coolhand search-workloads --include-metrics --days-back 30 --include-archived --include-system --per-page 100 --json
+coolhand get-realized-savings --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--client-id ID` | Use a specific stored client (also `COOLHAND_CLIENT_ID` env var) |
+| `--json` | Emit JSON output |
+
 ### get-workload
 
 ```bash
